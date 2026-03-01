@@ -266,7 +266,7 @@ export const Login = () => {
             <div className="w-full max-w-[420px] bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
 
                 <div className="text-center mb-8">
-                    <h1 className="text-[22px] font-black text-primary-600 mb-1 leading-tight uppercase">Hệ thống dữ liệu dùng chung</h1>
+                    <h1 className="text-[22px] font-black text-primary-600 mb-1 leading-tight uppercase">Hệ thống <br /> dữ liệu dùng chung</h1>
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Ban Quản lý Đường sắt đô thị - Ban HTKT</p>
                 </div>
 

@@ -284,10 +284,11 @@ exports.processDocumentOCR = onCall({ region: 'asia-southeast1', timeoutSeconds:
         }
 
         if (textResult && !ocrResult.soKyHieu) {
-            const jsonMatch = textResult.match(/\{[\s\S]*\}/);
+            const jsonMatch = textResult.match(/[{\[][\s\S]*[}\]]/);
             if (jsonMatch) {
                 try {
-                    ocrResult = JSON.parse(jsonMatch[0]);
+                    const parsed = JSON.parse(jsonMatch[0]);
+                    ocrResult = Array.isArray(parsed) ? (parsed[0] || {}) : parsed;
                 } catch (pe) {
                     ocrResult = { trichYeu: `Parse JSON lỗi: ${pe.message}. Thô: ${textResult.substring(0, 100)}` };
                 }
