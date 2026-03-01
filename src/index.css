@@ -1,0 +1,334 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================================================
+   CSS Variables - Design Tokens
+   ========================================================= */
+:root {
+  --bg-page: #f9fafb;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f3f4f6;
+  --bg-muted: #e5e7eb;
+
+  --text-1: #111827;
+  --text-2: #374151;
+  --text-3: #6b7280;
+  --text-4: #9ca3af;
+
+  --border: #e5e7eb;
+  --border-muted: #d1d5db;
+}
+
+.dark {
+  --bg-page: #0f172a;
+  --bg-surface: #1e293b;
+  --bg-subtle: #273549;
+  --bg-muted: #334155;
+
+  --text-1: #f1f5f9;
+  --text-2: #cbd5e1;
+  --text-3: #94a3b8;
+  --text-4: #64748b;
+
+  --border: #334155;
+  --border-muted: #475569;
+}
+
+/* =========================================================
+   BASE — Áp lên HTML elements gốc.
+   → Tất cả trang hiện tại VÀ trang mới tự động có dark mode
+   ========================================================= */
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  body {
+    background-color: var(--bg-page);
+    color: var(--text-1);
+  }
+
+  /* Hiệu ứng chuyển theme */
+  *,
+  *::before,
+  *::after {
+    transition-property: background-color, border-color, color;
+    transition-duration: 200ms;
+    transition-timing-function: ease;
+    /* Tắt transition cho iframe để không bị delay */
+  }
+
+  iframe {
+    transition: none !important;
+  }
+
+  /* === Text elements === */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: var(--text-1);
+  }
+
+  label {
+    color: var(--text-2);
+  }
+
+  /* === Form elements === */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([class*="opacity-0"]),
+  select,
+  textarea {
+    background-color: var(--bg-surface);
+    color: var(--text-1);
+    border-color: var(--border);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--text-4);
+  }
+
+  /* === Table === */
+  table {
+    color: var(--text-2);
+  }
+
+  thead tr {
+    background-color: var(--bg-subtle);
+    color: var(--text-2);
+  }
+
+  thead th,
+  tbody td {
+    border-color: var(--border);
+  }
+
+  tbody tr {
+    border-bottom-color: var(--border);
+  }
+}
+
+/* =========================================================
+   DARK MODE OVERRIDES — Dùng .dark để ghi đè chính xác
+   Tailwind utility classes — an toàn, không phá màu accent
+   ========================================================= */
+@layer utilities {
+
+  /* Backgrounds */
+  .dark .bg-white {
+    background-color: var(--bg-surface);
+  }
+
+  .dark .bg-gray-50 {
+    background-color: var(--bg-page);
+  }
+
+  .dark .bg-gray-100 {
+    background-color: var(--bg-subtle);
+  }
+
+  .dark .bg-slate-50 {
+    background-color: var(--bg-subtle);
+  }
+
+  .dark .bg-white\/90 {
+    background-color: color-mix(in srgb, var(--bg-surface) 90%, transparent);
+  }
+
+  /* Borders */
+  .dark .border-gray-100,
+  .dark .border-gray-200 {
+    border-color: var(--border);
+  }
+
+  .dark .border-gray-300 {
+    border-color: var(--border-muted);
+  }
+
+  /* Text */
+  .dark .text-gray-900,
+  .dark .text-gray-800 {
+    color: var(--text-1);
+  }
+
+  .dark .text-gray-700,
+  .dark .text-gray-600 {
+    color: var(--text-2);
+  }
+
+  .dark .text-gray-500 {
+    color: var(--text-3);
+  }
+
+  .dark .text-gray-400 {
+    color: var(--text-4);
+  }
+
+  /* Dividers */
+  .dark .divide-gray-100>*+*,
+  .dark .divide-gray-200>*+* {
+    border-color: var(--border);
+  }
+
+  /* Table row alternating */
+  .dark tr.even\:bg-slate-50:nth-child(even) {
+    background-color: var(--bg-subtle);
+  }
+
+  .dark tr.odd\:bg-white:nth-child(odd) {
+    background-color: var(--bg-surface);
+  }
+
+  /* Hover states */
+  .dark .hover\:bg-gray-50:hover {
+    background-color: var(--bg-subtle);
+  }
+
+  .dark .hover\:bg-gray-100:hover {
+    background-color: var(--bg-muted);
+  }
+
+  .dark .hover\:bg-blue-50:hover {
+    background-color: rgba(59, 130, 246, 0.15);
+  }
+
+  .dark .hover\:bg-red-50:hover {
+    background-color: rgba(239, 68, 68, 0.15);
+  }
+
+  .dark .hover\:bg-purple-50:hover {
+    background-color: rgba(124, 58, 237, 0.15);
+  }
+
+  .dark .hover\:bg-indigo-100:hover {
+    background-color: rgba(79, 70, 229, 0.2);
+  }
+
+  .dark .hover\:bg-emerald-200:hover {
+    background-color: rgba(16, 185, 129, 0.2);
+  }
+
+  .dark .hover\:bg-red-200:hover {
+    background-color: rgba(239, 68, 68, 0.2);
+  }
+
+  .dark .hover\:bg-gray-200:hover {
+    background-color: var(--bg-muted);
+  }
+
+  /* Modal backdrop darker */
+  .dark .bg-black\/40 {
+    background-color: rgba(0, 0, 0, 0.65);
+  }
+
+  .dark .bg-black\/50 {
+    background-color: rgba(0, 0, 0, 0.75);
+  }
+
+  /* Tree item selected */
+  .dark .bg-blue-50 {
+    background-color: rgba(59, 130, 246, 0.12);
+  }
+
+  /* Shadows in dark mode */
+  .dark .shadow-sm {
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  }
+
+  .dark .shadow-xl {
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  }
+
+  .dark .shadow-2xl {
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+  }
+
+  .dark .shadow {
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
+  }
+
+  /* Disabled inputs */
+  .dark input:disabled,
+  .dark select:disabled,
+  .dark textarea:disabled {
+    background-color: var(--bg-subtle) !important;
+    color: var(--text-3) !important;
+    border-color: transparent !important;
+  }
+
+  /* Resizer bar */
+  .dark .bg-gray-200 {
+    background-color: var(--bg-muted);
+  }
+}
+
+/* =========================================================
+   MOBILE RESPONSIVE — CSS cơ bản cho mobile
+   ========================================================= */
+
+/* Smooth scrolling trên iOS */
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Giới hạn mobile ≤ 768px */
+@media (max-width: 768px) {
+  /* Thu nhỏ padding tổng thể */
+  .p-4 { padding: 0.5rem; }
+  .p-6 { padding: 0.75rem; }
+  .px-6 { padding-left: 0.75rem; padding-right: 0.75rem; }
+  .py-6 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+  .p-8 { padding: 1rem; }
+
+  /* Thu nhỏ gap */
+  .gap-6 { gap: 0.75rem; }
+
+  /* Đảm bảo bảng có thể scroll ngang */
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Modal full-width trên mobile */
+  .max-w-2xl,
+  .max-w-3xl,
+  .max-w-4xl,
+  .max-w-5xl,
+  .max-w-6xl {
+    max-width: calc(100vw - 1rem) !important;
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
+  }
+
+  /* Font size nhỏ hơn cho heading */
+  h1, .text-3xl { font-size: 1.25rem !important; }
+  h2, .text-2xl { font-size: 1.125rem !important; }
+  h3, .text-xl { font-size: 1rem !important; }
+
+  /* Grid 1 cột trên mobile */
+  .grid-cols-2,
+  .grid-cols-3,
+  .grid-cols-4 {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Tablet 769px → 1024px */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .grid-cols-4 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .grid-cols-3 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}

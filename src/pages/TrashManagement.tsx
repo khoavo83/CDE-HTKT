@@ -1,0 +1,214 @@
+import { useEffect, useState } from 'react';
+import { collection, query, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
+import { Trash, RefreshCw, Trash2, Search, Filter } from 'lucide-react';
+import { isoToVN } from '../utils/formatVN';
+import { restoreFromTrash } from '../utils/trashUtils';
+import toast from 'react-hot-toast';
+
+interface TrashItem {
+    id: string; // Original ID is the document ID in trash
+    originalCollection: string;
+    originalId: string;
+    data: any;
+    deletedBy: string;
+    deletedAt: string;
+    deleteReason: string;
+    metaSummary: string;
+}
+
+export const TrashManagement = () => {
+    const [trashItems, setTrashItems] = useState<TrashItem[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterCollection, setFilterCollection] = useState('all');
+
+    useEffect(() => {
+        const q = query(collection(db, 'trash'), orderBy('deletedAt', 'desc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const items = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as TrashItem));
+            setTrashItems(items);
+            setLoading(false);
+        }, (error) => {
+            console.error('Lỗi tải thùng rác:', error);
+            toast.error('Không thể tải dữ liệu thùng rác');
+            setLoading(false);
+        });
+        return unsubscribe;
+    }, []);
+
+    const handleRestore = async (item: TrashItem) => {
+        if (!window.confirm(`Bạn có chắc muốn khôi phục dữ liệu:\n${item.metaSummary}?`)) return;
+
+        const toastId = toast.loading('Đang khôi phục...');
+        try {
+            await restoreFromTrash(item);
+            toast.success('Đã khôi phục thành công', { id: toastId });
+        } catch (error) {
+            toast.error('Lỗi khi khôi phục: ' + (error as Error).message, { id: toastId });
+        }
+    };
+
+    const handlePermanentlyDelete = async (item: TrashItem) => {
+        if (!window.confirm(`HÀNH ĐỘNG NGUY HIỂM:\nBạn có chắc chắn muốn xóa VĨNH VIỄN dữ liệu này?\n\n${item.metaSummary}\n\nKhông thể phục hồi sau khi xóa!`)) return;
+
+        const toastId = toast.loading('Đang xóa vĩnh viễn...');
+        try {
+            await deleteDoc(doc(db, 'trash', item.id));
+            toast.success('Đã xóa vĩnh viễn', { id: toastId });
+        } catch (error) {
+            toast.error('Lỗi khi xóa vĩnh viễn', { id: toastId });
+        }
+    };
+
+    const filteredItems = trashItems.filter(item => {
+        const summaryMatch = item.metaSummary ? item.metaSummary.toLowerCase().includes(searchTerm.toLowerCase()) : false;
+        const reasonMatch = item.deleteReason ? item.deleteReason.toLowerCase().includes(searchTerm.toLowerCase()) : false;
+        const byMatch = item.deletedBy ? item.deletedBy.toLowerCase().includes(searchTerm.toLowerCase()) : false;
+
+        const matchSearch = summaryMatch || reasonMatch || byMatch;
+        const matchCol = filterCollection === 'all' || item.originalCollection === filterCollection;
+        return matchSearch && matchCol;
+    });
+
+    const collections = Array.from(new Set(trashItems.map(i => i.originalCollection)));
+
+    // Mapping collection names to user friendly names
+    const colNameMap: Record<string, string> = {
+        'internal_documents': 'Văn bản Nội bộ',
+        'project_nodes': 'Công việc & Dự án',
+        'categories': 'Danh mục',
+        'category_tabs': 'Tab Danh mục',
+        'menu_config': 'Cấu hình Menu'
+    };
+
+    return (
+        <div className="p-4 md:p-6 w-full max-w-7xl mx-auto">
+            <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-200">
+                <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+                        <Trash className="w-6 h-6 text-red-600" />
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-800">Thùng rác hệ thống</h1>
+                        <p className="text-sm text-gray-500 mt-1">Nơi lưu trữ và phục hồi dữ liệu đã xóa</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-[calc(100vh-12rem)]">
+                <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                    <div className="flex items-center gap-4">
+                        <div className="relative">
+                            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                            <input
+                                type="text"
+                                placeholder="Tìm kiếm dữ liệu đã xóa..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm w-64 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Filter className="w-4 h-4 text-gray-400" />
+                            <select
+                                value={filterCollection}
+                                onChange={e => setFilterCollection(e.target.value)}
+                                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            >
+                                <option value="all">Tất cả loại dữ liệu</option>
+                                {collections.map(col => (
+                                    <option key={col} value={col}>
+                                        {colNameMap[col] || col}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    <div className="text-sm text-gray-600 font-medium">
+                        Tổng cộng: {filteredItems.length} mục
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-auto">
+                    {loading ? (
+                        <div className="p-8 text-center text-gray-500">Đang tải dữ liệu...</div>
+                    ) : filteredItems.length === 0 ? (
+                        <div className="p-16 flex flex-col items-center justify-center text-gray-400">
+                            <Trash className="w-12 h-12 mb-4 text-gray-300" />
+                            <p className="text-lg font-medium">Thùng rác trống</p>
+                            <p className="text-sm mt-1">Không có dữ liệu nào bị xóa khớp với tìm kiếm.</p>
+                        </div>
+                    ) : (
+                        <table className="w-full text-left text-sm whitespace-nowrap">
+                            <thead className="bg-gray-50 text-gray-600 sticky top-0 z-10 shadow-sm">
+                                <tr>
+                                    <th className="px-4 py-3 font-semibold">Dữ liệu</th>
+                                    <th className="px-4 py-3 font-semibold w-48">Nguồn</th>
+                                    <th className="px-4 py-3 font-semibold w-48">Người xóa</th>
+                                    <th className="px-4 py-3 font-semibold w-64">Lý do</th>
+                                    <th className="px-4 py-3 font-semibold w-40 text-center">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {filteredItems.map(item => (
+                                    <tr key={item.id} className="hover:bg-blue-50/30 transition-colors group">
+                                        <td className="px-4 py-3">
+                                            <div className="font-medium text-gray-800 break-words whitespace-normal line-clamp-2" title={item.metaSummary}>
+                                                {item.metaSummary}
+                                            </div>
+                                            <div className="text-xs text-gray-500 mt-1">
+                                                ID: {item.originalId}
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 text-gray-700 text-xs font-medium">
+                                                {colNameMap[item.originalCollection] || item.originalCollection}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <div className="flex flex-col">
+                                                <span className="text-gray-900 truncate max-w-[150px]" title={item.deletedBy}>
+                                                    {item.deletedBy}
+                                                </span>
+                                                <span className="text-xs text-gray-500">
+                                                    {isoToVN(item.deletedAt)}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <div className="text-gray-600 italic break-words whitespace-normal line-clamp-2 text-xs" title={item.deleteReason}>
+                                                "{item.deleteReason}"
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={() => handleRestore(item)}
+                                                    className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                                                    title="Khôi phục"
+                                                >
+                                                    <RefreshCw className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handlePermanentlyDelete(item)}
+                                                    className="p-1.5 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                                                    title="Xóa vĩnh viễn"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
