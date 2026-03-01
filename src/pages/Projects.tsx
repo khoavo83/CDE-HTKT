@@ -983,7 +983,7 @@ export const Projects = () => {
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">Người phụ trách</label>
                                                 <select
                                                     {...register('phuTrach')}
-                                                    disabled={user?.role !== 'admin'}
+                                                    disabled={!isAdminOrManager}
                                                     className="w-full px-3 py-2 border rounded-md focus:ring-1 focus:ring-blue-500 outline-none disabled:bg-gray-50 disabled:text-gray-500"
                                                 >
                                                     <option value="">-- Chưa chọn --</option>
@@ -1014,7 +1014,7 @@ export const Projects = () => {
                                                             type="checkbox"
                                                             value={u.id}
                                                             checked={(watch('nguoiPhoiHop') || []).includes(u.id)}
-                                                            disabled={user?.role !== 'admin'}
+                                                            disabled={!isAdminOrManager}
                                                             onChange={(e) => {
                                                                 const current = watch('nguoiPhoiHop') || [];
                                                                 if (e.target.checked) {

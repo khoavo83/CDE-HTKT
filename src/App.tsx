@@ -42,12 +42,11 @@ function App() {
                 if (userSnap.exists()) {
                     setUser(userSnap.data() as any);
                 } else {
-                    // [!!! TEMP RESTORE ADMIN !!!] Nếu không có record (đã lỡ xóa), tự tạo lại làm admin
                     const newData = {
                         uid: firebaseUser.uid,
                         email: firebaseUser.email || '',
                         displayName: firebaseUser.displayName || 'User',
-                        role: 'admin' // TEMP: Khôi phục quyền admin
+                        role: 'pending' // Hợp lệ hóa: Phải chờ duyệt
                     };
                     await setDoc(userRef, newData);
                     setUser(newData as any);

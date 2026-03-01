@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { useMenuConfigStore } from '../store/useMenuConfigStore';
 import { useThemeStore } from '../store/useThemeStore';
+import { doc, getDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase/config';
 import { UserProfileModal } from '../components/UserProfileModal';
 import { DriveStorageStatus } from '../components/DriveStorageStatus';
 import { GlobalHeader } from '../components/GlobalHeader';
@@ -29,6 +31,20 @@ export const MainLayout = () => {
     const [isProfileModalOpen, setIsProfileModalOpen] = React.useState(false);
     const [isLogoutModalOpen, setIsLogoutModalOpen] = React.useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+    const [pendingCount, setPendingCount] = React.useState(0);
+
+    // Lắng nghe số lượng user pending cho badge ở Menu
+    useEffect(() => {
+        if (user?.role !== 'admin') {
+            setPendingCount(0);
+            return;
+        }
+        const q = query(collection(db, 'users'), where('role', '==', 'pending'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setPendingCount(snapshot.size);
+        });
+        return () => unsubscribe();
+    }, [user]);
 
     // Khởi tạo theme từ localStorage / prefers-color-scheme
     useEffect(() => {
@@ -166,7 +182,12 @@ export const MainLayout = () => {
                                     } `}
                             >
                                 <Icon className="w-5 h-5" />
-                                {item.name}
+                                <span className="flex-1">{item.name}</span>
+                                {item.key === 'users' && pendingCount > 0 && (
+                                    <span className="flex h-5 w-5 items-center justify-center bg-red-500 text-[10px] text-white rounded-full font-bold animate-pulse">
+                                        {pendingCount}
+                                    </span>
+                                )}
                             </Link>
                         );
                     })}

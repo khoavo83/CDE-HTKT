@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import logoUrl from '../assets/hcmc-metro-logo.jpg';
 import { Bell, Database, MessageSquare, Menu } from 'lucide-react';
 import { FeedbackModal } from './FeedbackModal';
 import { useAppSettingsStore } from '../store/useAppSettingsStore';
+import { useAuthStore } from '../store/useAuthStore';
+import { useNavigate } from 'react-router-dom';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 interface GlobalHeaderProps {
     onMenuClick?: () => void;
@@ -11,6 +15,24 @@ interface GlobalHeaderProps {
 export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ onMenuClick }) => {
     const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
     const { settings } = useAppSettingsStore();
+    const { user } = useAuthStore();
+    const navigate = useNavigate();
+    const [pendingCount, setPendingCount] = useState(0);
+
+    useEffect(() => {
+        if (user?.role !== 'admin') {
+            setPendingCount(0);
+            return;
+        }
+
+        // Lắng nghe realtime số lượng user pending
+        const q = query(collection(db, 'users'), where('role', '==', 'pending'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setPendingCount(snapshot.size);
+        });
+
+        return () => unsubscribe();
+    }, [user]);
 
     return (
         <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-gray-100 px-6 py-2 grid grid-cols-3 items-center shadow-sm select-none transition-all">
@@ -65,9 +87,17 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ onMenuClick }) => {
                 </button>
 
                 {/* Notification Bell */}
-                <button className="relative group p-2 hover:bg-gray-100 rounded-full transition-all duration-300">
-                    <Bell className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white animate-pulse"></span>
+                <button
+                    onClick={() => navigate('/users')}
+                    className="relative group p-2 hover:bg-gray-100 rounded-full transition-all duration-300"
+                    title={pendingCount > 0 ? `Có ${pendingCount} người dùng chờ phê duyệt` : "Thông báo"}
+                >
+                    <Bell className={`w-5 h-5 ${pendingCount > 0 ? 'text-primary-600 animate-bounce' : 'text-gray-400'} group-hover:text-blue-600 transition-colors`} />
+                    {pendingCount > 0 && (
+                        <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center bg-red-500 text-[10px] text-white rounded-full border border-white font-bold">
+                            {pendingCount}
+                        </span>
+                    )}
                 </button>
 
                 <div className="hidden sm:flex flex-col items-end border-l border-gray-200 pl-4 h-8 justify-center">

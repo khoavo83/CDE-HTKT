@@ -170,7 +170,20 @@ export const Login = () => {
             // Update Auth Profile
             await updateProfile(user, { displayName });
 
-            // Create Firestore Document
+            // [MỚI] Kiểm tra xem có user nào chưa được claim (unclaimed) không
+            const unclaimedQuery = query(collection(db, 'users'), where('role', '==', 'unclaimed'));
+            const unclaimedSnapshot = await getDocs(unclaimedQuery);
+            const list = unclaimedSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+            if (list.length > 0) {
+                setUnclaimedUsers(list);
+                setTempGoogleUser(user); // Dùng chung state tạm để claim
+                setView('claim_profile');
+                setIsLoading(false);
+                return;
+            }
+
+            // Create Firestore Document (Nếu không có ai để claim)
             const userData = {
                 uid: user.uid,
                 email: user.email,
@@ -234,25 +247,25 @@ export const Login = () => {
             const unclaimedData = unclaimedUsers.find(u => (u.uid === selectedUnclaimedUid || u.id === selectedUnclaimedUid));
             if (!unclaimedData) throw new Error("Không tìm thấy thông tin cán bộ.");
 
-            // Dữ liệu mới gắn vào Google Auth UID
+            // Dữ liệu mới gắn vào Auth UID
             const newUserData = {
                 ...unclaimedData,
                 uid: tempGoogleUser.uid,
                 email: tempGoogleUser.email,
-                role: 'user', // Cấp quyền user
+                role: 'pending', // BUỘC PHẢI CHỜ DUYỆT - Không cho bypass
             };
 
-            // Lưu doc mới với UID của Google Auth
+            // Lưu doc mới với UID của Auth
             await setDoc(doc(db, 'users', tempGoogleUser.uid), newUserData);
 
-            // Xóa doc unclaimed cũ (để không còn trong danh sách vô chủ)
+            // Xóa doc unclaimed cũ
             const docIdToDelete = unclaimedData.id || unclaimedData.uid;
             if (docIdToDelete && docIdToDelete !== tempGoogleUser.uid) {
                 await deleteDoc(doc(db, 'users', docIdToDelete));
             }
 
             setUser(newUserData as any);
-            navigate('/');
+            navigate('/pending-approval');
         } catch (error: any) {
             console.error('Lỗi claim profile:', error);
             setErrorMsg("Không thể xác nhận thông tin. Vui lòng thử lại.");
