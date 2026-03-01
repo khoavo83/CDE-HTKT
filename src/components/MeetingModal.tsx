@@ -32,7 +32,6 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({ isOpen, onClose, ini
         attachmentName: ''
     });
     const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
-    const [isUploadingFile, setIsUploadingFile] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -85,7 +84,6 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({ isOpen, onClose, ini
 
             // Upload file đính kèm nếu có file mới
             if (attachmentFile) {
-                setIsUploadingFile(true);
                 const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
                 const { storage } = await import('../firebase/config');
                 const fileRef = ref(storage, `meeting-attachments/${Date.now()}_${attachmentFile.name}`);
@@ -93,7 +91,7 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({ isOpen, onClose, ini
                 const downloadUrl = await getDownloadURL(fileRef);
                 finalData.attachmentUrl = downloadUrl;
                 finalData.attachmentName = attachmentFile.name;
-                setIsUploadingFile(false);
+                finalData.attachmentName = attachmentFile.name;
             }
 
             if (isExistingMeeting) {
@@ -112,7 +110,6 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({ isOpen, onClose, ini
             toast.error('Có lỗi xảy ra khi lưu lịch họp. Vui lòng thử lại.');
         } finally {
             setIsSaving(false);
-            setIsUploadingFile(false);
         }
     };
 
