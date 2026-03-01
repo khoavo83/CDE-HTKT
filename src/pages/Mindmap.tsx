@@ -334,7 +334,8 @@ export const Mindmap = () => {
     // ===== Fetch children của 1 node =====
     const fetchChildren = useCallback(async (parentId: string): Promise<any[]> => {
         const snap = await getDocs(query(collection(db, 'project_nodes'), where('parentId', '==', parentId)));
-        const children = snap.docs.map(d => ({ id: d.id, ...d.data() as any })).filter(c => c.type !== 'TASK');
+        // Không lọc bỏ TASK ở đây để ta có thể dùng ID của TASK tìm văn bản đính kèm
+        const children = snap.docs.map(d => ({ id: d.id, ...d.data() as any }));
         children.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         children.forEach(c => {
             loadedNodesRef.current.set(c.id, c);
@@ -345,28 +346,54 @@ export const Mindmap = () => {
 
     // ===== Đếm children (không fetch full data, chỉ count) =====
     const countChildren = useCallback(async (nodeIds: string[]) => {
-        // Batch check: Fetch tất cả nodes có parentId nằm trong nodeIds
         if (nodeIds.length === 0) return;
-        // Firestore chỉ hỗ trợ 'in' tới 30 phần tử
+
+        // Firestore 'in' limitation
         const batches: string[][] = [];
         for (let i = 0; i < nodeIds.length; i += 30) {
             batches.push(nodeIds.slice(i, i + 30));
         }
-        for (const batch of batches) {
-            const snap = await getDocs(query(collection(db, 'project_nodes'), where('parentId', 'in', batch)));
-            const snapLinks = await getDocs(query(collection(db, 'vanban_node_links'), where('nodeId', 'in', batch)));
 
-            // Count per parentId
+        for (const batch of batches) {
+            // Lấy tất cả children (bao gồm cả TASK)
+            const snap = await getDocs(query(collection(db, 'project_nodes'), where('parentId', 'in', batch)));
+            const allNodesInBatch = snap.docs.map(d => ({ id: d.id, ...d.data() as any }));
+
+            // Tìm tất cả TASK IDs trong batch này để đếm văn bản gắn vào TASK
+            const taskIds = allNodesInBatch.filter(n => n.type === 'TASK').map(n => n.id);
+            const nonTaskNodes = allNodesInBatch.filter(n => n.type !== 'TASK');
+
+            // Query links cho tất cả node trong batch + các TASK con (nếu đã biết)
+            const nodeAndTaskIds = [...batch, ...taskIds];
+            const linkBatches: string[][] = [];
+            for (let i = 0; i < nodeAndTaskIds.length; i += 30) {
+                linkBatches.push(nodeAndTaskIds.slice(i, i + 30));
+            }
+
             const counts: Record<string, number> = {};
-            snap.docs.forEach(d => {
-                const pid = (d.data() as any).parentId;
-                counts[pid] = (counts[pid] || 0) + 1;
+
+            // Đếm các node con không phải TASK
+            nonTaskNodes.forEach(n => {
+                counts[n.parentId] = (counts[n.parentId] || 0) + 1;
             });
-            // Đếm luôn cả Văn bản (Links)
-            snapLinks.docs.forEach(d => {
-                const pid = (d.data() as any).nodeId;
-                counts[pid] = (counts[pid] || 0) + 1;
-            });
+
+            // Đếm văn bản (Links)
+            for (const lb of linkBatches) {
+                const snapLinks = await getDocs(query(collection(db, 'vanban_node_links'), where('nodeId', 'in', lb)));
+                snapLinks.docs.forEach(d => {
+                    const lData = d.data() as any;
+                    const directNodeId = lData.nodeId;
+
+                    // Nếu link gắn vào TASK, ta tính cho parent của TASK đó
+                    const taskNode = allNodesInBatch.find(n => n.id === directNodeId);
+                    const targetId = (taskNode && taskNode.type === 'TASK') ? taskNode.parentId : directNodeId;
+
+                    if (batch.includes(targetId)) {
+                        counts[targetId] = (counts[targetId] || 0) + 1;
+                    }
+                });
+            }
+
             batch.forEach(id => {
                 childCountRef.current.set(id, counts[id] || 0);
             });
@@ -462,7 +489,9 @@ export const Mindmap = () => {
                 .filter(d => (d.parentId || null) === parentId);
 
             children.forEach(child => {
-                addNodeToGraph(child);
+                if (child.type !== 'TASK') {
+                    addNodeToGraph(child);
+                }
                 if (expandedIds.has(child.id)) {
                     traverse(child.id);
                 }
@@ -518,22 +547,38 @@ export const Mindmap = () => {
                         await countChildren(children.map(c => c.id));
                     }
 
-                    // Fetch Documents của Node này (nếu chưa fetch)
+                    // Fetch Documents của Node này và của các TASK con của nó
                     if (needsFetchDocs) {
-                        loadedDocsNodeIds.current.add(nodeId); // Đánh dấu đã fetch
-                        const qLinks = query(collection(db, 'vanban_node_links'), where('nodeId', '==', nodeId));
-                        const snapLinks = await getDocs(qLinks);
-                        const linkData = snapLinks.docs.map(d => ({ id: d.id, ...d.data() as any }));
+                        loadedDocsNodeIds.current.add(nodeId);
+
+                        // Tìm các TASK IDs thuộc nodeId này
+                        const childTaskIds = children.filter(c => c.type === 'TASK').map(c => c.id);
+                        const queryIds = [nodeId, ...childTaskIds];
 
                         const dl: any[] = [];
-                        for (const link of linkData) {
-                            try {
-                                const { getDoc: getDocFn, doc: docRef } = await import('firebase/firestore');
-                                const vbDoc = await getDocFn(docRef(db, 'vanban', link.vanBanId));
-                                if (vbDoc.exists()) {
-                                    dl.push({ id: vbDoc.id, ...vbDoc.data(), _linkId: link.id, parentId: nodeId, type: 'DOCUMENT' });
-                                }
-                            } catch (e) { /* skip */ }
+                        // Query links theo từng batch 30
+                        for (let i = 0; i < queryIds.length; i += 30) {
+                            const batch = queryIds.slice(i, i + 30);
+                            const snapLinks = await getDocs(query(collection(db, 'vanban_node_links'), where('nodeId', 'in', batch)));
+                            const linkData = snapLinks.docs.map(d => ({ id: d.id, ...d.data() as any }));
+
+                            for (const link of linkData) {
+                                try {
+                                    const { getDoc: getDocFn, doc: docRef } = await import('firebase/firestore');
+                                    const vbDoc = await getDocFn(docRef(db, 'vanban', link.vanBanId));
+                                    if (vbDoc.exists()) {
+                                        // Gán parentId là nodeId hiện tại (Hạng mục) để hiển thị trên Mindmap tại đây
+                                        dl.push({
+                                            id: vbDoc.id,
+                                            ...vbDoc.data(),
+                                            _linkId: link.id,
+                                            parentId: nodeId,
+                                            _realNodeId: link.nodeId, // Lưu lại ID gốc (có thể là TASK)
+                                            type: 'DOCUMENT'
+                                        });
+                                    }
+                                } catch (e) { /* skip */ }
+                            }
                         }
                         dl.forEach(d => loadedDocsRef.current.set(d.id, d));
                     }
@@ -556,11 +601,12 @@ export const Mindmap = () => {
             try {
                 // 1. Fetch tất cả project_nodes
                 const allSnap = await getDocs(query(collection(db, 'project_nodes')));
-                const allNodes = allSnap.docs.map(d => ({ id: d.id, ...d.data() as any })).filter(n => n.type !== 'TASK');
-                const parentIdSet = new Set(allNodes.map(n => n.id));
+                const allNodes = allSnap.docs.map(d => ({ id: d.id, ...d.data() as any }));
+                const nonTaskNodes = allNodes.filter(n => n.type !== 'TASK');
+                const parentIdSet = new Set(nonTaskNodes.map(n => n.id));
 
                 // Roots = nodes không có parentId HOẶC parentId không tồn tại
-                const roots = allNodes.filter(n => !n.parentId || !parentIdSet.has(n.parentId));
+                const roots = nonTaskNodes.filter(n => !n.parentId || !parentIdSet.has(n.parentId));
                 roots.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
                 roots.forEach(r => {
                     r.parentId = null; // Normalize
@@ -578,7 +624,10 @@ export const Mindmap = () => {
                     initialExpanded.add(root.id);
                     const children = allNodes.filter(n => n.parentId === root.id);
                     children.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-                    children.forEach(c => loadedNodesRef.current.set(c.id, c));
+                    children.forEach(c => {
+                        loadedNodesRef.current.set(c.id, c);
+                        if (c.mindmapLayout) setNodeLayouts(prev => ({ ...prev, [c.id]: c.mindmapLayout }));
+                    });
                 }
 
                 // Count grandchildren (cấp 2)
@@ -588,18 +637,31 @@ export const Mindmap = () => {
                 await countChildren(level1Ids);
 
                 // ====== FETCH DOCS cho tất cả nodes đã được auto-load ======
-                // Batch fetch vanban_node_links cho roots + level1 nodes
-                const autoLoadedIds = [...rootIds, ...level1Ids];
-                const batchSize = 30; // Firestore 'in' giới hạn 30
-                for (let i = 0; i < autoLoadedIds.length; i += batchSize) {
-                    const batchIds = autoLoadedIds.slice(i, i + batchSize);
+                // Batch fetch vanban_node_links cho roots + level1 nodes + các TASK con của chúng
+                const autoLoadedCategoryIds = [...rootIds, ...level1Ids];
+                const autoLoadedAllIds = [...autoLoadedCategoryIds];
+
+                // Bao gồm cả các TASK con để lấy files
+                allNodes.forEach(n => {
+                    if (n.type === 'TASK' && autoLoadedCategoryIds.includes(n.parentId)) {
+                        autoLoadedAllIds.push(n.id);
+                    }
+                });
+
+                const batchSize = 30;
+                for (let i = 0; i < autoLoadedAllIds.length; i += batchSize) {
+                    const batchIds = autoLoadedAllIds.slice(i, i + batchSize);
                     const snapLinks = await getDocs(
                         query(collection(db, 'vanban_node_links'), where('nodeId', 'in', batchIds))
                     );
                     const linkData = snapLinks.docs.map(d => ({ id: d.id, ...d.data() as any }));
 
-                    // Mark các nodes đã fetch docs
-                    batchIds.forEach(id => loadedDocsNodeIds.current.add(id));
+                    // Mark các CAT nodes đã fetch docs (chỉ mark Category, không cần mark Task riêng)
+                    batchIds.forEach(id => {
+                        if (autoLoadedCategoryIds.includes(id)) {
+                            loadedDocsNodeIds.current.add(id);
+                        }
+                    });
 
                     // Fetch từng văn bản song song
                     const { getDoc: getDocFn, doc: docRef } = await import('firebase/firestore');
@@ -607,7 +669,18 @@ export const Mindmap = () => {
                         try {
                             const vbDoc = await getDocFn(docRef(db, 'vanban', link.vanBanId));
                             if (vbDoc.exists()) {
-                                return { id: vbDoc.id, ...vbDoc.data(), _linkId: link.id, parentId: link.nodeId, type: 'DOCUMENT' };
+                                // Nếu link là của TASK, thì parentId thực tế trên mindmap là parent của TASK đó
+                                const nodeInfo = allNodes.find(n => n.id === link.nodeId);
+                                const vParentId = (nodeInfo && nodeInfo.type === 'TASK') ? nodeInfo.parentId : link.nodeId;
+
+                                return {
+                                    id: vbDoc.id,
+                                    ...vbDoc.data(),
+                                    _linkId: link.id,
+                                    parentId: vParentId,
+                                    _realNodeId: link.nodeId,
+                                    type: 'DOCUMENT'
+                                };
                             }
                         } catch (e) { /* skip */ }
                         return null;
