@@ -25,6 +25,48 @@ export const Login = () => {
     const { setUser } = useAuthStore();
     const { initTheme } = useThemeStore();
 
+    // [MỚI] Hàm tự động kiểm tra và liên kết theo Email
+    const checkAndAutoLink = async (userAuth: any) => {
+        if (!userAuth.email) return null;
+
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('email', '==', userAuth.email));
+        const snapshot = await getDocs(q);
+
+        // Tìm bản ghi có Email trùng khớp nhưng CHƯA có UID (nghĩa là chưa được claim)
+        const unclaimedDoc = snapshot.docs.find(d => !d.data().uid);
+
+        if (unclaimedDoc) {
+            const unclaimedData = unclaimedDoc.data();
+            const docId = unclaimedDoc.id;
+
+            // Loại bỏ các ID thừa nếu có
+            const { id: oldId, uid: oldUid, ...cleanData } = unclaimedData;
+
+            const newUserData = {
+                ...cleanData,
+                uid: userAuth.uid,
+                email: userAuth.email,
+                // Giữ nguyên role mà Admin đã gán (unclaimed, editor, manager, v.v.)
+                // Nếu role đang là 'unclaimed' thì nâng lên 'editor' mặc định
+                role: cleanData.role === 'unclaimed' ? 'editor' : cleanData.role,
+                updatedAt: new Date().toISOString(),
+                lastLoginAt: new Date().toISOString()
+            };
+
+            // Tạo bản ghi mới theo UID của Auth
+            await setDoc(doc(db, 'users', userAuth.uid), newUserData);
+
+            // Xóa bản ghi cũ (vì bản ghi mới đã được tạo với ID là UID)
+            if (docId !== userAuth.uid) {
+                await deleteDoc(doc(db, 'users', docId));
+            }
+
+            return newUserData;
+        }
+        return null;
+    };
+
     const [view, setView] = useState<AuthView>('login');
     const [isLoading, setIsLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
@@ -69,17 +111,27 @@ export const Login = () => {
 
             let userData;
             if (!userSnap.exists()) {
-                // Kiểm tra xem có user nào chưa được claim (unclaimed) không
+                // [MỚI] Tự động kiểm tra Email trong danh sách cán bộ
+                const autoLinkedData = await checkAndAutoLink(user);
+
+                if (autoLinkedData) {
+                    setUser(autoLinkedData as any);
+                    navigate('/');
+                    return;
+                }
+
+                // [CŨ] Nếu không tự khớp được Email, kiểm tra xem có ai unclaimed (không có email) để show list claim không
                 const unclaimedQuery = query(collection(db, 'users'), where('role', '==', 'unclaimed'));
                 const unclaimedSnapshot = await getDocs(unclaimedQuery);
-                const list = unclaimedSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                const list = unclaimedSnapshot.docs.map(d => ({ ...d.data(), id: d.id }));
 
+                // Chỉ hiện màn hình Claim nếu có danh sách những người CHƯA CÓ EMAIL trùng khớp
                 if (list.length > 0) {
                     setUnclaimedUsers(list);
                     setTempGoogleUser(user);
                     setView('claim_profile');
                     setIsLoading(false);
-                    return; // Dừng lại ở đây chờ user chọn
+                    return;
                 }
 
                 // Nếu không có ai unclaimed, tạo bình thường với role pending
@@ -170,10 +222,20 @@ export const Login = () => {
             // Update Auth Profile
             await updateProfile(user, { displayName });
 
-            // [MỚI] Kiểm tra xem có user nào chưa được claim (unclaimed) không
+            // [MỚI] Tự động kiểm tra Email trong danh sách cán bộ
+            const autoLinkedData = await checkAndAutoLink(user);
+
+            if (autoLinkedData) {
+                setUser(autoLinkedData as any);
+                navigate('/');
+                setIsLoading(false);
+                return;
+            }
+
+            // [CŨ] Kiểm tra xem có user nào chưa được claim (unclaimed) không
             const unclaimedQuery = query(collection(db, 'users'), where('role', '==', 'unclaimed'));
             const unclaimedSnapshot = await getDocs(unclaimedQuery);
-            const list = unclaimedSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            const list = unclaimedSnapshot.docs.map(d => ({ ...d.data(), id: d.id }));
 
             if (list.length > 0) {
                 setUnclaimedUsers(list);

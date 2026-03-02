@@ -58,6 +58,7 @@ export const UsersManagement = () => {
             chucVu: userToEdit.chucVu || '',
             department: userToEdit.department || '',
             ngaySinh: userToEdit.ngaySinh || '',
+            email: userToEdit.email || '',
             role: userToEdit.role || 'pending'
         });
     };
@@ -277,7 +278,11 @@ export const UsersManagement = () => {
                                             </td>
 
                                             <td className="px-4 py-3">
-                                                <div className="text-xs text-gray-500 font-medium">{u.email}</div>
+                                                {isEditing ? (
+                                                    <input type="email" value={editFormData.email} onChange={(e) => handleFormChange('email', e.target.value)} className="bg-white border border-indigo-300 text-xs rounded-md p-1.5 w-full outline-none focus:ring-1 focus:ring-indigo-500" placeholder="example@gmail.com" />
+                                                ) : (
+                                                    <div className="text-xs text-gray-500 font-medium">{u.email || <span className="text-gray-300 italic">Trống</span>}</div>
+                                                )}
                                             </td>
 
                                             <td className="px-4 py-3">
