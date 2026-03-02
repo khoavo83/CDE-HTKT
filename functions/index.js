@@ -15,6 +15,33 @@ const cors = require("cors")({ origin: true });
 admin.initializeApp();
 const db = admin.firestore();
 
+// [MỚI] Cấu hình email Admin sẽ được toàn quyền trên Drive
+const DRIVE_ADMIN_EMAIL = "khoa.bqldsdt@gmail.com";
+
+/**
+ * Hàm hỗ trợ: Cấp quyền 'writer' cho Admin trên một file/folder cụ thể.
+ * Giúp Admin có quyền xóa/sửa file dù do Service Account hay User khác tạo.
+ */
+async function ensureAdminPermission(drive, fileId) {
+    if (!fileId) return;
+    try {
+        await drive.permissions.create({
+            fileId: fileId,
+            requestBody: {
+                role: 'writer',
+                type: 'user',
+                emailAddress: DRIVE_ADMIN_EMAIL
+            },
+            sendNotificationEmail: false,
+            supportsAllDrives: true
+        });
+        console.log(`[DEBUG] Granted 'writer' permission to ${DRIVE_ADMIN_EMAIL} for file ID: ${fileId}`);
+    } catch (err) {
+        // Nếu đã có quyền hoặc lỗi khác, ghi log nhưng không làm treo luồng chính
+        console.log(`[DEBUG] Permission grant status for ${fileId}:`, err.message);
+    }
+}
+
 // Helper function kết nối Drive - nạp trễ (Lazy Load) để tránh Timeout khi deploy
 let driveInstance = null;
 async function getDriveService() {
@@ -116,13 +143,17 @@ exports.processDocumentOCR = onCall({ region: 'asia-southeast1', timeoutSeconds:
             webViewLink = driveResponse.data.webViewLink;
             console.log(`[DEBUG] Đã upload file mới lên Drive qua OAuth: ${driveFileId}`);
 
-            // Cấp quyền đọc công khai
+            // Cần cấp quyền reader cho anyone để link xem được trên Web App
             try {
                 await drive.permissions.create({
                     fileId: driveFileId,
                     requestBody: { role: 'reader', type: 'anyone' }
                 });
-            } catch (e) { console.log("Không thể chmod anyone cho file chính", e.message); }
+            } catch (e) {
+                console.log("Không thể chmod anyone cho file chính", e.message);
+            }
+            // [MỚI] Đảm bảo Admin có quyền trên file mới upload
+            await ensureAdminPermission(drive, driveFileId);
 
         } else {
             console.log(`[DEBUG] Đang xử lý file đã có trên Drive: ${driveFileId}`);
@@ -413,6 +444,9 @@ exports.onDocumentStatusUpdate = onDocumentUpdated("vanban/{docId}", async (even
                 }
 
                 await drive.files.update(params);
+
+                // [MỚI] Đảm bảo Admin có quyền sau khi moved/named
+                await ensureAdminPermission(drive, fileId);
             };
 
             // 1. Rename & Move Main File
@@ -543,6 +577,9 @@ exports.uploadFileToDriveBase64 = onCall({ timeoutSeconds: 300 }, async (request
         } catch (permErr) {
             console.log("Cảnh báo: Không thể set permissions 'anyone' cho file này:", permErr.message);
         }
+
+        // [MỚI] Đảm bảo Admin có quyền trên file upload qua Base64 API
+        await ensureAdminPermission(drive, uploadedFile.data.id);
 
         return {
             success: true,
@@ -719,11 +756,15 @@ exports.syncDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) => 
         if (!folders.rootId) {
             const root = await createFolder("Hệ thống CDE - Ban HTKT");
             folders.rootId = root.id;
+            // Cấp quyền Admin cho Root mới
+            await ensureAdminPermission(drive, folders.rootId);
         }
 
-        // Luôn đảm bảo cấp quyền cho người dùng hiện tại (Admin) vào thư mục gốc
-        if (request.auth.token.email) {
-            console.log(`[DEBUG] Granting writer permission for ${request.auth.token.email} on folder ${folders.rootId}`);
+        // Luôn đảm bảo cấp quyền cho Admin và người dùng thực hiện lệnh (nếu khác nhau)
+        await ensureAdminPermission(drive, folders.rootId);
+
+        if (request.auth.token.email && request.auth.token.email !== DRIVE_ADMIN_EMAIL) {
+            console.log(`[DEBUG] Granting writer permission for session user ${request.auth.token.email} on folder ${folders.rootId}`);
             try {
                 await drive.permissions.create({
                     fileId: folders.rootId,
@@ -1094,6 +1135,9 @@ exports.onProjectNodeCreated = onDocumentCreated("project_nodes/{nodeId}", async
             driveFolderLink: folder.data.webViewLink
         });
 
+        // [MỚI] Đảm bảo Admin có quyền trên folder Node mới
+        await ensureAdminPermission(drive, folder.data.id);
+
         console.log(`Đã tạo thành công thư mục Drive ${folder.data.id} cho Node ${nodeId}`);
     } catch (error) {
         console.error("onProjectNodeCreated Error:", error);
@@ -1128,6 +1172,8 @@ exports.onProjectNodeUpdated = onDocumentUpdated("project_nodes/{nodeId}", async
                     fileId: nDriveFolderId,
                     resource: { name: expected }
                 });
+                // [MỚI] Đảm bảo Admin có quyền sau khi đổi tên
+                await ensureAdminPermission(drive, nDriveFolderId);
                 console.log(`Đã đồng bộ tên Drive cho Node ${nId}: ${expected}`);
             } catch (err) {
                 console.error(`Lỗi đổi tên Drive Node ${nId}:`, err.message);
@@ -1182,6 +1228,8 @@ exports.onProjectNodeUpdated = onDocumentUpdated("project_nodes/{nodeId}", async
                                 removeParents: previousParents,
                                 fields: 'id, parents'
                             });
+                            // [MỚI] Đảm bảo Admin có quyền sau khi di chuyển thư mục cha
+                            await ensureAdminPermission(drive, newValue.driveFolderId);
                             console.log(`Đã di chuyển folder Drive ${newValue.driveFolderId} sang cha mới ${newParentDriveId}`);
                         } catch (moveErr) {
                             console.error("Lỗi di chuyển folder Drive:", moveErr.message);
