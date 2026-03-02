@@ -137,6 +137,38 @@ export const CategoriesManagement = () => {
         }
     };
 
+    const handleResetDrive = async () => {
+        const confirm1 = window.confirm('CẢNH BÁO NGUY HIỂM: Thao tác này sẽ XÓA VĨNH VIỄN toàn bộ thư mục CDE-ROOT cũ trên Google Drive và các liên kết trong hệ thống.\n\nFile vật lý của bạn sẽ bị đưa vào Thùng rác trên Drive. Bạn có chắc chắn muốn làm sạch để bắt đầu lại từ đầu?');
+        if (!confirm1) return;
+
+        const confirm2 = window.confirm('XÁC NHẬN LẦN CUỐI: Bạn có thực sự muốn RESET TOÀN BỘ cấu trúc Drive không?');
+        if (!confirm2) return;
+
+        setIsSyncing(true);
+        setSyncDebugLogs([]);
+        try {
+            // 1. Gọi hàm Reset
+            const resetFn = httpsCallable(functions, 'resetDriveStructure', { timeout: 540000 });
+            const resetResult: any = await resetFn();
+            alert(resetResult.data.message || 'Đã làm sạch cấu trúc cũ.');
+
+            // 2. Tự động gọi Đồng bộ lại để xây dựng cấu trúc mới
+            const syncFn = httpsCallable(functions, 'syncDriveStructure', { timeout: 540000 });
+            const syncResult: any = await syncFn();
+            alert('Đã xây dựng lại cấu trúc Drive mới thành công!');
+
+            if (syncResult.data.debug && syncResult.data.debug.length > 0) {
+                setSyncDebugLogs(syncResult.data.debug);
+                setShowDebugModal(true);
+            }
+        } catch (error: any) {
+            console.error('Lỗi Reset Drive:', error);
+            alert('Lỗi: ' + error.message);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
     const handleResetAllNodesDrive = async () => {
         if (!window.confirm('CẢNH BÁO: Thao tác này sẽ xóa toàn bộ liên kết Drive cũ của các Dự án trên WebApp (không mất file). \n\nBạn chỉ làm việc này nếu muốn hệ thống TẠO LẠI TOÀN BỘ thư mục dự án trên Drive 2TB mới. Tiếp tục?')) return;
 
@@ -788,18 +820,34 @@ export const CategoriesManagement = () => {
                         </div>
 
                         {driveConfig?.rootId && (
-                            <div className="mb-8 p-4 bg-red-50 rounded-xl border border-red-100 flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm font-bold text-red-800">Làm sạch dữ liệu đồng bộ cũ</p>
-                                    <p className="text-xs text-red-600 mt-1 font-bold">Dùng khi bạn muốn hệ thống tạo lại toàn bộ thư mục Dự án trên Drive 2TB mới.</p>
+                            <div className="mb-8 space-y-3">
+                                <div className="p-4 bg-red-50 rounded-xl border border-red-100 flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm font-bold text-red-800">Làm sạch dữ liệu đồng bộ cũ</p>
+                                        <p className="text-xs text-red-600 mt-1 font-bold">Dùng khi bạn muốn hệ thống tạo lại toàn bộ thư mục Dự án trên Drive 2TB mới.</p>
+                                    </div>
+                                    <button
+                                        onClick={handleResetAllNodesDrive}
+                                        disabled={isSyncing}
+                                        className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 disabled:opacity-50 transition-colors"
+                                    >
+                                        Reset liên kết Dự án
+                                    </button>
                                 </div>
-                                <button
-                                    onClick={handleResetAllNodesDrive}
-                                    disabled={isSyncing}
-                                    className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 disabled:opacity-50 transition-colors"
-                                >
-                                    Reset liên kết Dự án
-                                </button>
+
+                                <div className="p-4 bg-orange-50 rounded-xl border border-orange-100 flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm font-bold text-orange-800">NUCLEAR OPTION: Reset & Làm sạch toàn bộ Drive</p>
+                                        <p className="text-xs text-orange-600 mt-1 font-bold">Xóa hẳn thư mục CDE-ROOT cũ khỏi Drive và xóa sạch liên kết trong Firestore để bắt đầu lại từ đầu.</p>
+                                    </div>
+                                    <button
+                                        onClick={handleResetDrive}
+                                        disabled={isSyncing}
+                                        className="px-4 py-2 bg-orange-600 text-white rounded-lg text-xs font-bold hover:bg-orange-700 disabled:opacity-50 transition-colors shadow-lg"
+                                    >
+                                        Reset & Làm sạch DRIVE
+                                    </button>
+                                </div>
                             </div>
                         )}
 

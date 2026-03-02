@@ -726,6 +726,58 @@ exports.backfillMissingFileSize = onCall({ timeoutSeconds: 540 }, async (request
 // ==========================================
 
 // ==========================================
+// PHASE 1/4: Reset & Làm sạch Drive (NUCLEAR OPTION)
+// ==========================================
+exports.resetDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để thực hiện thao tác này.");
+    }
+    // Chỉ Admin mới được thực hiện reset
+    if (request.auth.token.email !== DRIVE_ADMIN_EMAIL) {
+        throw new HttpsError("permission-denied", "Chỉ Admin hệ thống mới có quyền Reset Drive.");
+    }
+
+    try {
+        const drive = await getDriveService();
+
+        // 1. Lấy thông tin folder hiện tại
+        const settingsDoc = await db.collection("settings").doc("driveFolders").get();
+        if (settingsDoc.exists) {
+            const folders = settingsDoc.data();
+            if (folders.rootId) {
+                console.log(`[RESET] Deleting root folder from Drive: ${folders.rootId}`);
+                try {
+                    await drive.files.delete({ fileId: folders.rootId, supportsAllDrives: true });
+                } catch (driveErr) {
+                    console.error("[RESET] Error deleting drive folder:", driveErr.message);
+                }
+            }
+        }
+
+        // 2. Xóa cấu hình trong Firestore settings
+        await db.collection("settings").doc("driveFolders").delete();
+        console.log("[RESET] Deleted settings/driveFolders");
+
+        // 3. Xóa Drive ID trong tất cả project_nodes
+        const nodesSnap = await db.collection("project_nodes").get();
+        const batch = db.batch();
+        nodesSnap.docs.forEach(docSnap => {
+            batch.update(docSnap.ref, {
+                driveFolderId: admin.firestore.FieldValue.delete(),
+                driveFolderLink: admin.firestore.FieldValue.delete()
+            });
+        });
+        await batch.commit();
+        console.log(`[RESET] Cleared Drive IDs from ${nodesSnap.size} nodes.`);
+
+        return { success: true, message: "Đã làm sạch toàn bộ cấu trúc Drive cũ. Hệ thống đã sẵn sàng để đồng bộ lại." };
+    } catch (error) {
+        console.error("resetDriveStructure Error:", error);
+        throw new HttpsError("internal", error.message);
+    }
+});
+
+// ==========================================
 // PHASE 1/4: Khởi tạo & Đồng bộ Hệ thống Folder trên Drive
 // ==========================================
 
