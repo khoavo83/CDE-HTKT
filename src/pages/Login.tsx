@@ -248,8 +248,10 @@ export const Login = () => {
             if (!unclaimedData) throw new Error("Không tìm thấy thông tin cán bộ.");
 
             // Dữ liệu mới gắn vào Auth UID
+            const { id: oldId, uid: oldUid, ...cleanUnclaimedData } = unclaimedData;
+
             const newUserData = {
-                ...unclaimedData,
+                ...cleanUnclaimedData,
                 uid: tempGoogleUser.uid,
                 email: tempGoogleUser.email,
                 role: 'pending', // BUỘC PHẢI CHỜ DUYỆT - Không cho bypass

@@ -35,7 +35,7 @@ export const UsersManagement = () => {
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const list: any[] = [];
             snapshot.forEach((doc) => {
-                list.push({ id: doc.id, ...doc.data() });
+                list.push({ ...doc.data(), id: doc.id });
             });
             setUsersList(list);
             setLoading(false);
