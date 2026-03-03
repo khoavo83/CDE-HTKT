@@ -344,7 +344,10 @@ export const Login = () => {
 
                 <div className="text-center mb-8">
                     <h1 className="text-[22px] font-black text-primary-600 mb-1 leading-tight uppercase">Hệ thống <br /> dữ liệu dùng chung</h1>
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Ban Quản lý Đường sắt đô thị - Ban HTKT</p>
+                    <div className="flex flex-col items-center gap-1 mt-2">
+                        <p className="text-sm font-black text-primary-600 uppercase tracking-wider">Ban Quản lý Đường sắt đô thị</p>
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Ban Hạ tầng Kỹ thuật</p>
+                    </div>
                 </div>
 
                 {errorMsg && (
@@ -437,7 +440,7 @@ export const Login = () => {
                                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                                 <path fill="none" d="M1 1h22v22H1z" />
                             </svg>
-                            Google Workspace
+                            Tài khoản Google
                         </button>
 
                         <p className="mt-8 text-center text-sm text-gray-500">
