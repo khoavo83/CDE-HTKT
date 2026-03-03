@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { collection, query, onSnapshot, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Link } from 'react-router-dom';
-import { FolderTree, Folder, FileCheck, Layers, Plus, Edit2, Trash2, ChevronRight, ChevronDown, CheckCircle, Clock, ArrowUp, ArrowDown, FileText, FileImage, FileSpreadsheet, X, Link as LinkIcon, Unlink, ExternalLink, HardDrive, Search, Calendar, Loader2 } from 'lucide-react';
+import { FolderTree, Folder, FileCheck, Layers, Plus, Edit2, Trash2, ChevronRight, ChevronDown, CheckCircle, Clock, ArrowUp, ArrowDown, FileText, FileImage, FileSpreadsheet, X, Link as LinkIcon, Unlink, ExternalLink, HardDrive, Search, Calendar, Loader2, ArrowUpDown, AlertTriangle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useAuthStore } from '../store/useAuthStore';
 import { canEditOrDeleteData } from '../utils/authUtils';
@@ -110,6 +110,11 @@ export const Projects = () => {
     const [attachSearchTerm, setAttachSearchTerm] = useState('');
     const [previewDocId, setPreviewDocId] = useState<string | null>(null);
 
+    // State sắp xếp và gỡ văn bản
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+    const [removeModalOpen, setRemoveModalOpen] = useState(false);
+    const [linkToRemove, setLinkToRemove] = useState<string | null>(null);
+
     const previewDoc = previewDocId ? allDocs.find(d => d.id === previewDocId) || null : null;
 
     const { register, handleSubmit, reset, watch, setValue, formState: { } } = useForm<ProjectNode>();
@@ -149,11 +154,17 @@ export const Projects = () => {
         // Lấy các link của selectedNodeId HOẶC các link của child tasks
         const relevantLinks = allLinks.filter(l => l.nodeId === selectedNodeId || childTaskIds.includes(l.nodeId));
 
-        return relevantLinks.map(link => {
+        const unsortedDocs = relevantLinks.map(link => {
             const docData = allDocs.find(d => d.id === link.vanBanId);
             return docData ? { ...docData, linkId: link.id } : null;
         }).filter((item): item is any => item !== null);
-    }, [selectedNodeId, allDocs, allLinks, allNodes]);
+
+        return unsortedDocs.sort((a, b) => {
+            const dateA = a.ngayBanHanh ? new Date(a.ngayBanHanh).getTime() : 0;
+            const dateB = b.ngayBanHanh ? new Date(b.ngayBanHanh).getTime() : 0;
+            return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+        });
+    }, [selectedNodeId, allDocs, allLinks, allNodes, sortOrder]);
 
     const findRootProjectId = (nodeId: string): string => {
         let current = allNodes.find(n => n.id === nodeId);
@@ -195,30 +206,35 @@ export const Projects = () => {
         }
     };
 
-    const handleRemoveDocLink = async (linkId: string) => {
-        if (isRemovingId === linkId) return;
-        if (!confirm("Bạn có chắc muốn gỡ văn bản này khỏi Hệ thống phân cấp? Hệ thống sẽ tự động tìm và xóa TẤT CẢ các Lối tắt (Shortcut) của văn bản này trong thư mục dự án hiện tại trên Google Drive để đảm bảo không còn tệp rác.")) return;
+    const handleRemoveDocLink = (linkId: string) => {
+        setLinkToRemove(linkId);
+        setRemoveModalOpen(true);
+    };
 
-        setIsRemovingId(linkId);
+    const executeRemoveDocLink = async () => {
+        if (!linkToRemove) return;
+        setIsRemovingId(linkToRemove);
+        setRemoveModalOpen(false); // Đóng modal ngay
         try {
             const { httpsCallable } = await import('firebase/functions');
             const { functions } = await import('../firebase/config');
             const removeFn = httpsCallable(functions, 'removeDocumentLink');
 
             // Xóa qua Cloud Function để xóa trên Drive luôn
-            await removeFn({ linkId });
+            await removeFn({ linkId: linkToRemove });
         } catch (error: any) {
             console.error(error);
             alert("Lỗi khi gỡ văn bản: " + error.message);
 
             // Fallback: Nếu lỗi Drive thì ít nhất xóa DB để UX mượt
             try {
-                await deleteDoc(doc(db, "vanban_node_links", linkId));
+                await deleteDoc(doc(db, "vanban_node_links", linkToRemove));
             } catch (err) {
                 console.error("Fallback delete failed:", err);
             }
         } finally {
             setIsRemovingId(null);
+            setLinkToRemove(null);
         }
     };
 
@@ -860,12 +876,21 @@ export const Projects = () => {
                             <div className="mb-8">
                                 <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
                                     <h3 className="text-lg font-semibold text-gray-900">Danh sách Văn bản <span className="ml-2 text-sm font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{nodeLinksWithDocs.length}</span></h3>
-                                    <button
-                                        onClick={() => setIsAttachDocModalOpen(true)}
-                                        className="flex items-center gap-1.5 bg-white border border-gray-200 text-blue-600 hover:text-blue-700 hover:border-blue-300 font-medium px-3 py-1.5 rounded-md hover:bg-blue-50 transition-colors text-sm shadow-sm"
-                                    >
-                                        <LinkIcon className="w-3.5 h-3.5" /> Thêm Văn bản
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                                            className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 font-medium px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors text-sm shadow-sm"
+                                            title="Sắp xếp theo ngày ban hành"
+                                        >
+                                            <ArrowUpDown className="w-3.5 h-3.5" /> Sắp xếp {sortOrder === 'asc' ? 'cũ nhất' : 'mới nhất'}
+                                        </button>
+                                        <button
+                                            onClick={() => setIsAttachDocModalOpen(true)}
+                                            className="flex items-center gap-1.5 bg-white border border-gray-200 text-blue-600 hover:text-blue-700 hover:border-blue-300 font-medium px-3 py-1.5 rounded-md hover:bg-blue-50 transition-colors text-sm shadow-sm"
+                                        >
+                                            <LinkIcon className="w-3.5 h-3.5" /> Thêm Văn bản
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {nodeLinksWithDocs.length > 0 ? (
@@ -1443,6 +1468,42 @@ export const Projects = () => {
                 onConfirm={confirmDeleteNode}
                 itemName={nodeToDelete?.name || ''}
             />
+
+            {/* Modal Gỡ Văn bản */}
+            {removeModalOpen && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden transform transition-all">
+                        <div className="p-6">
+                            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mb-4 mx-auto">
+                                <AlertTriangle className="w-6 h-6 text-red-600" />
+                            </div>
+                            <h3 className="text-lg font-bold text-center text-gray-900 mb-2">
+                                Gỡ bỏ Văn bản
+                            </h3>
+                            <p className="text-center text-sm text-gray-500 mb-6">
+                                Bạn có chắc muốn gỡ văn bản này khỏi Hệ thống phân cấp? Hệ thống sẽ tự động tìm và xóa TẤT CẢ các Lối tắt (Shortcut) của văn bản này trong thư mục dự án hiện tại trên Google Drive để đảm bảo không còn tệp rác.
+                            </p>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => {
+                                        setRemoveModalOpen(false);
+                                        setLinkToRemove(null);
+                                    }}
+                                    className="flex-1 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                                >
+                                    Hủy bỏ
+                                </button>
+                                <button
+                                    onClick={executeRemoveDocLink}
+                                    className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors"
+                                >
+                                    Gỡ bỏ
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
