@@ -72,8 +72,8 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
         setSelectedCollaborators(prev => prev.filter(id => id !== newAssigneeId));
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+        if (e && e.preventDefault) e.preventDefault();
 
         console.log('[AssignTaskModal] Bắt đầu submit...', { selectedAssignee, contentKhacRong: !!content.trim() });
 
@@ -161,7 +161,7 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5">
+                <div className="p-6 overflow-y-auto space-y-5">
                     {/* Người phụ trách chính */}
                     <div>
                         <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
@@ -264,7 +264,8 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
                             Hủy
                         </button>
                         <button
-                            type="submit"
+                            type="button"
+                            onClick={handleSubmit}
                             disabled={isSubmitting || !selectedAssignee || !content.trim()}
                             className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
                         >
@@ -272,7 +273,7 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
                             Giao Việc
                         </button>
                     </div>
-                </form>
+                </div>
             </div>
         </div>
     );
