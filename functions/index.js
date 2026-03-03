@@ -649,8 +649,20 @@ exports.attachDocumentToNode = onCall({ timeoutSeconds: 60 }, async (request) =>
 
         // 3. Link file to Node's Drive Folder via Shortcut
         if (nodeData.driveFolderId && vbData.driveFileId_Original) {
+            // Kiểm tra xem đã tồn tại link này chưa
+            const existingLinksQuery = await db.collection("vanban_node_links")
+                .where("vanBanId", "==", vanBanId)
+                .where("nodeId", "==", nodeId)
+                .get();
+
+            if (!existingLinksQuery.empty) {
+                console.log(`[ATTACH] Link already exists: vanBanId=${vanBanId}, nodeId=${nodeId}`);
+                // Bỏ qua tạo shortcut và trả về ID hiện tại thay vì ném lỗi
+                return { success: true, linkId: existingLinksQuery.docs[0].id, isDuplicate: true };
+            }
+
             try {
-                await drive.files.create({
+                const res = await drive.files.create({
                     supportsAllDrives: true,
                     resource: {
                         name: (vbData.fileNameStandardized || vbData.fileNameOriginal || "Link") + " (Shortcut)",
@@ -659,8 +671,8 @@ exports.attachDocumentToNode = onCall({ timeoutSeconds: 60 }, async (request) =>
                         parents: [nodeData.driveFolderId]
                     }
                 });
-                copiedFileId = vbData.driveFileId_Original;
-                console.log(`Created shortcut for file ${copiedFileId} in Node Folder: ${nodeData.driveFolderId}`);
+                copiedFileId = res.data.id; // Lưu ID của shortcut vừa tạo, không phải ID file gốc
+                console.log(`Created shortcut ${copiedFileId} in Node Folder: ${nodeData.driveFolderId}`);
             } catch (err) {
                 console.error(`Error creating shortcut for node: ${err.message}`);
             }
@@ -681,6 +693,48 @@ exports.attachDocumentToNode = onCall({ timeoutSeconds: 60 }, async (request) =>
 
     } catch (error) {
         console.error("attachDocumentToNode Error:", error);
+        throw new HttpsError("internal", error.message);
+    }
+});
+
+/**
+ * Xóa liên kết văn bản với cấu trúc dự án và xóa Drive Shortcut tương ứng
+ */
+exports.removeDocumentLink = onCall({ timeoutSeconds: 60 }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để thực hiện thao tác này.");
+
+    try {
+        const { linkId } = request.data;
+        if (!linkId) throw new Error("Missing linkId");
+
+        const linkRef = db.collection("vanban_node_links").doc(linkId);
+        const linkDoc = await linkRef.get();
+
+        if (!linkDoc.exists) return { success: true, message: "Link already removed" };
+
+        const linkData = linkDoc.data();
+
+        // Gọi Google Drive xóa shortcut nếu có ID
+        if (linkData.driveShortcutId) {
+            try {
+                const drive = await getDriveService();
+                await drive.files.delete({
+                    fileId: linkData.driveShortcutId,
+                    supportsAllDrives: true
+                });
+                console.log(`[REMOVE LINK] Deleted shortcut ${linkData.driveShortcutId} on Drive.`);
+            } catch (err) {
+                console.warn(`[REMOVE LINK] Drive shortcut ${linkData.driveShortcutId} deletion failed:`, err.message);
+                // Vẫn tiếp tục xóa dưới DB (có thể file Drive đã bị xoá tay)
+            }
+        }
+
+        await linkRef.delete();
+        console.log(`[REMOVE LINK] Deleted link record: ${linkId} from database.`);
+
+        return { success: true };
+    } catch (error) {
+        console.error("Error removing document link:", error);
         throw new HttpsError("internal", error.message);
     }
 });

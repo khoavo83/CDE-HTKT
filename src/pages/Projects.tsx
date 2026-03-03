@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { collection, query, onSnapshot, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Link } from 'react-router-dom';
-import { FolderTree, Folder, FileCheck, Layers, Plus, Edit2, Trash2, ChevronRight, ChevronDown, CheckCircle, Clock, ArrowUp, ArrowDown, FileText, FileImage, FileSpreadsheet, X, Link as LinkIcon, Unlink, ExternalLink, HardDrive, Search, Calendar } from 'lucide-react';
+import { FolderTree, Folder, FileCheck, Layers, Plus, Edit2, Trash2, ChevronRight, ChevronDown, CheckCircle, Clock, ArrowUp, ArrowDown, FileText, FileImage, FileSpreadsheet, X, Link as LinkIcon, Unlink, ExternalLink, HardDrive, Search, Calendar, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useAuthStore } from '../store/useAuthStore';
 import { canEditOrDeleteData } from '../utils/authUtils';
@@ -101,6 +101,11 @@ export const Projects = () => {
     const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
     const [allDocs, setAllDocs] = useState<any[]>([]);
     const [allLinks, setAllLinks] = useState<any[]>([]);
+
+    // State chặn gửi đính kèm / gỡ dính kềm liên tục
+    const [isAttachingId, setIsAttachingId] = useState<string | null>(null);
+    const [isRemovingId, setIsRemovingId] = useState<string | null>(null);
+
     const [isAttachDocModalOpen, setIsAttachDocModalOpen] = useState(false);
     const [attachSearchTerm, setAttachSearchTerm] = useState('');
     const [previewDocId, setPreviewDocId] = useState<string | null>(null);
@@ -157,30 +162,60 @@ export const Projects = () => {
     };
 
     const handleAttachDoc = async (docId: string) => {
-        if (!selectedNodeId) return;
+        if (!selectedNodeId || isAttachingId === docId) return;
+
+        if (!confirm("Bạn có tin chắc muốn đính kèm văn bản này vào nhánh dự án hiện tại?")) return;
+
+        setIsAttachingId(docId);
         try {
             const { httpsCallable } = await import('firebase/functions');
             const { functions } = await import('../firebase/config');
             const attachFn = httpsCallable(functions, 'attachDocumentToNode');
 
-            await attachFn({
+            const result = await attachFn({
                 nodeId: selectedNodeId,
                 vanBanId: docId,
                 projectId: findRootProjectId(selectedNodeId)
             });
 
+            if ((result as any).data?.isDuplicate) {
+                alert("Văn bản này đã được đính kèm vào nhánh này từ trước!");
+            }
+
             setIsAttachDocModalOpen(false);
         } catch (error: any) {
             console.error(error);
             alert("Lỗi khi đính kèm văn bản: " + error.message);
+        } finally {
+            setIsAttachingId(null);
         }
     };
 
     const handleRemoveDocLink = async (docId: string) => {
-        if (!confirm("Bạn có chắc muốn gỡ văn bản này khỏi Hệ thống phân cấp? Khi gỡ nó sẽ quay về danh sách Văn bản chưa phân bổ.")) return;
+        if (isRemovingId === docId) return;
+        if (!confirm("Bạn có chắc muốn gỡ văn bản này khỏi Hệ thống phân cấp? Thao tác này sẽ xóa Lối tắt (Shortcut) của văn bản trên Google Drive.")) return;
+
         const link = allLinks.find(l => l.nodeId === selectedNodeId && l.vanBanId === docId);
         if (link) {
-            await deleteDoc(doc(db, "vanban_node_links", link.id));
+            setIsRemovingId(docId);
+            try {
+                const { httpsCallable } = await import('firebase/functions');
+                const { functions } = await import('../firebase/config');
+                const removeFn = httpsCallable(functions, 'removeDocumentLink');
+
+                // Xóa qua Cloud Function để xóa trên Drive luôn
+                await removeFn({ linkId: link.id });
+            } catch (error: any) {
+                console.error(error);
+                alert("Lỗi khi gỡ văn bản: " + error.message);
+
+                // Fallback: Nếu lỗi Drive thì ít nhất xóa DB để UX mượt
+                try {
+                    await deleteDoc(doc(db, "vanban_node_links", link.id));
+                } catch (e) { }
+            } finally {
+                setIsRemovingId(null);
+            }
         }
     };
 
@@ -1225,9 +1260,18 @@ export const Projects = () => {
                                             </div>
                                             <button
                                                 onClick={() => handleAttachDoc(d.id)}
-                                                className="shrink-0 bg-white border border-gray-200 text-blue-600 hover:bg-blue-600 hover:text-white hover:border-blue-600 px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm flex items-center gap-1.5"
+                                                disabled={isAttachingId === d.id}
+                                                className={`shrink-0 border px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm flex items-center gap-1.5 ${isAttachingId === d.id
+                                                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                                    : 'bg-white border-gray-200 text-blue-600 hover:bg-blue-600 hover:text-white hover:border-blue-600'
+                                                    }`}
                                             >
-                                                <LinkIcon className="w-3.5 h-3.5" /> Chọn
+                                                {isAttachingId === d.id ? (
+                                                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                                                ) : (
+                                                    <LinkIcon className="w-3.5 h-3.5" />
+                                                )}
+                                                {isAttachingId === d.id ? 'Đang gắn...' : 'Chọn'}
                                             </button>
                                         </div>
                                     ))}
