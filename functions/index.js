@@ -710,27 +710,49 @@ exports.removeDocumentLink = onCall({ timeoutSeconds: 60 }, async (request) => {
         const linkRef = db.collection("vanban_node_links").doc(linkId);
         const linkDoc = await linkRef.get();
 
-        if (!linkDoc.exists) return { success: true, message: "Link already removed" };
+        if (!linkDoc.exists) return { success: true, message: "Link already removed from database" };
 
         const linkData = linkDoc.data();
+        const { nodeId, vanBanId } = linkData;
 
-        // Gọi Google Drive xóa shortcut nếu có ID
-        if (linkData.driveShortcutId) {
+        // 1. Lấy thông tin Node và Văn bản để xác định mục tiêu xóa trên Drive
+        const [nodeSnap, vbSnap] = await Promise.all([
+            db.collection("project_nodes").doc(nodeId).get(),
+            db.collection("vanban").doc(vanBanId).get()
+        ]);
+
+        const drive = await getDriveService();
+        const driveFolderId = nodeSnap.exists ? nodeSnap.data().driveFolderId : null;
+        const targetFileId = vbSnap.exists ? vbSnap.data().driveFileId_Original : null;
+
+        // 2. Dọn dẹp triệt để trên Drive
+        if (driveFolderId && targetFileId) {
             try {
-                const drive = await getDriveService();
-                await drive.files.delete({
-                    fileId: linkData.driveShortcutId,
-                    supportsAllDrives: true
+                // Tìm tất cả shortcut trong thư mục này trỏ tới file gốc đó
+                const listRes = await drive.files.list({
+                    q: `'${driveFolderId}' in parents and mimeType = 'application/vnd.google-apps.shortcut' and trashed = false`,
+                    fields: 'files(id, shortcutDetails)',
+                    supportsAllDrives: true,
+                    includeItemsFromAllDrives: true
                 });
-                console.log(`[REMOVE LINK] Deleted shortcut ${linkData.driveShortcutId} on Drive.`);
+
+                const shortcutsToDelete = listRes.data.files.filter(f => f.shortcutDetails && f.shortcutDetails.targetId === targetFileId);
+
+                if (shortcutsToDelete.length > 0) {
+                    console.log(`[REMOVE LINK] Found ${shortcutsToDelete.length} shortcuts to cleanup in folder ${driveFolderId}`);
+                    await Promise.all(shortcutsToDelete.map(f =>
+                        drive.files.delete({ fileId: f.id, supportsAllDrives: true })
+                            .catch(e => console.error(`Failed to delete shortcut ${f.id}:`, e.message))
+                    ));
+                }
             } catch (err) {
-                console.warn(`[REMOVE LINK] Drive shortcut ${linkData.driveShortcutId} deletion failed:`, err.message);
-                // Vẫn tiếp tục xóa dưới DB (có thể file Drive đã bị xoá tay)
+                console.error("[REMOVE LINK] Drive cleanup failed:", err.message);
             }
         }
 
+        // 3. Xóa record trong DB
         await linkRef.delete();
-        console.log(`[REMOVE LINK] Deleted link record: ${linkId} from database.`);
+        console.log(`[REMOVE LINK] Deleted link record and cleaned up Drive shortcuts for link ${linkId}`);
 
         return { success: true };
     } catch (error) {

@@ -140,15 +140,19 @@ export const Projects = () => {
         return docs;
     }, [allDocs, allLinks, attachSearchTerm]);
 
-    const nodeDocs = useMemo(() => {
+    const nodeLinksWithDocs = useMemo(() => {
         if (!selectedNodeId) return [];
 
         // Lấy danh sách ID của các Task trực thuộc selectedNodeId
         const childTaskIds = allNodes.filter(n => n.type === 'TASK' && n.parentId === selectedNodeId).map(n => n.id);
 
-        // Lấy link của selectedNodeId HOẶC các link của child tasks
-        const myLinkIds = allLinks.filter(l => l.nodeId === selectedNodeId || childTaskIds.includes(l.nodeId)).map(l => l.vanBanId);
-        return allDocs.filter(d => myLinkIds.includes(d.id));
+        // Lấy các link của selectedNodeId HOẶC các link của child tasks
+        const relevantLinks = allLinks.filter(l => l.nodeId === selectedNodeId || childTaskIds.includes(l.nodeId));
+
+        return relevantLinks.map(link => {
+            const docData = allDocs.find(d => d.id === link.vanBanId);
+            return docData ? { ...docData, linkId: link.id } : null;
+        }).filter((item): item is any => item !== null);
     }, [selectedNodeId, allDocs, allLinks, allNodes]);
 
     const findRootProjectId = (nodeId: string): string => {
@@ -191,31 +195,30 @@ export const Projects = () => {
         }
     };
 
-    const handleRemoveDocLink = async (docId: string) => {
-        if (isRemovingId === docId) return;
-        if (!confirm("Bạn có chắc muốn gỡ văn bản này khỏi Hệ thống phân cấp? Thao tác này sẽ xóa Lối tắt (Shortcut) của văn bản trên Google Drive.")) return;
+    const handleRemoveDocLink = async (linkId: string) => {
+        if (isRemovingId === linkId) return;
+        if (!confirm("Bạn có chắc muốn gỡ văn bản này khỏi Hệ thống phân cấp? Hệ thống sẽ tự động tìm và xóa TẤT CẢ các Lối tắt (Shortcut) của văn bản này trong thư mục dự án hiện tại trên Google Drive để đảm bảo không còn tệp rác.")) return;
 
-        const link = allLinks.find(l => l.nodeId === selectedNodeId && l.vanBanId === docId);
-        if (link) {
-            setIsRemovingId(docId);
+        setIsRemovingId(linkId);
+        try {
+            const { httpsCallable } = await import('firebase/functions');
+            const { functions } = await import('../firebase/config');
+            const removeFn = httpsCallable(functions, 'removeDocumentLink');
+
+            // Xóa qua Cloud Function để xóa trên Drive luôn
+            await removeFn({ linkId });
+        } catch (error: any) {
+            console.error(error);
+            alert("Lỗi khi gỡ văn bản: " + error.message);
+
+            // Fallback: Nếu lỗi Drive thì ít nhất xóa DB để UX mượt
             try {
-                const { httpsCallable } = await import('firebase/functions');
-                const { functions } = await import('../firebase/config');
-                const removeFn = httpsCallable(functions, 'removeDocumentLink');
-
-                // Xóa qua Cloud Function để xóa trên Drive luôn
-                await removeFn({ linkId: link.id });
-            } catch (error: any) {
-                console.error(error);
-                alert("Lỗi khi gỡ văn bản: " + error.message);
-
-                // Fallback: Nếu lỗi Drive thì ít nhất xóa DB để UX mượt
-                try {
-                    await deleteDoc(doc(db, "vanban_node_links", link.id));
-                } catch (e) { }
-            } finally {
-                setIsRemovingId(null);
+                await deleteDoc(doc(db, "vanban_node_links", linkId));
+            } catch (err) {
+                console.error("Fallback delete failed:", err);
             }
+        } finally {
+            setIsRemovingId(null);
         }
     };
 
@@ -856,7 +859,7 @@ export const Projects = () => {
                             {/* Danh sách Văn bản */}
                             <div className="mb-8">
                                 <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
-                                    <h3 className="text-lg font-semibold text-gray-900">Danh sách Văn bản <span className="ml-2 text-sm font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{nodeDocs.length}</span></h3>
+                                    <h3 className="text-lg font-semibold text-gray-900">Danh sách Văn bản <span className="ml-2 text-sm font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{nodeLinksWithDocs.length}</span></h3>
                                     <button
                                         onClick={() => setIsAttachDocModalOpen(true)}
                                         className="flex items-center gap-1.5 bg-white border border-gray-200 text-blue-600 hover:text-blue-700 hover:border-blue-300 font-medium px-3 py-1.5 rounded-md hover:bg-blue-50 transition-colors text-sm shadow-sm"
@@ -865,7 +868,7 @@ export const Projects = () => {
                                     </button>
                                 </div>
 
-                                {nodeDocs.length > 0 ? (
+                                {nodeLinksWithDocs.length > 0 ? (
                                     <div className="border border-gray-200 rounded-lg overflow-x-auto bg-white shadow-sm">
                                         <table className="w-full text-left text-sm text-gray-600 table-fixed min-w-[500px]">
                                             <thead className="bg-gray-50 text-gray-700 font-medium border-b border-gray-200">
@@ -876,7 +879,7 @@ export const Projects = () => {
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
-                                                {nodeDocs.map(d => {
+                                                {nodeLinksWithDocs.map(d => {
                                                     const { Icon, bg, color } = getDocIconConfig(d);
                                                     // Tạo câu pháp lý đầy đủ
                                                     const parts: string[] = [];
@@ -905,11 +908,16 @@ export const Projects = () => {
                                                             </td>
                                                             <td className="px-3 py-3 text-center">
                                                                 <button
-                                                                    onClick={() => handleRemoveDocLink(d.id)}
-                                                                    className="text-gray-300 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                                                                    onClick={() => handleRemoveDocLink(d.linkId)}
+                                                                    disabled={!!isRemovingId}
+                                                                    className="text-gray-300 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
                                                                     title="Gỡ văn bản khỏi mục này"
                                                                 >
-                                                                    <Unlink className="w-4 h-4 mx-auto" />
+                                                                    {isRemovingId === d.linkId ? (
+                                                                        <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                                                                    ) : (
+                                                                        <Unlink className="w-4 h-4 mx-auto" />
+                                                                    )}
                                                                 </button>
                                                             </td>
                                                         </tr>
