@@ -32,6 +32,7 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({ isOpen, onClose, ini
         attachmentName: ''
     });
     const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -117,12 +118,17 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({ isOpen, onClose, ini
         if (!isExistingMeeting) return;
         if (!window.confirm('Bạn có chắc muốn xóa cuộc họp này?')) return;
 
+        setIsDeleting(true);
         try {
+            console.log(`[DEBUG] Đang xóa cuộc họp có ID: ${initialData.id}`);
             await deleteMeeting(initialData.id);
             toast.success('Đã xóa cuộc họp thành công!');
             onClose();
         } catch (error) {
-            toast.error('Lỗi khi xóa cuộc họp.');
+            console.error('Lỗi khi xóa cuộc họp:', error);
+            toast.error('Lỗi khi xóa cuộc họp. Vui lòng thử lại.');
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -500,9 +506,10 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({ isOpen, onClose, ini
                                     <button
                                         type="button"
                                         onClick={handleDelete}
-                                        className="px-4 py-2 text-sm font-bold text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1.5"
+                                        disabled={isDeleting || isSaving}
+                                        className="px-4 py-2 text-sm font-bold text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
                                     >
-                                        <Trash2 className="w-4 h-4" /> Xóa
+                                        {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Xóa
                                     </button>
                                 )}
                             </div>
@@ -542,9 +549,10 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({ isOpen, onClose, ini
                             <button
                                 type="button"
                                 onClick={handleDelete}
-                                className="px-4 py-2 text-sm font-bold text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1.5"
+                                disabled={isDeleting}
+                                className="px-4 py-2 text-sm font-bold text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
                             >
-                                <Trash2 className="w-4 h-4" /> Xóa
+                                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Xóa
                             </button>
                             <div className="flex items-center gap-3">
                                 <button

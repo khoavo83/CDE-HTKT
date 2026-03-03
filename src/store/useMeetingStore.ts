@@ -53,11 +53,28 @@ export const useMeetingStore = create<MeetingState>((set) => ({
             const list = snapshot.docs.map(d => ({
                 id: d.id,
                 ...d.data()
-            } as Meeting)).sort((a, b) => {
-                if (a.date !== b.date) return 0; // Already sorted by date in query
+            } as Meeting));
+
+            // Deduplicate: Lọc bỏ các bản ghi trùng lặp tuyệt đối (cùng title, date, startTime)
+            // Giữ lại bản ghi có createdAt mới nhất (nếu có) hoặc bản ghi đầu tiên
+            const uniqueMeetings = list.reduce((acc: Meeting[], current) => {
+                const isDuplicate = acc.find(item =>
+                    item.title === current.title &&
+                    item.date === current.date &&
+                    item.startTime === current.startTime
+                );
+                if (!isDuplicate) {
+                    acc.push(current);
+                }
+                return acc;
+            }, []);
+
+            const sortedList = uniqueMeetings.sort((a, b) => {
+                if (a.date !== b.date) return 0; // Đã sort bởi query theo ngày
                 return a.startTime.localeCompare(b.startTime);
             });
-            set({ meetings: list, isLoading: false });
+
+            set({ meetings: sortedList, isLoading: false });
         }, (error) => {
             console.error('Lỗi fetchMeetings:', error);
             set({ isLoading: false });

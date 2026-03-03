@@ -42,6 +42,38 @@ async function ensureAdminPermission(drive, fileId) {
     }
 }
 
+/**
+ * Hàm hỗ trợ: Tìm kiếm tệp hoặc thư mục đã tồn tại trên Drive theo Tên và Thư mục cha.
+ * Giúp chống nhân đôi (deduplication) khi đồng bộ.
+ */
+async function findExistingItem(drive, name, parentId, mimeType = null) {
+    try {
+        let query = `name = '${name.replace(/'/g, "\\'")}' and trashed = false`;
+        if (parentId) {
+            query += ` and '${parentId}' in parents`;
+        }
+        if (mimeType) {
+            query += ` and mimeType = '${mimeType}'`;
+        }
+
+        const response = await drive.files.list({
+            q: query,
+            fields: "files(id, name, webViewLink)",
+            spaces: 'drive',
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true
+        });
+
+        if (response.data.files && response.data.files.length > 0) {
+            return response.data.files[0]; // Trả về kết quả đầu tiên tìm thấy
+        }
+        return null;
+    } catch (err) {
+        console.error(`[DEBUG] Error finding item '${name}':`, err.message);
+        return null;
+    }
+}
+
 // Helper function kết nối Drive - nạp trễ (Lazy Load) để tránh Timeout khi deploy
 let driveInstance = null;
 async function getDriveService() {
@@ -732,24 +764,67 @@ exports.resetDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) =>
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để thực hiện thao tác này.");
     }
-    // Chỉ Admin mới được thực hiện reset
-    if (request.auth.token.email !== DRIVE_ADMIN_EMAIL) {
-        throw new HttpsError("permission-denied", "Chỉ Admin hệ thống mới có quyền Reset Drive.");
-    }
-
     try {
+        // Kiểm tra quyền Admin từ Firestore
+        const userDoc = await db.collection("users").doc(request.auth.uid).get();
+        const userData = userDoc.exists ? userDoc.data() : null;
+        const isAdmin = (userData?.role === 'admin') || (request.auth.token.email === DRIVE_ADMIN_EMAIL);
+
+        if (!isAdmin) {
+            throw new HttpsError("permission-denied", "Chỉ Admin hệ thống mới có quyền Reset Drive.");
+        }
+
         const drive = await getDriveService();
 
-        // 1. Lấy thông tin folder hiện tại
+        /**
+         * Hàm hỗ trợ: Xóa sạch toàn bộ nội dung bên trong một thư mục (đệ quy).
+         * Giúp dọn dẹp các lối tắt (shortcuts) và tệp tin mồ côi.
+         */
+        const deleteFolderRecursive = async (folderId) => {
+            if (!folderId) return;
+            try {
+                // Liệt kê tối đa 1000 mục con bên trong
+                const res = await drive.files.list({
+                    q: `'${folderId}' in parents and trashed = false`,
+                    fields: "files(id, name, mimeType)",
+                    supportsAllDrives: true,
+                    includeItemsFromAllDrives: true
+                });
+
+                const files = res.data.files || [];
+                for (const file of files) {
+                    if (file.mimeType === 'application/vnd.google-apps.folder') {
+                        // Nếu là thư mục, đệ quy xóa con trước
+                        await deleteFolderRecursive(file.id);
+                    }
+                    // Xóa tệp tin/lối tắt/thư mục rỗng
+                    try {
+                        await drive.files.delete({ fileId: file.id, supportsAllDrives: true });
+                        console.log(`[RESET] Deleted: ${file.name} (${file.id})`);
+                    } catch (e) {
+                        console.warn(`[RESET] Failed to delete ${file.id}: ${e.message}`);
+                    }
+                }
+            } catch (err) {
+                console.error(`[RESET] Error scanning folder ${folderId}:`, err.message);
+            }
+        };
+
+        // 1. Lấy thông tin folder hiện tại và Dọn dẹp Sâu
         const settingsDoc = await db.collection("settings").doc("driveFolders").get();
         if (settingsDoc.exists) {
             const folders = settingsDoc.data();
             if (folders.rootId) {
-                console.log(`[RESET] Deleting root folder from Drive: ${folders.rootId}`);
+                console.log(`[RESET] Deep cleaning root folder: ${folders.rootId}`);
+                // Bắt đầu dọn dẹp đệ quy từ root
+                await deleteFolderRecursive(folders.rootId);
+
+                // Sau khi xóa hết con, thử xóa chính nó
                 try {
                     await drive.files.delete({ fileId: folders.rootId, supportsAllDrives: true });
+                    console.log(`[RESET] Successfully deleted root folder ${folders.rootId}`);
                 } catch (driveErr) {
-                    console.error("[RESET] Error deleting drive folder:", driveErr.message);
+                    console.warn(`[RESET] Final root deletion skipped: ${driveErr.message}`);
                 }
             }
         }
@@ -770,7 +845,7 @@ exports.resetDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) =>
         await batch.commit();
         console.log(`[RESET] Cleared Drive IDs from ${nodesSnap.size} nodes.`);
 
-        return { success: true, message: "Đã làm sạch toàn bộ cấu trúc Drive cũ. Hệ thống đã sẵn sàng để đồng bộ lại." };
+        return { success: true, message: "Hệ thống đã dọn dẹp sạch sâu toàn bộ Drive rác. Bạn có thể thực hiện đồng bộ lại." };
     } catch (error) {
         console.error("resetDriveStructure Error:", error);
         throw new HttpsError("internal", error.message);
@@ -783,10 +858,16 @@ exports.resetDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) =>
 
 // HTTP Callable: Đồng bộ toàn bộ cấu trúc hiện tại lên Drive
 exports.syncDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để thực hiện thao tác này.");
-    }
     try {
+        // Kiểm tra quyền Admin hoặc Manager từ Firestore
+        const userDoc = await db.collection("users").doc(request.auth.uid).get();
+        const userData = userDoc.exists ? userDoc.data() : null;
+        const hasPermission = (userData?.role === 'admin' || userData?.role === 'manager') || (request.auth.token.email === DRIVE_ADMIN_EMAIL);
+
+        if (!hasPermission) {
+            throw new HttpsError("permission-denied", "Bạn không có quyền thực hiện đồng bộ Drive.");
+        }
+
         const drive = await getDriveService();
 
         // 1. Khởi tạo/Lấy thư mục gốc
@@ -794,6 +875,13 @@ exports.syncDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) => 
         let folders = settingsDoc.exists ? settingsDoc.data() : {};
 
         const createFolder = async (name, parentId = null) => {
+            // [DEDUPLICATION] Tìm kiếm trước khi tạo
+            const existing = await findExistingItem(drive, name, parentId, "application/vnd.google-apps.folder");
+            if (existing) {
+                console.log(`[DEBUG] Found existing folder: ${name} (${existing.id})`);
+                return existing;
+            }
+
             const folder = await drive.files.create({
                 requestBody: {
                     name: name || "Chưa đặt tên",
@@ -905,6 +993,11 @@ exports.syncDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) => 
                         }
                     }
                 }
+                // [PERMISSION FIX] Luôn đảm bảo Admin có quyền Writer trên folder này
+                if (currentDriveId) {
+                    await ensureAdminPermission(drive, currentDriveId);
+                }
+
                 // Tiếp tục đệ quy cho các con - RESET prefix nếu đây là cấp Dự án gốc (level 0)
                 if (currentDriveId) {
                     const isRoot = !prefix; // Trong code này, prefix "" tương ứng cấp 0
@@ -936,19 +1029,31 @@ exports.syncDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) => 
                     const targetFolderId = isOutgoing ? folders.vanBanDiId : folders.vanBanDenId;
                     const folderName = isOutgoing ? "Văn bản Đi" : "Văn bản Đến";
 
-                    // Tạo Shortcut thay vì addParents (Tránh lỗi multi-parent)
-                    await drive.files.create({
-                        supportsAllDrives: true,
-                        resource: {
-                            name: (data.fileNameStandardized || data.fileNameOriginal || "VanBan") + " (Shortcut)",
-                            mimeType: 'application/vnd.google-apps.shortcut',
-                            shortcutDetails: { targetId: fileId },
-                            parents: [targetFolderId]
-                        }
-                    });
+                    // [DEDUPLICATION] Kiểm tra shortcut đã tồn tại chưa
+                    const shortcutName = (data.fileNameStandardized || data.fileNameOriginal || "VanBan") + " (Shortcut)";
+                    const existingShortcut = await findExistingItem(drive, shortcutName, targetFolderId, 'application/vnd.google-apps.shortcut');
+
+                    if (!existingShortcut) {
+                        // Tạo Shortcut thay vì addParents (Tránh lỗi multi-parent)
+                        await drive.files.create({
+                            supportsAllDrives: true,
+                            resource: {
+                                name: shortcutName,
+                                mimeType: 'application/vnd.google-apps.shortcut',
+                                shortcutDetails: { targetId: fileId },
+                                parents: [targetFolderId]
+                            }
+                        });
+                        // [PERMISSION FIX] Cấp quyền cho Admin trên shortcut mới
+                        const news = await findExistingItem(drive, shortcutName, targetFolderId, 'application/vnd.google-apps.shortcut');
+                        if (news) await ensureAdminPermission(drive, news.id);
+
+                        debugLogs.push(`[${fileCount + 1}] Tạo mới: "${data.fileNameOriginal || doc.id}" -> ${folderName}`);
+                    } else {
+                        debugLogs.push(`[${fileCount + 1}] Đã có: "${data.fileNameOriginal || doc.id}" -> ${folderName}`);
+                    }
 
                     fileCount++;
-                    debugLogs.push(`[${fileCount}] Thành công: "${data.fileNameOriginal || doc.id}" -> ${folderName}`);
                     await sleep(200);
                 } catch (err) {
                     debugLogs.push(`[!] Lỗi shortcut doc ${doc.id}: ${err.message}`);
@@ -974,17 +1079,28 @@ exports.syncDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) => 
 
                 if (nodeData.driveFolderId && fileId) {
                     try {
-                        await drive.files.create({
-                            supportsAllDrives: true,
-                            resource: {
-                                name: (vbData.fileNameStandardized || vbData.fileNameOriginal || "Link") + " (Shortcut)",
-                                mimeType: 'application/vnd.google-apps.shortcut',
-                                shortcutDetails: { targetId: fileId },
-                                parents: [nodeData.driveFolderId]
-                            }
-                        });
+                        const shortcutName = (vbData.fileNameStandardized || vbData.fileNameOriginal || "Link") + " (Shortcut)";
+                        const existingShortcut = await findExistingItem(drive, shortcutName, nodeData.driveFolderId, 'application/vnd.google-apps.shortcut');
+
+                        if (!existingShortcut) {
+                            await drive.files.create({
+                                supportsAllDrives: true,
+                                resource: {
+                                    name: shortcutName,
+                                    mimeType: 'application/vnd.google-apps.shortcut',
+                                    shortcutDetails: { targetId: fileId },
+                                    parents: [nodeData.driveFolderId]
+                                }
+                            });
+                            // [PERMISSION FIX] Cấp quyền cho Admin trên shortcut mới
+                            const news = await findExistingItem(drive, shortcutName, nodeData.driveFolderId, 'application/vnd.google-apps.shortcut');
+                            if (news) await ensureAdminPermission(drive, news.id);
+
+                            debugLogs.push(`[+] Link: "${vbData.fileNameOriginal || linkData.vanBanId}" -> Nhánh: ${nodeData.name}`);
+                        } else {
+                            debugLogs.push(`[~] Đã có Link: "${vbData.fileNameOriginal || linkData.vanBanId}" -> Nhánh: ${nodeData.name}`);
+                        }
                         linkFileCount++;
-                        debugLogs.push(`[+] Link: "${vbData.fileNameOriginal || linkData.vanBanId}" -> Nhánh: ${nodeData.name}`);
                         await sleep(200);
                     } catch (err) {
                         debugLogs.push(`[!] Lỗi shortcut link ${linkDoc.id}: ${err.message}`);
