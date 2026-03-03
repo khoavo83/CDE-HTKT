@@ -433,16 +433,17 @@ export const Mindmap = () => {
 
             if (isDoc) {
                 const docLabelParts = [
-                    `${dbNode.loaiVanBan || 'Văn bản'} số ${dbNode.soKyHieu || '...'}`,
+                    `${dbNode.loaiVanBan || 'Văn bản'}`,
+                    dbNode.soKyHieu ? `số ${dbNode.soKyHieu}` : '',
                     dbNode.ngayBanHanh ? `ngày ${dbNode.ngayBanHanh}` : '',
-                    dbNode.coQuanBanHanh ? `của ${dbNode.coQuanBanHanh}` : '',
-                    `- ${dbNode.trichYeu || dbNode.fileNameOriginal}`
+                    dbNode.coQuanBanHanh ? `của ${dbNode.coQuanBanHanh.toUpperCase()}` : '',
+                    (dbNode.trichYeu || dbNode.fileNameOriginal) ? `- ${dbNode.trichYeu || dbNode.fileNameOriginal}` : ''
                 ];
                 label = `📄 ${docLabelParts.filter(Boolean).join(' ')}`;
                 style = {
                     backgroundColor: 'transparent',
                     border: 'none',
-                    color: '#334155', // text-slate-700
+                    color: '#334155',
                     textDecoration: 'none',
                     width: nodeWidth,
                     padding: '4px 8px',
@@ -486,7 +487,13 @@ export const Mindmap = () => {
                 .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
             const docs = Array.from(loadedDocsRef.current.values())
-                .filter(d => (d.parentId || null) === parentId);
+                .filter(d => (d.parentId || null) === parentId)
+                .sort((a, b) => {
+                    // Sắp xếp theo ngày ban hành: cũ nhất → mới nhất (trên → dưới)
+                    const dateA = a.ngayBanHanh || '';
+                    const dateB = b.ngayBanHanh || '';
+                    return dateA.localeCompare(dateB);
+                });
 
             children.forEach(child => {
                 if (child.type !== 'TASK') {
@@ -497,7 +504,7 @@ export const Mindmap = () => {
                 }
             });
 
-            // Render docs as leaf nodes if parent is expanded (or if it's root - logically root doesn't have docs)
+            // Render docs as leaf nodes - sorted by date oldest first
             docs.forEach(doc => {
                 addNodeToGraph(doc);
             });
