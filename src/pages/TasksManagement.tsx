@@ -59,16 +59,7 @@ export const TasksManagement = () => {
             const snap = await getDocs(q);
             const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-            // Sort newest first
-            data.sort((a: any, b: any) => {
-                const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-                const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-                return bTime - aTime;
-            });
-
-            setTasks(data);
-
-            // Fetch VB info for display
+            // Fetch VB info for display + filter VB đến
             const vanBanIds = [...new Set(data.map((t: any) => t.vanBanId).filter(Boolean))];
             const newCache: Record<string, any> = { ...vanBanCache };
             for (const vbId of vanBanIds) {
@@ -82,6 +73,21 @@ export const TasksManagement = () => {
                 }
             }
             setVanBanCache(newCache);
+
+            // Chỉ giữ lại task thuộc Văn bản đến (INCOMING)
+            const filteredData = data.filter((t: any) => {
+                const vb = newCache[t.vanBanId];
+                return vb && vb.phanLoaiVanBan === 'INCOMING';
+            });
+
+            // Sort newest first
+            filteredData.sort((a: any, b: any) => {
+                const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                return bTime - aTime;
+            });
+
+            setTasks(filteredData);
         } catch (err: any) {
             console.error('Error fetching tasks:', err);
             toast.error('Lỗi khi tải danh sách công việc.');
@@ -156,7 +162,12 @@ export const TasksManagement = () => {
     const getVanBanLabel = (vanBanId: string) => {
         const vb = vanBanCache[vanBanId];
         if (!vb) return vanBanId;
-        return `${vb.loaiVanBan || ''} ${vb.soKyHieu || ''}`.trim() || vb.fileNameOriginal || vanBanId;
+        const parts = [
+            vb.loaiVanBan || '',
+            vb.soKyHieu ? `số ${vb.soKyHieu}` : '',
+            vb.coQuanBanHanh ? `- ${vb.coQuanBanHanh}` : ''
+        ].filter(Boolean);
+        return parts.join(' ') || vb.fileNameOriginal || vanBanId;
     };
 
     const tabs: { key: TabType; label: string; icon: React.ElementType }[] = [
@@ -182,9 +193,9 @@ export const TasksManagement = () => {
                         <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
                             <ListChecks className="w-5 h-5 text-indigo-600" />
                         </div>
-                        Công việc của tôi
+                        Theo dõi Phân công Xử lý
                     </h1>
-                    <p className="text-sm text-gray-500 mt-1 ml-[52px]">Theo dõi, nhận việc, báo cáo tiến độ và hoàn thành công việc được giao</p>
+                    <p className="text-sm text-gray-500 mt-1 ml-[52px]">Theo dõi, nhận việc, báo cáo tiến độ xử lý các Văn bản đến được giao</p>
                 </div>
 
                 {/* Stats */}
