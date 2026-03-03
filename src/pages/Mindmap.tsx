@@ -432,12 +432,22 @@ export const Mindmap = () => {
             let style = getNodeStyle(dbNode.type, isHighlight);
 
             if (isDoc) {
+                // Format ngày: YYYY-MM-DD → "ngày DD tháng MM năm YYYY"
+                let formattedDate = '';
+                if (dbNode.ngayBanHanh) {
+                    const parts = dbNode.ngayBanHanh.split('-');
+                    if (parts.length === 3) {
+                        formattedDate = `ngày ${parseInt(parts[2])} tháng ${parseInt(parts[1])} năm ${parts[0]}`;
+                    } else {
+                        formattedDate = `ngày ${dbNode.ngayBanHanh}`;
+                    }
+                }
                 const docLabelParts = [
                     `${dbNode.loaiVanBan || 'Văn bản'}`,
                     dbNode.soKyHieu ? `số ${dbNode.soKyHieu}` : '',
-                    dbNode.ngayBanHanh ? `ngày ${dbNode.ngayBanHanh}` : '',
+                    formattedDate,
                     dbNode.coQuanBanHanh ? `của ${dbNode.coQuanBanHanh.toUpperCase()}` : '',
-                    (dbNode.trichYeu || dbNode.fileNameOriginal) ? `- ${dbNode.trichYeu || dbNode.fileNameOriginal}` : ''
+                    (dbNode.trichYeu || dbNode.fileNameOriginal) ? `${dbNode.trichYeu || dbNode.fileNameOriginal}` : ''
                 ];
                 label = `📄 ${docLabelParts.filter(Boolean).join(' ')}`;
                 style = {
