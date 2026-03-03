@@ -15,7 +15,14 @@ import { auth, db, googleProvider } from '../firebase/config';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
 import { useThemeStore } from '../store/useThemeStore';
-import { Mail, Lock, User as UserIcon, Loader2, ArrowLeft } from 'lucide-react';
+import logoUrl from '../assets/hcmc-metro-logo.jpg';
+import {
+    Mail,
+    Lock,
+    Loader2,
+    ArrowLeft,
+    User as UserIcon
+} from 'lucide-react';
 import { GlobalFooter } from '../components/GlobalFooter';
 
 type AuthView = 'login' | 'register' | 'forgot' | 'claim_profile';
@@ -342,11 +349,14 @@ export const Login = () => {
         <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 transition-colors duration-300">
             <div className="w-full max-w-[420px] bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
 
-                <div className="text-center mb-8">
-                    <h1 className="text-[22px] font-black text-primary-600 mb-1 leading-tight uppercase">Hệ thống <br /> dữ liệu dùng chung</h1>
-                    <div className="flex flex-col items-center gap-1 mt-2">
-                        <p className="text-sm font-black text-primary-600 uppercase tracking-wider">Ban Quản lý Đường sắt đô thị</p>
-                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Ban Hạ tầng Kỹ thuật</p>
+                <div className="text-center mb-8 flex flex-col items-center">
+                    <h1 className="text-[22px] font-black text-primary-600 mb-4 leading-tight uppercase">Hệ thống <br /> dữ liệu dùng chung</h1>
+
+                    <img src={logoUrl} alt="HCMC Metro Logo" className="h-16 w-auto object-contain mb-4" />
+
+                    <div className="flex flex-col items-center gap-1">
+                        <p className="text-sm font-black text-black uppercase tracking-wider">Ban Quản lý Đường sắt đô thị</p>
+                        <p className="text-xs font-bold text-primary-600 uppercase tracking-wider">Ban Hạ tầng Kỹ thuật</p>
                     </div>
                 </div>
 
