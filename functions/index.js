@@ -777,13 +777,11 @@ exports.resetDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) =>
         const drive = await getDriveService();
 
         /**
-         * Hàm hỗ trợ: Xóa sạch toàn bộ nội dung bên trong một thư mục (đệ quy).
-         * Giúp dọn dẹp các lối tắt (shortcuts) và tệp tin mồ côi.
+         * Hàm hỗ trợ 1: Xóa đệ quy trong thư mục gốc (xử lý các file có thể không do SA sở hữu nhưng SA có quyền xóa)
          */
         const deleteFolderRecursive = async (folderId) => {
             if (!folderId) return;
             try {
-                // Liệt kê tối đa 1000 mục con bên trong
                 const res = await drive.files.list({
                     q: `'${folderId}' in parents and trashed = false`,
                     fields: "files(id, name, mimeType)",
@@ -794,15 +792,13 @@ exports.resetDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) =>
                 const files = res.data.files || [];
                 for (const file of files) {
                     if (file.mimeType === 'application/vnd.google-apps.folder') {
-                        // Nếu là thư mục, đệ quy xóa con trước
                         await deleteFolderRecursive(file.id);
                     }
-                    // Xóa tệp tin/lối tắt/thư mục rỗng
                     try {
                         await drive.files.delete({ fileId: file.id, supportsAllDrives: true });
-                        console.log(`[RESET] Deleted: ${file.name} (${file.id})`);
+                        console.log(`[RESET] Recursively deleted: ${file.name} (${file.id})`);
                     } catch (e) {
-                        console.warn(`[RESET] Failed to delete ${file.id}: ${e.message}`);
+                        console.warn(`[RESET] Failed to recursively delete ${file.id}: ${e.message}`);
                     }
                 }
             } catch (err) {
@@ -810,16 +806,49 @@ exports.resetDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) =>
             }
         };
 
-        // 1. Lấy thông tin folder hiện tại và Dọn dẹp Sâu
+        /**
+         * Hàm hỗ trợ 2: Càn quét cấp bộ (Deep Sweep).
+         * Xóa TẤT CẢ folder và lối tắt (shortcuts) do Service Account tạo ra trên toàn Drive, triệt tiêu tệp mồ côi.
+         */
+        const deepSweepDrive = async () => {
+            console.log("[RESET] Starting Deep Sweep for orphaned SA folders & shortcuts...");
+            let pageToken = null;
+            let deletedCount = 0;
+            do {
+                try {
+                    const res = await drive.files.list({
+                        q: "trashed = false and 'me' in owners and (mimeType = 'application/vnd.google-apps.folder' or mimeType = 'application/vnd.google-apps.shortcut')",
+                        fields: "nextPageToken, files(id, name, mimeType)",
+                        pageToken: pageToken,
+                        supportsAllDrives: true,
+                        includeItemsFromAllDrives: true
+                    });
+                    const files = res.data.files || [];
+                    for (const file of files) {
+                        try {
+                            await drive.files.delete({ fileId: file.id, supportsAllDrives: true });
+                            console.log(`[RESET-SWEEP] Deleted orphaned item: ${file.name} (${file.id})`);
+                            deletedCount++;
+                        } catch (e) {
+                            console.warn(`[RESET-SWEEP] Failed to sweep ${file.name} (${file.id}): ${e.message}`);
+                        }
+                    }
+                    pageToken = res.data.nextPageToken;
+                } catch (err) {
+                    console.error("[RESET-SWEEP] Error during sweep:", err.message);
+                    break;
+                }
+            } while (pageToken);
+            console.log(`[RESET] Deep Sweep completed. Deleted ${deletedCount} orphaned items.`);
+        };
+
+        // 1. Dọn dẹp dựa trên ID hiện tại
         const settingsDoc = await db.collection("settings").doc("driveFolders").get();
         if (settingsDoc.exists) {
             const folders = settingsDoc.data();
             if (folders.rootId) {
-                console.log(`[RESET] Deep cleaning root folder: ${folders.rootId}`);
-                // Bắt đầu dọn dẹp đệ quy từ root
+                console.log(`[RESET] Deep cleaning root folder via ID: ${folders.rootId}`);
                 await deleteFolderRecursive(folders.rootId);
-
-                // Sau khi xóa hết con, thử xóa chính nó
                 try {
                     await drive.files.delete({ fileId: folders.rootId, supportsAllDrives: true });
                     console.log(`[RESET] Successfully deleted root folder ${folders.rootId}`);
@@ -828,6 +857,9 @@ exports.resetDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) =>
                 }
             }
         }
+
+        // 2. Càn quét toàn bộ tệp mồ côi
+        await deepSweepDrive();
 
         // 2. Xóa cấu hình trong Firestore settings
         await db.collection("settings").doc("driveFolders").delete();
