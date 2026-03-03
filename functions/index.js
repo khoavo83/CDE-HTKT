@@ -127,7 +127,14 @@ exports.processDocumentOCR = onCall({ region: 'asia-southeast1', timeoutSeconds:
         let webViewLink = request.data.webViewLink;
         let base64Content = "";
 
-        const drive = await getDriveService();
+        const { google } = require("googleapis");
+        const oauthToken = request.data.oauthToken;
+        if (!oauthToken) {
+            throw new Error("Thiếu oauthToken để upload mượn quyền người dùng.");
+        }
+        const oauth2Client = new google.auth.OAuth2();
+        oauth2Client.setCredentials({ access_token: oauthToken });
+        const drive = google.drive({ version: "v3", auth: oauth2Client });
 
         if (!driveFileId) {
             if (!base64Data) {
@@ -559,12 +566,16 @@ exports.uploadFileToDriveBase64 = onCall({ timeoutSeconds: 300 }, async (request
         throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để thực hiện thao tác này.");
     }
     try {
-        const { fileName, mimeType, base64Data, targetParentId } = request.data;
-        if (!fileName || !base64Data) {
-            throw new Error("Tuyệt đối phải cung cấp fileName và base64Data để tải tệp định kèm lên hệ thống lưu trữ gốc của CDE.");
+        const { fileName, mimeType, base64Data, oauthToken, targetParentId } = request.data;
+        if (!fileName || !base64Data || !oauthToken) {
+            throw new Error("Tuyệt đối phải cung cấp fileName, base64Data và oauthToken để mượn dung lượng Client.");
         }
 
-        const drive = await getDriveService();
+        const { google } = require("googleapis");
+        const oauth2Client = new google.auth.OAuth2();
+        oauth2Client.setCredentials({ access_token: oauthToken });
+
+        const drive = google.drive({ version: "v3", auth: oauth2Client });
 
         const fileMetadata = {
             name: fileName,

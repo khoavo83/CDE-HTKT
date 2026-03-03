@@ -42,8 +42,15 @@ export const ReportCompletionModal: React.FC<ReportCompletionModalProps> = ({ is
     if (!isOpen) return null;
 
     const handleReport = async () => {
+        const { googleAccessToken } = useAuthStore.getState();
+
         if (!mainFile) {
             showToast('error', 'Vui lòng chọn Tệp báo cáo (PDF hoặc Ảnh)!');
+            return;
+        }
+
+        if (!googleAccessToken) {
+            showToast('error', 'Bạn phải đăng nhập bằng nút "Google Workspace" để upload file.');
             return;
         }
 
@@ -65,7 +72,8 @@ export const ReportCompletionModal: React.FC<ReportCompletionModalProps> = ({ is
                 dinhKem: [],
                 // Task không có folder riêng, lưu vào folder của node cha
                 folderId: parentDriveFolderId || undefined,
-                nodeId: task.id
+                nodeId: task.id,
+                oauthToken: googleAccessToken // Truyền token để Functions upload
             });
 
             if (response.data.success) {
@@ -83,7 +91,12 @@ export const ReportCompletionModal: React.FC<ReportCompletionModalProps> = ({ is
             }
         } catch (error: any) {
             console.error('Lỗi báo cáo hoàn thành:', error);
-            showToast('error', error.message || 'Xử lý báo cáo thất bại. Vui lòng thử lại.');
+            const errorMessage = error?.message || '';
+            if (errorMessage.includes('Invalid Credentials') || errorMessage.includes('unauthenticated')) {
+                showToast('error', 'Phiên làm việc Google đã hết hạn (sau 1 giờ). Vui lòng Đăng xuất -> Đăng nhập lại hệ thống bằng Google Workspace để tiếp tục.');
+            } else {
+                showToast('error', errorMessage || 'Xử lý báo cáo thất bại. Vui lòng thử lại.');
+            }
         } finally {
             setIsUploading(false);
             setUploadStatus('');

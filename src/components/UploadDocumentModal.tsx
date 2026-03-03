@@ -73,8 +73,15 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
     if (!isOpen) return null;
 
     const handleProcess = async () => {
+        const { googleAccessToken } = useAuthStore.getState();
+
         if (!mainFile) {
             alert('Vui lòng chọn Văn bản chính (PDF hoặc Ảnh)!');
+            return;
+        }
+
+        if (!googleAccessToken) {
+            alert('Thiếu quyền truy cập Google Drive. Vui lòng đăng xuất và đăng nhập lại bằng Google!');
             return;
         }
 
@@ -91,11 +98,12 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                 setUploadStatus(`Đang upload ${attachments.length} tệp đính kèm...`);
             }
             const attachmentResults = await Promise.all(attachments.map(async (file) => {
-                const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string }, any>(functions, 'uploadFileToDriveBase64');
+                const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string, oauthToken: string }, any>(functions, 'uploadFileToDriveBase64');
                 const uploaded = await uploadFn({
                     fileName: file.name,
                     mimeType: file.type,
-                    base64Data: await fileToBase64(file)
+                    base64Data: await fileToBase64(file),
+                    oauthToken: googleAccessToken
                 });
 
                 return {
@@ -115,7 +123,8 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                 mimeType: mainFile.type,
                 fileNameOriginal: mainFile.name,
                 totalSizeBytes: mainFile.size,
-                dinhKem: attachmentResults
+                dinhKem: attachmentResults,
+                oauthToken: googleAccessToken
             });
 
             if (result.data.success) {
@@ -154,7 +163,12 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
             }
         } catch (error: any) {
             console.error('Lỗi quá trình xử lý:', error);
-            alert(`Xử lý thất bại: ${error?.message || 'Không rõ lỗi. Kiểm tra Console.'}`);
+            const errorMessage = error?.message || '';
+            if (errorMessage.includes('Invalid Credentials') || errorMessage.includes('unauthenticated')) {
+                alert('Phiên làm việc Google của bạn đã hết hạn bảo mật (sau 1 giờ). Vui lòng Đăng xuất và Đăng nhập lại để tiếp tục tải file lên nhé!');
+            } else {
+                alert(`Xử lý thất bại: ${errorMessage || 'Không rõ lỗi. Kiểm tra Console.'}`);
+            }
         } finally {
             setIsUploading(false);
             setUploadStatus('');

@@ -21,10 +21,6 @@ export const googleProvider = new GoogleAuthProvider();
 
 // Thêm scope để ứng dụng có thể upload file vào Drive của người dùng (chỉ các file nó tạo ra/mở)
 googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
-googleProvider.setCustomParameters({
-    prompt: 'consent',
-    access_type: 'offline'
-});
 
 import { getFunctions } from "firebase/functions";
 
