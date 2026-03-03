@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, deleteDoc, doc, addDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuthStore } from '../store/useAuthStore';
 import { CheckCircle2, Clock, CheckSquare, Edit3, Trash2, Send, ChevronDown, ChevronUp, UserPlus, Users } from 'lucide-react';
@@ -79,6 +79,20 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
         setDeleteModal({ isOpen: false, taskId: '' });
     };
 
+    const handleAcceptTask = async (task: any) => {
+        try {
+            const taskRef = doc(db, 'vanban_tasks', task.id);
+            await updateDoc(taskRef, {
+                status: 'IN_PROGRESS'
+            });
+            toast.success('Đã nhận việc! Đang tiến hành.');
+            fetchTasks(); // Reload bảng
+        } catch (error) {
+            console.error(error);
+            toast.error('Có lỗi xảy ra khi nhận việc.');
+        }
+    };
+
     const StatusBadge = ({ status }: { status: string }) => {
         switch (status) {
             case 'COMPLETED':
@@ -138,17 +152,18 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Phân công</th>
-                                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phối hợp</th>
-                                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">Nội dung</th>
+                                <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12">STT</th>
+                                <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-28 text-nowrap">Đến ngày</th>
+                                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[25%]">Nội dung chỉ đạo</th>
+                                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P.Trách</th>
+                                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P.Hợp</th>
                                 <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Trạng thái</th>
                                 <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Tuỳ chọn</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-100">
-                            {tasks.map((task) => {
+                            {tasks.map((task, index) => {
                                 const isAssignee = user?.uid === task.assigneeId;
-                                // Also allow collaborators to update
                                 const isCollaborator = task.collaborators?.some((c: any) => c.id === user?.uid);
                                 const isAssigner = user?.uid === task.assignerId;
                                 const isAdmin = user?.role === 'admin';
@@ -159,23 +174,36 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                 return (
                                     <React.Fragment key={task.id}>
                                         <tr className="hover:bg-gray-50 transition-colors">
-                                            <td className="px-4 py-3 text-sm">
-                                                <div className="font-medium text-gray-900">
-                                                    <span className="text-blue-700">{task.assigneeName}</span>
-                                                </div>
-                                                <div className="text-gray-500 text-xs mt-1 flex justify-between items-center gap-2">
+                                            <td className="px-4 py-4 text-sm text-center font-medium text-gray-500">
+                                                {index + 1}
+                                            </td>
+                                            <td className="px-4 py-4 text-sm text-center text-gray-600 font-medium">
+                                                {task.createdAt ? formatDateTime(task.createdAt) : ''}
+                                            </td>
+                                            <td className="px-4 py-4 text-sm text-gray-900">
+                                                <div className="line-clamp-2">{task.content}</div>
+                                                <div className="text-gray-400 text-xs font-normal mt-1 flex justify-between items-center gap-2">
                                                     <span>Giao bởi: {task.assignerName}</span>
                                                 </div>
-                                                <div className="text-gray-400 text-xs mt-0.5 whitespace-nowrap">
-                                                    {task.createdAt ? formatDateTime(task.createdAt) : ''}
-                                                </div>
+                                                {task.result && (
+                                                    <button
+                                                        onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
+                                                        className="text-indigo-600 mt-2 text-xs font-medium flex items-center gap-1 hover:text-indigo-800"
+                                                    >
+                                                        {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                                        {isExpanded ? 'Thu gọn kết quả' : 'Xem kết quả báo cáo'}
+                                                    </button>
+                                                )}
                                             </td>
-                                            <td className="px-4 py-3 text-sm text-gray-700">
+                                            <td className="px-4 py-4 text-sm">
+                                                <span className="text-blue-700 font-medium bg-blue-50 px-2 py-0.5 rounded-full inline-block w-fit whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{task.assigneeName}</span>
+                                            </td>
+                                            <td className="px-4 py-4 text-sm">
                                                 {task.collaborators && task.collaborators.length > 0 ? (
-                                                    <div className="flex flex-wrap gap-1.5">
+                                                    <div className="flex flex-wrap gap-1">
                                                         {task.collaborators.map((c: any) => (
-                                                            <span key={c.id} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-purple-100 text-purple-800 rounded-full">
-                                                                <Users className="w-3 h-3" />{c.name}
+                                                            <span key={c.id} title={c.name} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-purple-100 text-purple-800 rounded-full font-medium whitespace-nowrap">
+                                                                {c.name}
                                                             </span>
                                                         ))}
                                                     </div>
@@ -183,51 +211,59 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                                     <span className="text-gray-400 text-xs italic">—</span>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-3 text-sm text-gray-700">
-                                                <div className="line-clamp-2">{task.content}</div>
-                                                {task.result && (
-                                                    <button
-                                                        onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
-                                                        className="text-indigo-600 mt-1 text-xs font-medium flex items-center gap-1 hover:text-indigo-800"
-                                                    >
-                                                        {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                                                        {isExpanded ? 'Thu gọn kết quả' : 'Xem kết quả báo cáo'}
-                                                    </button>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
+                                            <td className="px-4 py-4 text-center">
                                                 <StatusBadge status={task.status} />
                                             </td>
-                                            <td className="px-4 py-3 text-right text-sm font-medium space-x-2 whitespace-nowrap">
-                                                {canEdit && (
-                                                    <button
-                                                        onClick={() => setSelectedTaskToUpdate(task)}
-                                                        className="text-blue-600 hover:text-blue-900 bg-blue-50 p-1.5 rounded-md"
-                                                        title="Báo cáo tiến độ"
-                                                    >
-                                                        <Edit3 className="w-4 h-4" />
-                                                    </button>
-                                                )}
-                                                {canDelete && (
-                                                    <button
-                                                        onClick={() => setDeleteModal({ isOpen: true, taskId: task.id })}
-                                                        className="text-red-600 hover:text-red-900 bg-red-50 p-1.5 rounded-md"
-                                                        title="Xóa phân công này"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                )}
+                                            <td className="px-4 py-4 text-right text-sm font-medium space-x-2 whitespace-nowrap">
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    {canEdit && task.status === 'PENDING' && (
+                                                        <button
+                                                            onClick={() => handleAcceptTask(task)}
+                                                            className="text-green-700 hover:text-green-900 bg-green-50 p-1.5 rounded-md hover:bg-green-100 transition-colors"
+                                                            title="Nhận việc"
+                                                        >
+                                                            <CheckCircle2 className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    {canEdit && task.status === 'IN_PROGRESS' && (
+                                                        <button
+                                                            onClick={() => setSelectedTaskToUpdate(task)}
+                                                            className="text-blue-600 hover:text-blue-900 bg-blue-50 p-1.5 rounded-md hover:bg-blue-100 transition-colors"
+                                                            title="Báo cáo thay đổi tiến độ"
+                                                        >
+                                                            <Send className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    {canEdit && task.status === 'COMPLETED' && (
+                                                        <button
+                                                            onClick={() => setSelectedTaskToUpdate(task)}
+                                                            className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 p-1.5 rounded-md hover:bg-indigo-100 transition-colors"
+                                                            title="Sửa báo cáo"
+                                                        >
+                                                            <Edit3 className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    {canDelete && (
+                                                        <button
+                                                            onClick={() => setDeleteModal({ isOpen: true, taskId: task.id })}
+                                                            className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-md transition-colors"
+                                                            title="Xóa phân công này"
+                                                        >
+                                                            <Trash2 className="w-4 h-4 ml-1" />
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                         {/* Row showing result if expanded */}
                                         {isExpanded && task.result && (
-                                            <tr className="bg-indigo-50/30">
-                                                <td colSpan={5} className="px-4 py-3 text-sm">
-                                                    <div className="pl-4 border-l-2 border-indigo-400">
-                                                        <p className="font-medium text-indigo-800 text-xs mb-1">
-                                                            Kết quả xử lý (Cập nhật: {task.completedAt ? formatDateTime(task.completedAt) : 'Chưa rõ'}):
+                                            <tr className="bg-indigo-50/40">
+                                                <td colSpan={6} className="px-6 py-4 text-sm">
+                                                    <div className="pl-4 border-l-4 border-indigo-400 rounded-r-md py-2">
+                                                        <p className="font-semibold text-indigo-900 text-xs mb-2 uppercase tracking-wide">
+                                                            Kết quả xử lý (Hoàn thành lúc: {task.completedAt ? formatDateTime(task.completedAt) : 'Chưa rõ'})
                                                         </p>
-                                                        <p className="text-gray-700 whitespace-pre-wrap">{task.result}</p>
+                                                        <div className="text-gray-800 whitespace-pre-wrap leading-relaxed bg-white border border-indigo-100 p-3 rounded">{task.result}</div>
                                                     </div>
                                                 </td>
                                             </tr>
