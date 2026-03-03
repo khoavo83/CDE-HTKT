@@ -893,7 +893,7 @@ export const Projects = () => {
                                                     if (d.trichYeu) parts.push(`${d.trichYeu}`);
                                                     const phapLy = parts.join(' ');
                                                     return (
-                                                        <tr key={d.id} className="hover:bg-gray-50/80 transition-colors group">
+                                                        <tr key={d.linkId} className="hover:bg-gray-50/80 transition-colors group">
                                                             <td className="px-3 py-3 text-center">
                                                                 <button
                                                                     onClick={() => setPreviewDocId(d.id)}
@@ -910,7 +910,7 @@ export const Projects = () => {
                                                                 <button
                                                                     onClick={() => handleRemoveDocLink(d.linkId)}
                                                                     disabled={!!isRemovingId}
-                                                                    className="text-gray-300 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                                                                    className="text-gray-400 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 transition-colors disabled:opacity-50"
                                                                     title="Gỡ văn bản khỏi mục này"
                                                                 >
                                                                     {isRemovingId === d.linkId ? (
