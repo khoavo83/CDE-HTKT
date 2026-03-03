@@ -4,6 +4,7 @@ import { doc, getDoc, collection, query, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Cloud, HardDrive, AlertCircle, CloudOff } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
+import { toast } from 'react-hot-toast';
 
 export const DriveStorageStatus = () => {
     const { googleAccessToken } = useAuthStore();
@@ -46,12 +47,12 @@ export const DriveStorageStatus = () => {
                 const result = await setupFn();
                 const data = result.data as any;
                 if (data.success) {
-                    alert("Đã khởi tạo thư mục Drive thành công!");
+                    toast.success("Đã khởi tạo thư mục Drive thành công!");
                     setDriveSettings(data.data);
                 }
             } catch (error) {
                 console.error(error);
-                alert("Lỗi khi tạo thư mục: " + (error as Error).message);
+                toast.error("Lỗi khi tạo thư mục: " + (error as Error).message);
             } finally {
                 setIsSettingUp(false);
             }

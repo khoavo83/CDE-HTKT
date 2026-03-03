@@ -4,6 +4,7 @@ import { X, Camera, Save, Loader2 } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
+import { toast } from 'react-hot-toast';
 
 interface UserProfileModalProps {
     isOpen: boolean;
@@ -45,13 +46,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
 
         // Chỉ cho phép ảnh
         if (!file.type.startsWith('image/')) {
-            alert('Vui lòng chọn file hình ảnh hợp lệ (jpg, png, webp...)');
+            toast.error('Vui lòng chọn file hình ảnh hợp lệ (jpg, png, webp...)');
             return;
         }
 
         // Validate size (max 5MB)
         if (file.size > 5 * 1024 * 1024) {
-            alert('File ảnh quá lớn, vui lòng chọn file <= 5MB.');
+            toast.error('File ảnh quá lớn, vui lòng chọn file <= 5MB.');
             return;
         }
 
@@ -72,11 +73,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
             await updateDoc(doc(db, 'users', user.uid), { photoURL: downloadURL });
             setUser({ ...user, photoURL: downloadURL });
 
-            alert("Đã cập nhật ảnh đại diện thành công!");
+            toast.success("Đã cập nhật ảnh đại diện thành công!");
 
         } catch (error) {
             console.error("Lỗi khi upload ảnh:", error);
-            alert("Đã xảy ra lỗi khi cập nhật ảnh. Vui lòng thử lại.");
+            toast.error("Đã xảy ra lỗi khi cập nhật ảnh. Vui lòng thử lại.");
         } finally {
             setIsLoading(false);
             // Reset input file
@@ -116,12 +117,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                 chucVu: formData.chucVu
             });
 
-            alert("Đã lưu thông tin cá nhân!");
+            toast.success("Đã lưu thông tin cá nhân!");
             onClose();
 
         } catch (error) {
             console.error("Lỗi cập nhật profile:", error);
-            alert("Lỗi khi lưu thông tin. Kiểm tra lại kết nối mạng.");
+            toast.error("Lỗi khi lưu thông tin. Kiểm tra lại kết nối mạng.");
         } finally {
             setIsLoading(false);
         }

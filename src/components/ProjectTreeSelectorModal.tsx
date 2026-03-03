@@ -4,6 +4,8 @@ import { db } from '../firebase/config';
 import { FolderTree, Folder, FileCheck, Layers, Plus, Edit2, Trash2, ChevronRight, ChevronDown, CheckSquare, Square, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useAuthStore } from '../store/useAuthStore';
+import { toast } from 'react-hot-toast';
+
 
 interface ProjectNode {
     id: string;
@@ -181,7 +183,7 @@ export const ProjectTreeSelectorModal: React.FC<ProjectTreeSelectorModalProps> =
         e.stopPropagation();
         const children = allNodes.filter(n => n.parentId === node.id);
         if (children.length > 0) {
-            alert('Không thể xóa mục này vì vẫn còn chứa các mục con bên trong.');
+            toast.error('Không thể xóa mục này vì vẫn còn chứa các mục con bên trong.');
             return;
         }
         if (window.confirm(`Bạn có chắc chắn muốn xóa "${node.name}" không?`)) {
@@ -214,7 +216,7 @@ export const ProjectTreeSelectorModal: React.FC<ProjectTreeSelectorModalProps> =
             setIsNodeModalOpen(false);
         } catch (error) {
             console.error('Lỗi khi lưu dữ liệu:', error);
-            alert('Có lỗi xảy ra, vui lòng thử lại.');
+            toast.error('Có lỗi xảy ra, vui lòng thử lại.');
         }
     };
 

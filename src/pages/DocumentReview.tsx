@@ -3,11 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useForm } from 'react-hook-form';
-import { ArrowLeft, Clock, Save, Trash2, FileEdit, Folder, ArrowUpDown, ExternalLink, Sparkles, Loader2, CheckCircle, FileText, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Clock, Save, Trash2, FileEdit, Folder, ArrowUpDown, ExternalLink, Sparkles, Loader2, CheckCircle, FileText, Image as ImageIcon, FolderTree } from 'lucide-react';
 import { isoToVN, formatDateTime, formatBytes } from '../utils/formatVN';
 import { useAuthStore } from '../store/useAuthStore';
 import { useCategoryStore } from '../store/useCategoryStore';
 import { useCategoryTabStore } from '../store/useCategoryTabStore';
+import { ProjectTreeSelectorModal } from '../components/ProjectTreeSelectorModal';
+import toast from 'react-hot-toast';
 
 interface DocumentForm {
     soKyHieu: string;
@@ -32,6 +34,8 @@ export const DocumentReview = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [isChecking, setIsChecking] = useState(false);
     const [linkedNodes, setLinkedNodes] = useState<{ id: string, name: string }[]>([]);
+    const [isProjectTreeOpen, setIsProjectTreeOpen] = useState(false);
+    const [isSavingProjectNodes, setIsSavingProjectNodes] = useState(false);
 
     const { categories, addCategory, fetchCategories } = useCategoryStore();
     const { tabs, fetchTabs } = useCategoryTabStore();
@@ -88,79 +92,110 @@ export const DocumentReview = () => {
         fetchDoc();
     }, [id, reset]);
 
+    const fetchLinkedNodes = async () => {
+        if (!id) return;
+        try {
+            const qLinks = query(collection(db, 'vanban_node_links'), where('vanBanId', '==', id));
+            const linksSnap = await getDocs(qLinks);
+            const nodeIds = linksSnap.docs.map(d => d.data().nodeId);
+
+            if (nodeIds.length > 0) {
+                // Fetch all project nodes to build path hierarchy
+                const allNodesSnap = await getDocs(collection(db, 'project_nodes'));
+                const allNodes = allNodesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+
+                const map = new Map<string, any>();
+                const roots: any[] = [];
+
+                allNodes.forEach(node => {
+                    map.set(node.id, { ...node, children: [], fullPath: '' });
+                });
+
+                allNodes.forEach(node => {
+                    if (node.parentId) {
+                        const parent = map.get(node.parentId);
+                        if (parent) {
+                            parent.children.push(map.get(node.id));
+                        } else {
+                            roots.push(map.get(node.id)); // Fallback if parent missing
+                        }
+                    } else {
+                        roots.push(map.get(node.id));
+                    }
+                });
+
+                const sortNodes = (items: any[]) => {
+                    items.sort((a, b) => (a.order ?? a.createdAt) - (b.order ?? b.createdAt));
+                    items.forEach(item => sortNodes(item.children));
+                };
+                sortNodes(roots);
+
+                const computePaths = (items: any[], prefix = '', rootName = '') => {
+                    items.forEach((item, index) => {
+                        const currentPrefix = prefix ? `${prefix}${index + 1}.` : `${index + 1}.`;
+                        const currentRootName = rootName || item.name;
+
+                        if (!prefix) {
+                            item.fullPath = item.name;
+                        } else {
+                            item.fullPath = `${currentRootName} - ${currentPrefix} ${item.name}`;
+                        }
+
+                        computePaths(item.children, currentPrefix, currentRootName);
+                    });
+                };
+                computePaths(roots);
+
+                const nodes: { id: string, name: string }[] = [];
+                for (const nId of nodeIds) {
+                    const nodeInTree = map.get(nId);
+                    if (nodeInTree) {
+                        nodes.push({ id: nId, name: nodeInTree.fullPath });
+                    }
+                }
+                setLinkedNodes(nodes);
+            } else {
+                setLinkedNodes([]);
+            }
+        } catch (error) {
+            console.error("Lỗi lấy danh sách node liên kết:", error);
+        }
+    };
+
     // Lấy danh sách vị trí lưu trữ
     useEffect(() => {
-        const fetchLinkedNodes = async () => {
-            if (!id) return;
-            try {
-                const qLinks = query(collection(db, 'vanban_node_links'), where('vanBanId', '==', id));
-                const linksSnap = await getDocs(qLinks);
-                const nodeIds = linksSnap.docs.map(d => d.data().nodeId);
-
-                if (nodeIds.length > 0) {
-                    // Fetch all project nodes to build path hierarchy
-                    const allNodesSnap = await getDocs(collection(db, 'project_nodes'));
-                    const allNodes = allNodesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-
-                    const map = new Map<string, any>();
-                    const roots: any[] = [];
-
-                    allNodes.forEach(node => {
-                        map.set(node.id, { ...node, children: [], fullPath: '' });
-                    });
-
-                    allNodes.forEach(node => {
-                        if (node.parentId) {
-                            const parent = map.get(node.parentId);
-                            if (parent) {
-                                parent.children.push(map.get(node.id));
-                            } else {
-                                roots.push(map.get(node.id)); // Fallback if parent missing
-                            }
-                        } else {
-                            roots.push(map.get(node.id));
-                        }
-                    });
-
-                    const sortNodes = (items: any[]) => {
-                        items.sort((a, b) => (a.order ?? a.createdAt) - (b.order ?? b.createdAt));
-                        items.forEach(item => sortNodes(item.children));
-                    };
-                    sortNodes(roots);
-
-                    const computePaths = (items: any[], prefix = '', rootName = '') => {
-                        items.forEach((item, index) => {
-                            const currentPrefix = prefix ? `${prefix}${index + 1}.` : `${index + 1}.`;
-                            const currentRootName = rootName || item.name;
-
-                            if (!prefix) {
-                                item.fullPath = item.name;
-                            } else {
-                                item.fullPath = `${currentRootName} - ${currentPrefix} ${item.name}`;
-                            }
-
-                            computePaths(item.children, currentPrefix, currentRootName);
-                        });
-                    };
-                    computePaths(roots);
-
-                    const nodes: { id: string, name: string }[] = [];
-                    for (const nId of nodeIds) {
-                        const nodeInTree = map.get(nId);
-                        if (nodeInTree) {
-                            nodes.push({ id: nId, name: nodeInTree.fullPath });
-                        }
-                    }
-                    setLinkedNodes(nodes);
-                } else {
-                    setLinkedNodes([]);
-                }
-            } catch (error) {
-                console.error("Lỗi lấy danh sách node liên kết:", error);
-            }
-        };
         fetchLinkedNodes();
     }, [id]);
+
+    const handleProjectNodesConfirm = async (selectedNodes: { nodeId: string, projectId: string }[]) => {
+        if (!id) return;
+        setIsSavingProjectNodes(true);
+        const loadingToast = toast.loading('Đang cập nhật liên kết Dự án...');
+        try {
+            const { functions: functionsInstance } = await import('../firebase/config');
+            const { httpsCallable } = await import('firebase/functions');
+            const attachFn = httpsCallable(functionsInstance, 'attachDocumentToNode');
+
+            // Do logic ở Backend attachDocumentToNode có kiểm tra trùng lặp
+            // Chúng ta chỉ cần gọi cho các node mới được chọn
+            for (const node of selectedNodes) {
+                await attachFn({
+                    nodeId: node.nodeId,
+                    projectId: node.projectId,
+                    vanBanId: id
+                });
+            }
+
+            await fetchLinkedNodes();
+            toast.success('Đã cập nhật vị trí lưu trữ dự án thành công!', { id: loadingToast });
+            setIsProjectTreeOpen(false);
+        } catch (error: any) {
+            console.error('Lỗi khi đính kèm dự án:', error);
+            toast.error('Lỗi khi đính kèm dự án: ' + error.message, { id: loadingToast });
+        } finally {
+            setIsSavingProjectNodes(false);
+        }
+    };
 
     // Handle Kéo dãn Pane
     const handleMouseDown = (e: React.MouseEvent) => {
@@ -245,7 +280,7 @@ export const DocumentReview = () => {
             // Optional: Hiển thị toast notice thay vì alert
         } catch (error) {
             console.error(error);
-            alert('Lỗi lưu dữ liệu');
+            toast.error('Lỗi lưu dữ liệu');
         }
     };
 
@@ -261,7 +296,7 @@ export const DocumentReview = () => {
             navigate('/documents');
         } catch (error) {
             console.error("Lỗi khi xóa tài liệu: ", error);
-            alert("Không thể xóa văn bản này. Vui lòng thử lại sau.");
+            toast.error("Không thể xóa văn bản này. Vui lòng thử lại sau.");
         }
     };
 
@@ -272,7 +307,7 @@ export const DocumentReview = () => {
         const driveId = docData.driveFileId_Original || docData.driveFileId;
 
         if (!driveId) {
-            alert('Lỗi: Không tìm thấy ID tệp Drive của văn bản này. Có thể văn bản được tải lên trước khi hệ thống tích hợp Drive.');
+            toast.error('Lỗi: Không tìm thấy ID tệp Drive của văn bản này. Có thể văn bản được tải lên trước khi hệ thống tích hợp Drive.');
             return;
         }
 
@@ -303,11 +338,11 @@ export const DocumentReview = () => {
                 // Cập nhật docData cục bộ để đồng bộ UI
                 setDocData((prev: any) => ({ ...prev, ...newData }));
 
-                alert('AI đã rà soát và cập nhật thông tin thành công!');
+                toast.success('AI đã rà soát và cập nhật thông tin thành công!');
             }
         } catch (error) {
             console.error('Lỗi AI Recheck:', error);
-            alert('Không thể thực hiện AI Recheck. Vui lòng thử lại sau.');
+            toast.error('Không thể thực hiện AI Recheck. Vui lòng thử lại sau.');
         } finally {
             setIsChecking(false);
         }
@@ -563,14 +598,30 @@ export const DocumentReview = () => {
                         )}
 
                         <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
-                            <button
-                                type="button"
-                                className="flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-md hover:bg-blue-200 transition font-medium"
-                                title="Sắp xếp tài liệu"
-                            >
-                                <ArrowUpDown className="w-4 h-4" />
-                                Sắp xếp
-                            </button>
+                            {!isEditing && (
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/documents')}
+                                    className="flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 transition font-medium"
+                                    title="Quay về danh sách văn bản"
+                                >
+                                    <ArrowLeft className="w-4 h-4" />
+                                    Quay về
+                                </button>
+                            )}
+
+                            {isEditing && (
+                                <button
+                                    type="button"
+                                    onClick={() => setIsProjectTreeOpen(true)}
+                                    disabled={isSavingProjectNodes}
+                                    className="flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-md hover:bg-blue-200 transition font-medium"
+                                    title="Sắp xếp/Đính kèm vào cây thư mục Dự án"
+                                >
+                                    {isSavingProjectNodes ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderTree className="w-4 h-4" />}
+                                    Sắp xếp Dự án
+                                </button>
+                            )}
 
                             {canEdit && !isEditing && (
                                 <button
@@ -721,6 +772,13 @@ export const DocumentReview = () => {
                     </div>
                 </div>
             )}
+
+            <ProjectTreeSelectorModal
+                isOpen={isProjectTreeOpen}
+                onClose={() => setIsProjectTreeOpen(false)}
+                initialSelectedNodeIds={linkedNodes.map(n => n.id)}
+                onConfirm={handleProjectNodesConfirm}
+            />
         </div>
     );
 };

@@ -25,6 +25,8 @@ import {
     User as UserIcon
 } from 'lucide-react';
 import { GlobalFooter } from '../components/GlobalFooter';
+import { toast } from 'react-hot-toast';
+
 
 type AuthView = 'login' | 'register' | 'forgot' | 'claim_profile';
 
@@ -293,7 +295,7 @@ export const Login = () => {
 
         try {
             await sendPasswordResetEmail(auth, email);
-            alert("Đường dẫn khôi phục mật khẩu đã được gửi đến email của bạn. Vui lòng kiểm tra hộp thư (và thư mục rác).");
+            toast.success("Đường dẫn khôi phục mật khẩu đã được gửi đến email của bạn. Vui lòng kiểm tra hộp thư (và thư mục rác).");
             setView('login');
         } catch (error: any) {
             console.error('Reset password error:', error);
