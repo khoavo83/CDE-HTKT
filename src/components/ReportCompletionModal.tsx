@@ -42,15 +42,8 @@ export const ReportCompletionModal: React.FC<ReportCompletionModalProps> = ({ is
     if (!isOpen) return null;
 
     const handleReport = async () => {
-        const { googleAccessToken } = useAuthStore.getState();
-
         if (!mainFile) {
             showToast('error', 'Vui lòng chọn Tệp báo cáo (PDF hoặc Ảnh)!');
-            return;
-        }
-
-        if (!googleAccessToken) {
-            showToast('error', 'Bạn phải đăng nhập bằng nút "Google Workspace" để upload file.');
             return;
         }
 
@@ -72,8 +65,7 @@ export const ReportCompletionModal: React.FC<ReportCompletionModalProps> = ({ is
                 dinhKem: [],
                 // Task không có folder riêng, lưu vào folder của node cha
                 folderId: parentDriveFolderId || undefined,
-                nodeId: task.id,
-                oauthToken: googleAccessToken // Truyền token để Functions upload
+                nodeId: task.id
             });
 
             if (response.data.success) {

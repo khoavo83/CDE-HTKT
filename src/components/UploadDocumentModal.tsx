@@ -73,15 +73,8 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
     if (!isOpen) return null;
 
     const handleProcess = async () => {
-        const { googleAccessToken } = useAuthStore.getState();
-
         if (!mainFile) {
             alert('Vui lòng chọn Văn bản chính (PDF hoặc Ảnh)!');
-            return;
-        }
-
-        if (!googleAccessToken) {
-            alert('Thiếu quyền truy cập Google Drive. Vui lòng đăng xuất và đăng nhập lại bằng Google!');
             return;
         }
 
@@ -98,12 +91,11 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                 setUploadStatus(`Đang upload ${attachments.length} tệp đính kèm...`);
             }
             const attachmentResults = await Promise.all(attachments.map(async (file) => {
-                const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string, oauthToken: string }, any>(functions, 'uploadFileToDriveBase64');
+                const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string }, any>(functions, 'uploadFileToDriveBase64');
                 const uploaded = await uploadFn({
                     fileName: file.name,
                     mimeType: file.type,
-                    base64Data: await fileToBase64(file),
-                    oauthToken: googleAccessToken
+                    base64Data: await fileToBase64(file)
                 });
 
                 return {
@@ -123,8 +115,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                 mimeType: mainFile.type,
                 fileNameOriginal: mainFile.name,
                 totalSizeBytes: mainFile.size,
-                dinhKem: attachmentResults,
-                oauthToken: googleAccessToken
+                dinhKem: attachmentResults
             });
 
             if (result.data.success) {
