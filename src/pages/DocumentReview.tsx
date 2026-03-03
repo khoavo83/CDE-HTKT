@@ -9,6 +9,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useCategoryStore } from '../store/useCategoryStore';
 import { useCategoryTabStore } from '../store/useCategoryTabStore';
 import { ProjectTreeSelectorModal } from '../components/ProjectTreeSelectorModal';
+import { DocumentTasks } from '../components/DocumentTasks';
 import toast from 'react-hot-toast';
 
 interface DocumentForm {
@@ -595,6 +596,11 @@ export const DocumentReview = () => {
                                     ))}
                                 </ul>
                             </div>
+                        )}
+
+                        {/* Tracking Tác vụ */}
+                        {!isEditing && id && (
+                            <DocumentTasks vanBanId={id} />
                         )}
 
                         <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
