@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Upload, FileText, Paperclip, Loader2, Sparkles, FolderTree, Calendar, MapPin, Clock, Users, ChevronDown, ChevronUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { useAuthStore } from '../store/useAuthStore';
 import { useUserStore } from '../store/useUserStore';
 import { useMeetingStore } from '../store/useMeetingStore';
@@ -76,12 +77,12 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
         const { googleAccessToken } = useAuthStore.getState();
 
         if (!mainFile) {
-            alert('Vui lòng chọn Văn bản chính (PDF hoặc Ảnh)!');
+            toast.error('Vui lòng chọn Văn bản chính (PDF hoặc Ảnh)!');
             return;
         }
 
         if (!googleAccessToken) {
-            alert('Thiếu quyền truy cập Google Drive. Vui lòng đăng xuất và đăng nhập lại bằng Google!');
+            toast.error('Thiếu quyền truy cập Google Drive. Vui lòng đăng xuất và đăng nhập lại bằng Google!');
             return;
         }
 
@@ -164,10 +165,10 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
         } catch (error: any) {
             console.error('Lỗi quá trình xử lý:', error);
             const errorMessage = error?.message || '';
-            if (errorMessage.includes('Invalid Credentials') || errorMessage.includes('unauthenticated')) {
-                alert('Phiên làm việc Google của bạn đã hết hạn bảo mật (sau 1 giờ). Vui lòng Đăng xuất và Đăng nhập lại để tiếp tục tải file lên nhé!');
+            if (errorMessage.includes('Invalid Credentials') || errorMessage.includes('unauthenticated') || errorMessage.includes('Insufficient Permission')) {
+                toast.error('Phiên làm việc Google của bạn đã hết hạn hoặc thiếu quyền (Insufficient Permission). Vui lòng Đăng xuất và Đăng nhập lại để cập nhật quyền truy cập Drive nhé!');
             } else {
-                alert(`Xử lý thất bại: ${errorMessage || 'Không rõ lỗi. Kiểm tra Console.'}`);
+                toast.error(`Xử lý thất bại: ${errorMessage || 'Không rõ lỗi. Kiểm tra Console.'}`);
             }
         } finally {
             setIsUploading(false);
@@ -195,7 +196,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
             }
         } catch (error) {
             console.error('Lỗi AI Recheck:', error);
-            alert('AI Kiểm tra thất bại. Vui lòng thử lại.');
+            toast.error('AI Kiểm tra thất bại. Vui lòng thử lại.');
         } finally {
             setIsChecking(false);
         }
@@ -277,7 +278,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
             navigate(`/documents/${docId}`);
         } catch (error: any) {
             console.error('Lỗi lưu cuối cùng:', error);
-            alert('Không thể lưu thông tin. Vui lòng thử lại.');
+            toast.error('Không thể lưu thông tin. Vui lòng thử lại.');
         } finally {
             setIsUploading(false);
         }

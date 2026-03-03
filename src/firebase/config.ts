@@ -20,8 +20,7 @@ export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
 // Thêm scope để ứng dụng có thể upload file vào Drive của người dùng (chỉ các file nó tạo ra/mở)
-// Bỏ qua addScope vì đã dùng Service Account
-// googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
+googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
 
 import { getFunctions } from "firebase/functions";
 
