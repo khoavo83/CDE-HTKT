@@ -3,6 +3,8 @@ import * as OBC from 'openbim-components';
 import * as THREE from 'three';
 import { Box, Loader2, UploadCloud, Scissors, Trash2 } from 'lucide-react';
 
+import toast from 'react-hot-toast';
+
 export const BimViewer = () => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -76,7 +78,7 @@ export const BimViewer = () => {
 
         } catch (error) {
             console.error("Lỗi parse file IFC:", error);
-            alert("Lỗi khi load tệp IFC 3D.");
+            toast.error("Lỗi khi load tệp IFC 3D.");
         } finally {
             setIsLoading(false);
         }

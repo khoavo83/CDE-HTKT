@@ -8,6 +8,7 @@ import { useCategoryStore } from '../store/useCategoryStore';
 import { Users, ShieldAlert, Loader2, CheckCircle, Edit2, Save, X, Upload, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
+import { GenericConfirmModal } from '../components/GenericConfirmModal';
 
 export const UsersManagement = () => {
     const { user } = useAuthStore();
@@ -78,9 +79,9 @@ export const UsersManagement = () => {
                 ...editFormData
             });
             setEditingUserId(null); // Tắt chế độ sửa
-            // Thành công, Snapshot tự động load lại layout
+            toast.success('Đã lưu thông tin người dùng');
         } catch (error) {
-            alert('Lỗi khi lưu thông tin: ' + (error as Error).message);
+            toast.error('Lỗi khi lưu thông tin: ' + (error as Error).message);
         }
     };
 
@@ -485,41 +486,18 @@ export const UsersManagement = () => {
                 </div>
             )}
 
-            {/* Modal Xác nhận Xóa */}
-            {isDeleteModalOpen && userToDelete && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm transition-opacity">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200">
-                        <div className="p-6">
-                            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-rose-100 mb-5 mx-auto">
-                                <Trash2 className="w-7 h-7 text-rose-600" />
-                            </div>
-                            <h3 className="text-xl font-bold text-center text-gray-900 mb-2">
-                                Xác nhận xóa
-                            </h3>
-                            <p className="text-center text-gray-500 mb-6 text-sm">
-                                Bạn có chắc chắn muốn xóa người dùng <br />
-                                <span className="font-bold text-slate-800 text-base">{userToDelete.displayName || userToDelete.hoTen || userToDelete.email}</span>?
-                                <br /><br />
-                                Hành động này không thể hoàn tác.
-                            </p>
-                            <div className="flex gap-3 mt-4">
-                                <button
-                                    onClick={() => setIsDeleteModalOpen(false)}
-                                    className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200 transition-colors focus:ring-2 focus:ring-slate-300 outline-none"
-                                >
-                                    Hủy bỏ
-                                </button>
-                                <button
-                                    onClick={handleConfirmDelete}
-                                    className="flex-1 px-4 py-2.5 bg-rose-600 text-white font-semibold rounded-xl hover:bg-rose-700 transition-colors shadow-sm shadow-rose-200 focus:ring-2 focus:ring-rose-500 outline-none"
-                                >
-                                    Xóa người dùng
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <GenericConfirmModal
+                isOpen={isDeleteModalOpen}
+                onClose={() => {
+                    setIsDeleteModalOpen(false);
+                    setUserToDelete(null);
+                }}
+                onConfirm={handleConfirmDelete}
+                title="Xác nhận xóa người dùng"
+                message={`Bạn có chắc chắn muốn xóa người dùng "${userToDelete?.displayName || userToDelete?.hoTen || userToDelete?.email}"?\n\nHành động này không thể hoàn tác.`}
+                type="danger"
+                confirmText="Xóa người dùng"
+            />
         </div>
     );
 };

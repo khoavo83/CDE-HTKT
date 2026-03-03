@@ -108,90 +108,114 @@ export const CategoriesManagement = () => {
             }
         } catch (error: any) {
             console.error('Lỗi đồng bộ Drive:', error);
-            alert('Lỗi: ' + error.message);
+            toast.error('Lỗi đồng bộ: ' + error.message);
         } finally {
             setIsSyncing(false);
         }
     };
 
     const [manualRootId, setManualRootId] = useState('');
+    const [confirmAction, setConfirmAction] = useState<{
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        type?: 'danger' | 'warning' | 'info';
+        confirmText?: string;
+    } | null>(null);
+
     const handleSaveRootId = async () => {
         if (!manualRootId.trim()) return;
-        if (!window.confirm('Khi đổi Thư mục gốc, hệ thống sẽ tạo lại cấu trúc mới (Văn bản đến/đi, Hồ sơ dự án) bên trong thư mục này. Bạn có chắc chắn?')) return;
 
-        try {
-            const { setDoc, doc } = await import('firebase/firestore');
-            await setDoc(doc(db, 'settings', 'driveFolders'), {
-                rootId: manualRootId.trim(),
-                updatedAt: new Date().toISOString(),
-                manualConfig: true,
-                vanBanDenId: null,
-                vanBanDiId: null,
-                projectsRootId: null
-            }, { merge: true });
+        setConfirmAction({
+            title: 'Xác nhận đổi Thư mục gốc',
+            message: 'Khi đổi Thư mục gốc, hệ thống sẽ tạo lại cấu trúc mới (Văn bản đến/đi, Hồ sơ dự án) bên trong thư mục này. Bạn có chắc chắn?',
+            type: 'warning',
+            onConfirm: async () => {
+                try {
+                    const { setDoc, doc } = await import('firebase/firestore');
+                    await setDoc(doc(db, 'settings', 'driveFolders'), {
+                        rootId: manualRootId.trim(),
+                        updatedAt: new Date().toISOString(),
+                        manualConfig: true,
+                        vanBanDenId: null,
+                        vanBanDiId: null,
+                        projectsRootId: null
+                    }, { merge: true });
 
-            setManualRootId('');
-            alert('Đã cập nhật ID thư mục gốc mới. Hãy nhấn "Đồng bộ" để tạo cấu trúc con.');
-        } catch (e) {
-            alert('Lỗi: ' + (e as Error).message);
-        }
+                    setManualRootId('');
+                    toast.success('Đã cập nhật ID thư mục gốc mới. Hãy nhấn "Đồng bộ" để tạo cấu trúc con.');
+                    setConfirmAction(null);
+                } catch (e) {
+                    toast.error('Lỗi: ' + (e as Error).message);
+                }
+            }
+        });
     };
 
     const handleResetDrive = async () => {
-        const confirm1 = window.confirm('CẢNH BÁO NGUY HIỂM: Thao tác này sẽ XÓA VĨNH VIỄN toàn bộ thư mục CDE-ROOT cũ trên Google Drive và các liên kết trong hệ thống.\n\nFile vật lý của bạn sẽ bị đưa vào Thùng rác trên Drive. Bạn có chắc chắn muốn làm sạch để bắt đầu lại từ đầu?');
-        if (!confirm1) return;
+        setConfirmAction({
+            title: 'CẢNH BÁO NGUY HIỂM',
+            message: 'Thao tác này sẽ XÓA VĨNH VIỄN toàn bộ thư mục CDE-ROOT cũ trên Google Drive và các liên kết trong hệ thống.\n\nFile vật lý của bạn sẽ bị đưa vào Thùng rác trên Drive. Bạn có chắc chắn muốn RESET TOÀN BỘ cấu trúc Drive không?',
+            type: 'danger',
+            confirmText: 'Tôi hiểu, hãy Reset ngay',
+            onConfirm: async () => {
+                setIsSyncing(true);
+                setSyncDebugLogs([]);
+                setConfirmAction(null);
+                try {
+                    // 1. Gọi hàm Reset
+                    const resetFn = httpsCallable(functions, 'resetDriveStructure', { timeout: 540000 });
+                    const resetResult: any = await resetFn();
+                    toast.success(resetResult.data.message || 'Đã làm sạch cấu trúc cũ.');
 
-        const confirm2 = window.confirm('XÁC NHẬN LẦN CUỐI: Bạn có thực sự muốn RESET TOÀN BỘ cấu trúc Drive không?');
-        if (!confirm2) return;
+                    // 2. Tự động gọi Đồng bộ lại để xây dựng cấu trúc mới
+                    const syncFn = httpsCallable(functions, 'syncDriveStructure', { timeout: 540000 });
+                    const syncResult: any = await syncFn();
+                    toast.success('Đã xây dựng lại cấu trúc Drive mới thành công!');
 
-        setIsSyncing(true);
-        setSyncDebugLogs([]);
-        try {
-            // 1. Gọi hàm Reset
-            const resetFn = httpsCallable(functions, 'resetDriveStructure', { timeout: 540000 });
-            const resetResult: any = await resetFn();
-            alert(resetResult.data.message || 'Đã làm sạch cấu trúc cũ.');
-
-            // 2. Tự động gọi Đồng bộ lại để xây dựng cấu trúc mới
-            const syncFn = httpsCallable(functions, 'syncDriveStructure', { timeout: 540000 });
-            const syncResult: any = await syncFn();
-            alert('Đã xây dựng lại cấu trúc Drive mới thành công!');
-
-            if (syncResult.data.debug && syncResult.data.debug.length > 0) {
-                setSyncDebugLogs(syncResult.data.debug);
-                setShowDebugModal(true);
+                    if (syncResult.data.debug && syncResult.data.debug.length > 0) {
+                        setSyncDebugLogs(syncResult.data.debug);
+                        setShowDebugModal(true);
+                    }
+                } catch (error: any) {
+                    console.error('Lỗi Reset Drive:', error);
+                    toast.error('Lỗi Reset: ' + error.message);
+                } finally {
+                    setIsSyncing(false);
+                }
             }
-        } catch (error: any) {
-            console.error('Lỗi Reset Drive:', error);
-            alert('Lỗi: ' + error.message);
-        } finally {
-            setIsSyncing(false);
-        }
+        });
     };
 
     const handleResetAllNodesDrive = async () => {
-        if (!window.confirm('CẢNH BÁO: Thao tác này sẽ xóa toàn bộ liên kết Drive cũ của các Dự án trên WebApp (không mất file). \n\nBạn chỉ làm việc này nếu muốn hệ thống TẠO LẠI TOÀN BỘ thư mục dự án trên Drive 2TB mới. Tiếp tục?')) return;
+        setConfirmAction({
+            title: 'Reset liên kết Dự án',
+            message: 'CẢNH BÁO: Thao tác này sẽ xóa toàn bộ liên kết Drive cũ của các Dự án trên WebApp (không mất file). \n\nBạn chỉ làm việc này nếu muốn hệ thống TẠO LẠI TOÀN BỘ thư mục dự án trên Drive 2TB mới. Tiếp tục?',
+            type: 'warning',
+            onConfirm: async () => {
+                setIsSyncing(true);
+                setConfirmAction(null);
+                try {
+                    const { collection, getDocs, writeBatch, doc } = await import('firebase/firestore');
+                    const nodesSnap = await getDocs(collection(db, 'project_nodes'));
+                    const batch = writeBatch(db);
 
-        setIsSyncing(true);
-        try {
-            const { collection, getDocs, writeBatch, doc } = await import('firebase/firestore');
-            const nodesSnap = await getDocs(collection(db, 'project_nodes'));
-            const batch = writeBatch(db);
+                    nodesSnap.forEach((nodeDoc) => {
+                        batch.update(doc(db, 'project_nodes', nodeDoc.id), {
+                            driveFolderId: null,
+                            driveFolderLink: null
+                        });
+                    });
 
-            nodesSnap.forEach((nodeDoc) => {
-                batch.update(doc(db, 'project_nodes', nodeDoc.id), {
-                    driveFolderId: null,
-                    driveFolderLink: null
-                });
-            });
-
-            await batch.commit();
-            alert('Đã xóa sạch liên kết cũ. Hãy nhấn "Đồng bộ" để tạo mới lên Drive 2TB.');
-        } catch (e) {
-            alert('Lỗi: ' + (e as Error).message);
-        } finally {
-            setIsSyncing(false);
-        }
+                    await batch.commit();
+                    toast.success('Đã xóa sạch liên kết cũ. Hãy nhấn "Đồng bộ" để tạo mới lên Drive 2TB.');
+                } catch (e) {
+                    toast.error('Lỗi: ' + (e as Error).message);
+                } finally {
+                    setIsSyncing(false);
+                }
+            }
+        });
     };
 
     if (!user || user.role === 'viewer' || user.role === 'pending') {
@@ -323,7 +347,7 @@ export const CategoriesManagement = () => {
 
     const handleSavePrimary = async () => {
         if (!formData.value.trim()) {
-            alert('Tên danh mục không được để trống!');
+            toast.error('Tên danh mục không được để trống!');
             return;
         }
         try {
@@ -333,8 +357,9 @@ export const CategoriesManagement = () => {
                 await updateCategory(editingId, { value: formData.value, description: formData.description, parentAgency: formData.parentAgency, order: Number(formData.order), isActive: formData.isActive });
             }
             handleCancel();
+            toast.success('Đã lưu dữ liệu thành công');
         } catch (error) {
-            alert('Có lỗi xảy ra khi lưu! ' + (error as Error).message);
+            toast.error('Có lỗi xảy ra khi lưu! ' + (error as Error).message);
         }
     };
 
@@ -346,8 +371,9 @@ export const CategoriesManagement = () => {
     const handleMenuStatusChange = async (item: MenuConfigItem, newStatus: MenuItemStatus) => {
         try {
             await updateMenuItemStatus(item.id, newStatus);
+            toast.success(`Đã cập nhật trạng thái menu: ${item.name}`);
         } catch (e) {
-            alert('Lỗi cập nhật trạng thái: ' + (e as Error).message);
+            toast.error('Lỗi cập nhật trạng thái: ' + (e as Error).message);
         }
     };
 
@@ -370,7 +396,7 @@ export const CategoriesManagement = () => {
 
     const handleSaveMenu = async () => {
         if (!menuFormData.name.trim() || !menuFormData.key.trim() || !menuFormData.path.trim()) {
-            alert('Vui lòng điền đầy đủ Tên, Key và Đường dẫn!');
+            toast.error('Vui lòng điền đầy đủ Tên, Key và Đường dẫn!');
             return;
         }
         try {
@@ -390,8 +416,9 @@ export const CategoriesManagement = () => {
                 });
             }
             handleCancelMenu();
+            toast.success('Đã lưu cấu hình Menu');
         } catch (e) {
-            alert('Lỗi lưu Menu: ' + (e as Error).message);
+            toast.error('Lỗi lưu Menu: ' + (e as Error).message);
         }
     };
 
@@ -402,7 +429,7 @@ export const CategoriesManagement = () => {
 
     const handleAddTabConfig = async () => {
         if (!newTabName.trim()) {
-            alert('Tên Tab không được để trống!');
+            toast.error('Tên Tab không được để trống!');
             return;
         }
         try {
@@ -410,8 +437,9 @@ export const CategoriesManagement = () => {
             setNewTabName('');
             setIsAddingTab(false);
             setActiveTab(newId);
+            toast.success(`Đã tạo Tab "${newTabName}" thành công`);
         } catch (error) {
-            alert('Lỗi tạo Tab: ' + (error as Error).message);
+            toast.error('Lỗi tạo Tab: ' + (error as Error).message);
         }
     };
 
@@ -421,7 +449,7 @@ export const CategoriesManagement = () => {
         // Kiểm tra xem Tab có chứa Category nào không
         const hasChildren = categories.some(c => c.type === tabId);
         if (hasChildren) {
-            alert(`Không thể xóa Tab "${tabLabel}" vì vẫn đang chứa các thuộc tính dữ liệu. Vui lòng xóa hết các thuộc tính bên trong trước khi xóa Tab.`);
+            toast.error(`Không thể xóa Tab "${tabLabel}" vì vẫn đang chứa các thuộc tính dữ liệu. Vui lòng xóa hết các thuộc tính bên trong trước khi xóa Tab.`);
             return;
         }
 
@@ -1174,6 +1202,43 @@ export const CategoriesManagement = () => {
                 onConfirm={confirmDelete}
                 itemName={deleteTarget.name}
             />
+
+            {/* Generic Confirm Modal for Drive Actions */}
+            {confirmAction && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-6">
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 mx-auto ${confirmAction.type === 'danger' ? 'bg-red-100 text-red-600' :
+                                confirmAction.type === 'warning' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
+                                }`}>
+                                <AlertCircle className="w-6 h-6" />
+                            </div>
+                            <h3 className="text-lg font-bold text-center text-gray-900 mb-2">
+                                {confirmAction.title}
+                            </h3>
+                            <p className="text-center text-sm text-gray-500 mb-6 whitespace-pre-wrap">
+                                {confirmAction.message}
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setConfirmAction(null)}
+                                    className="flex-1 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 font-bold transition-all"
+                                >
+                                    Hủy bỏ
+                                </button>
+                                <button
+                                    onClick={confirmAction.onConfirm}
+                                    className={`flex-1 px-4 py-2.5 text-white rounded-xl font-bold transition-all shadow-lg ${confirmAction.type === 'danger' ? 'bg-red-600 hover:bg-red-700 shadow-red-100' :
+                                        confirmAction.type === 'warning' ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-100' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-100'
+                                        }`}
+                                >
+                                    {confirmAction.confirmText || 'Xác nhận'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

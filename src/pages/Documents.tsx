@@ -8,6 +8,7 @@ import { isoToVN, formatBytes } from '../utils/formatVN';
 import { useAuthStore } from '../store/useAuthStore';
 import { utils, writeFile } from 'xlsx';
 import { format } from 'date-fns';
+import toast from 'react-hot-toast';
 
 export const Documents = () => {
     const { user } = useAuthStore();
@@ -178,7 +179,7 @@ export const Documents = () => {
             setConfirmDeleteModal({ isOpen: false, docId: null });
         } catch (error) {
             console.error("Lỗi khi xóa tài liệu: ", error);
-            alert("Không thể xóa văn bản này. Vui lòng thử lại sau.");
+            toast.error("Không thể xóa văn bản này. Vui lòng thử lại sau.");
         }
     };
 
@@ -490,10 +491,6 @@ export const Documents = () => {
                     </div>
                 </div>
             )}
-            <UploadDocumentModal
-                isOpen={isUploadModalOpen}
-                onClose={() => setIsUploadModalOpen(false)}
-            />
         </div>
     );
 };

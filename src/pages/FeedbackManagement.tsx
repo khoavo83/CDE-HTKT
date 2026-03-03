@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { MessageSquare, Search, Filter, Loader2, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import toast from 'react-hot-toast';
 
 export const FeedbackManagement: React.FC = () => {
     const { user } = useAuthStore();
@@ -44,7 +45,9 @@ export const FeedbackManagement: React.FC = () => {
         setUpdatingId(id);
         try {
             await updateFeedbackStatus(id, newStatus);
+            toast.success('Đã cập nhật trạng thái');
         } catch (error) {
+            toast.error('Lỗi khi cập nhật trạng thái');
             console.error(error);
         } finally {
             setUpdatingId(null);
@@ -57,7 +60,9 @@ export const FeedbackManagement: React.FC = () => {
             await updateFeedbackStatus(id, currentStatus, tempNote);
             setEditNoteId(null);
             setTempNote('');
+            toast.success('Đã lưu phản hồi');
         } catch (error) {
+            toast.error('Lỗi khi lưu phản hồi');
             console.error(error);
         } finally {
             setUpdatingId(null);

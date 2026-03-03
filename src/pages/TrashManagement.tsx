@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { collection, query, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Trash, RefreshCw, Trash2, Search, Filter } from 'lucide-react';
+import { Trash, RefreshCw, Trash2, Search, Filter, AlertCircle } from 'lucide-react';
 import { isoToVN } from '../utils/formatVN';
 import { restoreFromTrash } from '../utils/trashUtils';
 import toast from 'react-hot-toast';
@@ -40,28 +40,47 @@ export const TrashManagement = () => {
         return unsubscribe;
     }, []);
 
-    const handleRestore = async (item: TrashItem) => {
-        if (!window.confirm(`Bạn có chắc muốn khôi phục dữ liệu:\n${item.metaSummary}?`)) return;
+    const [confirmAction, setConfirmAction] = useState<{
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        type?: 'danger' | 'warning' | 'info';
+    } | null>(null);
 
-        const toastId = toast.loading('Đang khôi phục...');
-        try {
-            await restoreFromTrash(item);
-            toast.success('Đã khôi phục thành công', { id: toastId });
-        } catch (error) {
-            toast.error('Lỗi khi khôi phục: ' + (error as Error).message, { id: toastId });
-        }
+    const handleRestore = async (item: TrashItem) => {
+        setConfirmAction({
+            title: 'Khôi phục dữ liệu',
+            message: `Bạn có chắc muốn khôi phục dữ liệu: "${item.metaSummary}"?`,
+            type: 'info',
+            onConfirm: async () => {
+                const toastId = toast.loading('Đang khôi phục...');
+                setConfirmAction(null);
+                try {
+                    await restoreFromTrash(item);
+                    toast.success('Đã khôi phục thành công', { id: toastId });
+                } catch (error) {
+                    toast.error('Lỗi khi khôi phục: ' + (error as Error).message, { id: toastId });
+                }
+            }
+        });
     };
 
     const handlePermanentlyDelete = async (item: TrashItem) => {
-        if (!window.confirm(`HÀNH ĐỘNG NGUY HIỂM:\nBạn có chắc chắn muốn xóa VĨNH VIỄN dữ liệu này?\n\n${item.metaSummary}\n\nKhông thể phục hồi sau khi xóa!`)) return;
-
-        const toastId = toast.loading('Đang xóa vĩnh viễn...');
-        try {
-            await deleteDoc(doc(db, 'trash', item.id));
-            toast.success('Đã xóa vĩnh viễn', { id: toastId });
-        } catch (error) {
-            toast.error('Lỗi khi xóa vĩnh viễn', { id: toastId });
-        }
+        setConfirmAction({
+            title: 'XÓA VĨNH VIỄN',
+            message: `HÀNH ĐỘNG NGUY HIỂM: Bạn có chắc chắn muốn xóa VĨNH VIỄN dữ liệu này?\n\n"${item.metaSummary}"\n\nKhông thể phục hồi sau khi xóa!`,
+            type: 'danger',
+            onConfirm: async () => {
+                const toastId = toast.loading('Đang xóa vĩnh viễn...');
+                setConfirmAction(null);
+                try {
+                    await deleteDoc(doc(db, 'trash', item.id));
+                    toast.success('Đã xóa vĩnh viễn', { id: toastId });
+                } catch (error) {
+                    toast.error('Lỗi khi xóa vĩnh viễn', { id: toastId });
+                }
+            }
+        });
     };
 
     const filteredItems = trashItems.filter(item => {
@@ -209,6 +228,43 @@ export const TrashManagement = () => {
                     )}
                 </div>
             </div>
+
+            {/* Modal Xác nhận Tùy chỉnh */}
+            {confirmAction && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-6">
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 mx-auto ${confirmAction.type === 'danger' ? 'bg-red-100 text-red-600' :
+                                    confirmAction.type === 'warning' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
+                                }`}>
+                                <AlertCircle className="w-6 h-6" />
+                            </div>
+                            <h3 className="text-lg font-bold text-center text-gray-900 mb-2">
+                                {confirmAction.title}
+                            </h3>
+                            <p className="text-center text-sm text-gray-500 mb-6 whitespace-pre-wrap">
+                                {confirmAction.message}
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setConfirmAction(null)}
+                                    className="flex-1 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 font-bold transition-all"
+                                >
+                                    Hủy bỏ
+                                </button>
+                                <button
+                                    onClick={confirmAction.onConfirm}
+                                    className={`flex-1 px-4 py-2.5 text-white rounded-xl font-bold transition-all shadow-lg ${confirmAction.type === 'danger' ? 'bg-red-600 hover:bg-red-700 shadow-red-100' :
+                                            confirmAction.type === 'warning' ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-100' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-100'
+                                        }`}
+                                >
+                                    Xác nhận
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

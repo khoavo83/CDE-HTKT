@@ -13,6 +13,8 @@ import {
 } from 'firebase/firestore';
 import { useAuthStore } from '../store/useAuthStore';
 import { canEditOrDeleteData } from '../utils/authUtils';
+import toast from 'react-hot-toast';
+import { GenericConfirmModal } from '../components/GenericConfirmModal';
 import L from 'leaflet';
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -105,6 +107,11 @@ export const MapViewer = () => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [latestData, setLatestData] = useState<any>(null);
 
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        layerId: string;
+    }>({ isOpen: false, layerId: '' });
+
     // Load danh sách layer metadata từ Firestore
     useEffect(() => {
         const q = query(collection(db, 'map_layers'), orderBy('uploadedAt', 'desc'));
@@ -196,28 +203,40 @@ export const MapViewer = () => {
 
             setLatestData(geoData);
             setUploadMsg('');
+            toast.success('Đã tải lên bản đồ thành công');
             // Auto load và bật layer vừa upload
             setLoadedGeoData(prev => ({ ...prev, [layerRef.id]: geoData }));
             setVisibleIds(prev => new Set(prev).add(layerRef.id));
         } catch (err: any) {
-            alert(`Lỗi: ${err?.message || 'Không thể đọc file KMZ'}`);
+            toast.error(`Lỗi: ${err?.message || 'Không thể đọc file KMZ'}`);
         } finally {
             setIsUploading(false);
             setUploadMsg('');
         }
     };
 
-    // Xoá layer và tất cả chunks
+    // Mở modal xác nhận xoá
+    const handleDeleteRequest = (id: string) => {
+        setConfirmModal({ isOpen: true, layerId: id });
+    };
+
+    // Thực hiện xoá layer và tất cả chunks
     const handleDelete = async (id: string) => {
-        if (!confirm('Xoá lớp dữ liệu này khỏi hệ thống?')) return;
-        // Xoá tất cả chunks trước
-        const chunksSnap = await getDocs(collection(db, 'map_layers', id, 'chunks'));
-        const batch = writeBatch(db);
-        chunksSnap.docs.forEach(d => batch.delete(d.ref));
-        batch.delete(doc(db, 'map_layers', id));
-        await batch.commit();
-        setVisibleIds(prev => { const n = new Set(prev); n.delete(id); return n; });
-        setLoadedGeoData(prev => { const n = { ...prev }; delete n[id]; return n; });
+        const toastId = toast.loading('Đang xoá lớp dữ liệu...');
+        try {
+            // Xoá tất cả chunks trước
+            const chunksSnap = await getDocs(collection(db, 'map_layers', id, 'chunks'));
+            const batch = writeBatch(db);
+            chunksSnap.docs.forEach(d => batch.delete(d.ref));
+            batch.delete(doc(db, 'map_layers', id));
+            await batch.commit();
+
+            setVisibleIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+            setLoadedGeoData(prev => { const n = { ...prev }; delete n[id]; return n; });
+            toast.success('Đã xoá lớp dữ liệu', { id: toastId });
+        } catch (error) {
+            toast.error('Lỗi khi xoá lớp dữ liệu', { id: toastId });
+        }
     };
 
     return (
@@ -282,7 +301,7 @@ export const MapViewer = () => {
                                     </div>
                                     {canEditOrDeleteData(user, layer.uploadedBy) && (
                                         <button
-                                            onClick={() => handleDelete(layer.id)}
+                                            onClick={() => handleDeleteRequest(layer.id)}
                                             className="shrink-0 text-gray-200 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                                         >
                                             <Trash2 className="w-3.5 h-3.5" />
@@ -346,6 +365,16 @@ export const MapViewer = () => {
                     </MapContainer>
                 </div>
             </div>
+
+            <GenericConfirmModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+                onConfirm={() => handleDelete(confirmModal.layerId)}
+                title="Xác nhận xoá bản đồ"
+                message="Bạn có chắc chắn muốn xoá lớp dữ liệu này khỏi hệ thống? Tuyệt đối không thể hoàn tác nếu đã xoá!"
+                type="danger"
+                confirmText="Chắc chắn Xoá"
+            />
         </div>
     );
 };

@@ -6,6 +6,7 @@ import { FolderTree, Folder, FileCheck, Layers, Plus, Edit2, Trash2, ChevronRigh
 import { useForm } from 'react-hook-form';
 import { useAuthStore } from '../store/useAuthStore';
 import { canEditOrDeleteData } from '../utils/authUtils';
+import { toast } from 'react-hot-toast';
 import { ReportCompletionModal } from '../components/ReportCompletionModal';
 import { DeleteConfirmModal } from '../components/DeleteConfirmModal';
 import { moveToTrash } from '../utils/trashUtils';
@@ -115,6 +116,10 @@ export const Projects = () => {
     const [removeModalOpen, setRemoveModalOpen] = useState(false);
     const [linkToRemove, setLinkToRemove] = useState<string | null>(null);
 
+    // State xác nhận đính kèm
+    const [isAttachConfirmModalOpen, setIsAttachConfirmModalOpen] = useState(false);
+    const [docToAttach, setDocToAttach] = useState<any | null>(null);
+
     const previewDoc = previewDocId ? allDocs.find(d => d.id === previewDocId) || null : null;
 
     const { register, handleSubmit, reset, watch, setValue, formState: { } } = useForm<ProjectNode>();
@@ -176,12 +181,18 @@ export const Projects = () => {
         return current?.id || nodeId;
     };
 
-    const handleAttachDoc = async (docId: string) => {
-        if (!selectedNodeId || isAttachingId === docId) return;
+    const handleAttachDoc = async (doc: any) => {
+        if (!selectedNodeId || isAttachingId === doc.id) return;
+        setDocToAttach(doc);
+        setIsAttachConfirmModalOpen(true);
+    };
 
-        if (!confirm("Bạn có tin chắc muốn đính kèm văn bản này vào nhánh dự án hiện tại?")) return;
+    const executeAttachDoc = async () => {
+        if (!docToAttach || !selectedNodeId) return;
+        const docId = docToAttach.id;
 
         setIsAttachingId(docId);
+        setIsAttachConfirmModalOpen(false);
         try {
             const { httpsCallable } = await import('firebase/functions');
             const { functions } = await import('../firebase/config');
@@ -194,15 +205,18 @@ export const Projects = () => {
             });
 
             if ((result as any).data?.isDuplicate) {
-                alert("Văn bản này đã được đính kèm vào nhánh này từ trước!");
+                toast.error("Văn bản này đã được đính kèm vào nhánh này từ trước!");
+            } else {
+                toast.success("Đã đính kèm văn bản thành công.");
             }
 
             setIsAttachDocModalOpen(false);
         } catch (error: any) {
             console.error(error);
-            alert("Lỗi khi đính kèm văn bản: " + error.message);
+            toast.error("Lỗi khi đính kèm văn bản: " + error.message);
         } finally {
             setIsAttachingId(null);
+            setDocToAttach(null);
         }
     };
 
@@ -224,11 +238,12 @@ export const Projects = () => {
             await removeFn({ linkId: linkToRemove });
         } catch (error: any) {
             console.error(error);
-            alert("Lỗi khi gỡ văn bản: " + error.message);
+            toast.error("Lỗi khi gỡ văn bản: " + error.message);
 
             // Fallback: Nếu lỗi Drive thì ít nhất xóa DB để UX mượt
             try {
                 await deleteDoc(doc(db, "vanban_node_links", linkToRemove));
+                toast.success("Đã gỡ liên kết trong cơ sở dữ liệu.");
             } catch (err) {
                 console.error("Fallback delete failed:", err);
             }
@@ -359,9 +374,10 @@ export const Projects = () => {
 
         try {
             await Promise.all(promises);
+            toast.success('Đã cập nhật thứ tự.');
         } catch (error) {
             console.error('Lỗi di chuyển:', error);
-            alert('Không thể cập nhật thứ tự mới!');
+            toast.error('Không thể cập nhật thứ tự mới!');
         }
     };
 
@@ -424,7 +440,7 @@ export const Projects = () => {
         e.stopPropagation();
         const children = allNodes.filter(n => n.parentId === node.id);
         if (children.length > 0) {
-            alert('Không thể xóa mục này vì vẫn còn chứa các mục con bên trong.');
+            toast.error('Không thể xóa mục này vì vẫn còn chứa các mục con bên trong.');
             return;
         }
         setNodeToDelete(node);
@@ -446,9 +462,10 @@ export const Projects = () => {
             if (expandedTaskId === nodeToDelete.id) setExpandedTaskId(null);
             setDeleteModalOpen(false);
             setNodeToDelete(null);
+            toast.success('Đã xóa dữ liệu thành công.');
         } catch (error) {
             console.error('Lỗi khi xóa:', error);
-            alert('Có lỗi xảy ra khi xóa dữ liệu');
+            toast.error('Có lỗi xảy ra khi xóa dữ liệu');
         }
     };
 
@@ -472,9 +489,10 @@ export const Projects = () => {
                 });
             }
             setIsModalOpen(false);
+            toast.success(modalMode === 'add' ? 'Đã thêm thành công.' : 'Đã cập nhật thành công.');
         } catch (error) {
             console.error('Lỗi khi lưu dữ liệu:', error);
-            alert('Có lỗi xảy ra, vui lòng thử lại.');
+            toast.error('Có lỗi xảy ra, vui lòng thử lại.');
         }
     };
 
@@ -888,7 +906,7 @@ export const Projects = () => {
                                             onClick={() => setIsAttachDocModalOpen(true)}
                                             className="flex items-center gap-1.5 bg-white border border-gray-200 text-blue-600 hover:text-blue-700 hover:border-blue-300 font-medium px-3 py-1.5 rounded-md hover:bg-blue-50 transition-colors text-sm shadow-sm"
                                         >
-                                            <LinkIcon className="w-3.5 h-3.5" /> Thêm Văn bản
+                                            <LinkIcon className="w-3.5 h-3.5" /> Đính kèm Văn bản
                                         </button>
                                     </div>
                                 </div>
@@ -1292,7 +1310,7 @@ export const Projects = () => {
                                                 </p>
                                             </div>
                                             <button
-                                                onClick={() => handleAttachDoc(d.id)}
+                                                onClick={() => handleAttachDoc(d)}
                                                 disabled={isAttachingId === d.id}
                                                 className={`shrink-0 border px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm flex items-center gap-1.5 ${isAttachingId === d.id
                                                     ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
@@ -1304,7 +1322,7 @@ export const Projects = () => {
                                                 ) : (
                                                     <LinkIcon className="w-3.5 h-3.5" />
                                                 )}
-                                                {isAttachingId === d.id ? 'Đang gắn...' : 'Chọn'}
+                                                {isAttachingId === d.id ? 'Đang gắn...' : 'Đính kèm'}
                                             </button>
                                         </div>
                                     ))}
@@ -1498,6 +1516,43 @@ export const Projects = () => {
                                     className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors"
                                 >
                                     Gỡ bỏ
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Xác nhận Đính kèm Văn bản */}
+            {isAttachConfirmModalOpen && docToAttach && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden transform transition-all">
+                        <div className="p-6">
+                            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 mb-4 mx-auto">
+                                <LinkIcon className="w-6 h-6 text-blue-600" />
+                            </div>
+                            <h3 className="text-lg font-bold text-center text-gray-900 mb-2">
+                                Xác nhận Đính kèm
+                            </h3>
+                            <p className="text-center text-sm text-gray-500 mb-6">
+                                Bạn có chắc chắn muốn đính kèm văn bản <b>{docToAttach.soKyHieu || docToAttach.fileNameOriginal}</b> vào nhánh dự án hiện tại?
+                                <br /><span className="text-xs italic text-gray-400 mt-2 block">(Hệ thống sẽ tạo lối tắt văn bản trên Google Drive)</span>
+                            </p>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => {
+                                        setIsAttachConfirmModalOpen(false);
+                                        setDocToAttach(null);
+                                    }}
+                                    className="flex-1 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                                >
+                                    Hủy bỏ
+                                </button>
+                                <button
+                                    onClick={executeAttachDoc}
+                                    className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                                >
+                                    Đính kèm
                                 </button>
                             </div>
                         </div>
