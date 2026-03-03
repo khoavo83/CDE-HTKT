@@ -5,7 +5,7 @@ import { auth } from '../firebase/config';
 import {
     LayoutDashboard, FileText, Share2, Box, LogOut, Users, Settings,
     Map as MapIcon, FolderTree, Zap, Sun, Moon, BookOpen, Layers, Database,
-    Calendar as CalendarIcon, MessageSquare, Trash2, X
+    Calendar as CalendarIcon, MessageSquare, Trash2, X, ListChecks
 } from 'lucide-react';
 import { useMenuConfigStore } from '../store/useMenuConfigStore';
 import { useThemeStore } from '../store/useThemeStore';
@@ -20,7 +20,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 // Map icon string → component
 export const ICON_MAP: Record<string, React.ElementType> = {
     LayoutDashboard, FolderTree, Share2, FileText, Box, Calendar: CalendarIcon,
-    Map: MapIcon, Users, Settings, Zap, BookOpen, Layers, Database, MessageSquare, Trash: Trash2
+    Map: MapIcon, Users, Settings, Zap, BookOpen, Layers, Database, MessageSquare, Trash: Trash2, ListChecks
 };
 
 export const MainLayout = () => {
@@ -67,7 +67,8 @@ export const MainLayout = () => {
                 const hasMeetings = menuItems.some(item => item.key === 'meetings');
                 const hasFeedbacks = menuItems.some(item => item.key === 'feedbacks');
                 const hasTrash = menuItems.some(item => item.key === 'trash');
-                if (!hasInternalDocs || !hasMeetings || !hasFeedbacks || !hasTrash) {
+                const hasTasks = menuItems.some(item => item.key === 'tasks');
+                if (!hasInternalDocs || !hasMeetings || !hasFeedbacks || !hasTrash || !hasTasks) {
                     seedMenuConfig();
                 }
             }

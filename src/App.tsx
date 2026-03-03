@@ -24,6 +24,7 @@ import { InternalDocRegister } from './pages/InternalDocRegister';
 import { MeetingCalendar } from './pages/MeetingCalendar';
 import { FeedbackManagement } from './pages/FeedbackManagement';
 import { TrashManagement } from './pages/TrashManagement';
+import { TasksManagement } from './pages/TasksManagement';
 
 function App() {
     const { setUser, setLoading, isLoading } = useAuthStore();
@@ -74,6 +75,7 @@ function App() {
                 <Route element={<MainLayout />}>
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/projects" element={<Projects />} />
+                    <Route path="/tasks" element={<TasksManagement />} />
                     <Route path="/mindmap" element={<Mindmap />} />
                     <Route path="/documents" element={<Documents />} />
                     <Route path="/documents/:id" element={<DocumentReview />} />
