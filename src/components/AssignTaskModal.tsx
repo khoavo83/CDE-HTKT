@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, where, addDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db, auth } from '../firebase/config';
 import { useAuthStore } from '../store/useAuthStore';
 import { Loader2, X, Send, Users, UserCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -74,13 +74,32 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        console.log('[AssignTaskModal] Bắt đầu submit...', { selectedAssignee, contentKhacRong: !!content.trim() });
+
         if (!selectedAssignee || !content.trim()) {
             toast.error('Vui lòng chọn người phụ trách và nhập nội dung chỉ đạo.');
             return;
         }
 
         const assigneeUser = users.find(u => u.id === selectedAssignee);
-        if (!assigneeUser || !user) return;
+
+        // Sửa lỗi im lặng: dùng auth.currentUser thay vì phụ thuộc mỗi vàozustand user
+        const firestoreUser = auth.currentUser;
+        const currentUserId = firestoreUser?.uid || user?.uid;
+        const currentUserName = firestoreUser?.displayName || user?.displayName || user?.email || firestoreUser?.email || 'Người dùng ẩn danh';
+
+        if (!assigneeUser) {
+            console.error('[AssignTaskModal] Không tìm thấy assigneeUser trong danh sách users!', { selectedAssignee });
+            toast.error('Lỗi dữ liệu hệ thống: Không xác định được người phụ trách.');
+            return;
+        }
+
+        if (!currentUserId) {
+            console.error('[AssignTaskModal] Không xác định được user hiện tại đang đăng nhập!', { firestoreUser, zustandUser: user });
+            toast.error('Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng tải lại trang.');
+            return;
+        }
 
         // Build collaborators list
         const collaboratorsData = selectedCollaborators
@@ -94,8 +113,8 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
         try {
             const taskData: any = {
                 vanBanId: vanBanId,
-                assignerId: user.uid,
-                assignerName: user.displayName || user.email,
+                assignerId: currentUserId,
+                assignerName: currentUserName,
                 assigneeId: assigneeUser.id,
                 assigneeName: assigneeUser.displayName || assigneeUser.email,
                 content: content.trim(),
@@ -107,9 +126,10 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
                 taskData.collaborators = collaboratorsData;
             }
 
+            console.log('[AssignTaskModal] Đang gọi addDoc với taskData:', taskData);
             await addDoc(collection(db, 'vanban_tasks'), taskData);
 
-            console.log('[AssignTaskModal] Task written for vanBanId:', vanBanId);
+            console.log('[AssignTaskModal] addDoc THÀNH CÔNG cho vanBanId:', vanBanId);
             toast.success('Đã phân công xử lý văn bản thành công!');
             setContent('');
             setSelectedAssignee('');
@@ -117,8 +137,8 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
             onSuccess();
             onClose();
         } catch (error: any) {
-            console.error('Lỗi khi phân công:', error);
-            toast.error('Đã xảy ra lỗi khi tạo phân công: ' + error.message);
+            console.error('[AssignTaskModal] Lỗi khi addDoc:', error);
+            toast.error('Đã xảy ra lỗi khi lưu vào database: ' + error.message);
         } finally {
             setIsSubmitting(false);
         }
