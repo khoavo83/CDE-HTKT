@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, where, addDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { useAuthStore } from '../store/useAuthStore';
-import { Loader2, X, Send, Search, FileText, UserCheck, Users } from 'lucide-react';
+import { Loader2, X, Send, Search, FileText, UserCheck, Users, Link as LinkIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { DocAttachmentSelectorModal } from './DocAttachmentSelectorModal';
 
 interface UserItem {
     id: string;
@@ -38,9 +39,7 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
     const [loadingUsers, setLoadingUsers] = useState(false);
 
     // Search VanBan State
-    const [searchTerm, setSearchTerm] = useState('');
-    const [searchResults, setSearchResults] = useState<VanBanItem[]>([]);
-    const [isSearching, setIsSearching] = useState(false);
+    const [isDocModalOpen, setIsDocModalOpen] = useState(false);
     const [selectedVanBan, setSelectedVanBan] = useState<VanBanItem | null>(null);
 
     // Form State
@@ -73,56 +72,7 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
         fetchUsers();
     }, [isOpen]);
 
-    // Handle searching logic for VanBan (only fetch incoming docs normally, or any doc that has content)
-    useEffect(() => {
-        const handleSearch = async () => {
-            if (searchTerm.trim().length < 2) {
-                setSearchResults([]);
-                return;
-            }
 
-            setIsSearching(true);
-            try {
-                // Since firestore doesn't support generic full text search natively easily,
-                // we'll fetch recently added documents or a limited set and filter client side
-                // For a robust app, you'd use Algolia or similar. We'll do a simple fetch limited to 'vanban' collection
-                const q = query(collection(db, 'vanban'));
-                const querySnapshot = await getDocs(q);
-
-                const results: VanBanItem[] = [];
-                const searchLower = searchTerm.toLowerCase();
-
-                querySnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    const trichYeu = data.trichYeu || '';
-                    const soKyHieu = data.soKyHieu || data.fileNameOriginal || '';
-
-                    if (trichYeu.toLowerCase().includes(searchLower) || soKyHieu.toLowerCase().includes(searchLower)) {
-                        results.push({
-                            id: doc.id,
-                            soKyHieu: data.soKyHieu || '',
-                            trichYeu: data.trichYeu || data.fileNameOriginal || 'Không có trích yếu',
-                            ngayBanHanh: data.ngayBanHanh || '',
-                            coQuanBanHanh: data.coQuanBanHanh || '',
-                            loaiVanBan: data.loaiVanBan || ''
-                        });
-                    }
-                });
-
-                setSearchResults(results.slice(0, 10)); // Limit to 10 results
-            } catch (error) {
-                console.error("Lỗi khi tìm kiếm văn bản:", error);
-            } finally {
-                setIsSearching(false);
-            }
-        };
-
-        const timeoutId = setTimeout(() => {
-            handleSearch();
-        }, 500); // 500ms debounce
-
-        return () => clearTimeout(timeoutId);
-    }, [searchTerm]);
 
     if (!isOpen) return null;
 
@@ -197,7 +147,6 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
             setSelectedAssignee('');
             setSelectedCollaborators([]);
             setSelectedVanBan(null);
-            setSearchTerm('');
 
             onSuccess();
             onClose();
@@ -238,52 +187,18 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
                             </label>
 
                             {!selectedVanBan ? (
-                                <div className="space-y-2">
-                                    <div className="relative">
-                                        <Search className="w-4 h-4 text-blue-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                                        <input
-                                            type="text"
-                                            placeholder="Tìm kiếm số hiệu hoặc trích yếu văn bản..."
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="w-full pl-9 pr-4 py-2 bg-white border border-blue-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-shadow placeholder:text-blue-300 text-blue-800"
-                                        />
-                                        {isSearching && (
-                                            <Loader2 className="w-4 h-4 text-blue-500 animate-spin absolute right-3 top-1/2 -translate-y-1/2" />
-                                        )}
+                                <button
+                                    onClick={() => setIsDocModalOpen(true)}
+                                    className="w-full flex items-center justify-center gap-2 px-4 py-8 bg-white border-2 border-dashed border-blue-200 rounded-lg text-blue-600 hover:bg-blue-50 hover:border-blue-400 font-medium transition-all group"
+                                >
+                                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                                        <LinkIcon className="w-5 h-5 text-blue-600" />
                                     </div>
-
-                                    {/* Search Results */}
-                                    {searchTerm.trim().length >= 2 && searchResults.length > 0 && (
-                                        <div className="bg-white border border-blue-200 rounded-lg shadow-sm max-h-48 overflow-y-auto">
-                                            {searchResults.map((vb) => (
-                                                <div
-                                                    key={vb.id}
-                                                    onClick={() => {
-                                                        setSelectedVanBan(vb);
-                                                        setSearchTerm('');
-                                                    }}
-                                                    className="p-2.5 hover:bg-blue-50 cursor-pointer border-b border-blue-50 last:border-0 transition-colors flex items-start gap-3 group"
-                                                >
-                                                    <div className="mt-0.5 w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0 group-hover:bg-blue-200">
-                                                        <FileText className="w-4 h-4 text-blue-600" />
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-sm font-medium text-gray-800 group-hover:text-blue-700">
-                                                            {vb.loaiVanBan} {vb.soKyHieu && `số ${vb.soKyHieu}`}
-                                                        </div>
-                                                        <div className="text-xs text-gray-500 line-clamp-1 mt-0.5">{vb.trichYeu}</div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                    {searchTerm.trim().length >= 2 && !isSearching && searchResults.length === 0 && (
-                                        <div className="text-xs text-blue-500 p-2 text-center bg-white border border-blue-200 rounded-lg">
-                                            Không tìm thấy văn bản nào với từ khóa này.
-                                        </div>
-                                    )}
-                                </div>
+                                    <div className="flex flex-col items-start ml-2 text-left">
+                                        <span className="font-semibold text-gray-800 group-hover:text-blue-700">Đính kèm Văn bản</span>
+                                        <span className="text-xs text-gray-500 font-normal">Mở danh sách văn bản và chọn 1 tệp cần đính kèm</span>
+                                    </div>
+                                </button>
                             ) : (
                                 <div className="flex items-start justify-between bg-white p-3 rounded-lg border border-blue-200 shadow-sm">
                                     <div className="flex items-start gap-3">
@@ -434,6 +349,15 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
                     </button>
                 </div>
             </div>
+
+            <DocAttachmentSelectorModal
+                isOpen={isDocModalOpen}
+                onClose={() => setIsDocModalOpen(false)}
+                onAttach={(docId, docData) => {
+                    setSelectedVanBan(docData);
+                    setIsDocModalOpen(false);
+                }}
+            />
         </div>
     );
 };
