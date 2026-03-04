@@ -8,6 +8,8 @@ import { useMeetingStore } from '../store/useMeetingStore';
 import { ProjectTreeSelectorModal } from './ProjectTreeSelectorModal';
 
 
+import { format } from 'date-fns';
+
 // Chuyển File sang Base64 string
 const fileToBase64 = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -94,74 +96,97 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
             const { httpsCallable } = await import('firebase/functions');
             const { functions } = await import('../firebase/config');
 
-            // 1. Upload các tệp đính kèm thông qua Cloud Function (Tập trung)
-            if (attachments.length > 0) {
-                setUploadStatus(`Đang upload ${attachments.length} tệp đính kèm...`);
-            }
-            const attachmentResults = await Promise.all(attachments.map(async (file) => {
-                const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string, oauthToken: string }, any>(functions, 'uploadFileToDriveBase64');
-                const uploaded = await uploadFn({
-                    fileName: file.name,
-                    mimeType: file.type,
-                    base64Data: await fileToBase64(file),
-                    oauthToken: googleAccessToken
-                });
+            // 1. Lọc và chuẩn bị xử lý OCR mảng attachment trước (nếu cần đổi tên ngay lúc này thì chưa có số ký hiệu/ngày ban hành từ file chính)
+            // Tuy nhiên, việc chuẩn hoá tên file đính kèm cần phụ thuộc vào thông tin trích xuất của file chính.
+            // Vì vậy, ta sửa lại luồng: 
+            // Bước A: Gửi file chính cho OCR để lấy thông tin (SoKyHieu, NgayBanHanh).
+            // Bước B: Upload các file đính kèm với tên đã chuẩn hoá dựa trên kết quả Bước A.
 
-                return {
-                    fileName: file.name,
-                    mimeType: file.type,
-                    driveFileId: uploaded.data.file.id,
-                    webViewLink: uploaded.data.file.webViewLink
-                };
-            }));
-
-            // 2. Gọi Cloud Function để xử lý OCR và upload file chính
-            const processOCR = httpsCallable(functions, 'processDocumentOCR');
             setUploadStatus('AI Gemini đang đọc văn bản và lưu hồ sơ gốc...');
+            const processOCR = httpsCallable(functions, 'processDocumentOCR');
 
-            const result: any = await processOCR({
-                base64Data, // Gửi dữ liệu file chính cho AI và để upload
+            const ocrResult: any = await processOCR({
+                base64Data,
                 mimeType: mainFile.type,
                 fileNameOriginal: mainFile.name,
                 totalSizeBytes: mainFile.size,
-                dinhKem: attachmentResults,
+                dinhKem: [], // Tạm thời để trống, sẽ cập nhật mảng đính kèm sau khi có ID và upload attach
                 oauthToken: googleAccessToken
             });
 
-            if (result.data.success) {
-                const data = result.data.data;
-                setDocId(result.data.docId);
-
-                // Chuẩn hóa tên file ban đầu
-                const safeSoKyHieu = (data.soKyHieu || "NOSO").replace(/\//g, "_");
-                const safeTrichYeu = (data.trichYeu || "KhongTrichYeu")
-                    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-                    .replace(/[^a-zA-Z0-9 ]/g, "")
-                    .replace(/\s+/g, "_")
-                    .substring(0, 50);
-                const initialStandardName = `${data.ngayBanHanh || "NODATE"}_${safeSoKyHieu}_${safeTrichYeu}`;
-
-                setOcrData({
-                    ...data,
-                    fileNameStandardized: initialStandardName
-                });
-
-                // Tự động bật form lịch họp nếu là Giấy mời
-                const loai = (data.loaiVanBan || '').toLowerCase();
-                if (loai.includes('giấy mời') || loai.includes('thông báo họp') || loai.includes('lịch họp')) {
-                    setShowMeetingForm(true);
-                    setMeetingData(prev => ({
-                        ...prev,
-                        diaDiemHop: data.diaDiemHop || '',
-                        ngayHop: data.ngayHop || '',
-                        thoiGianHop: data.thoiGianHop || '',
-                        title: data.trichYeu || ''
-                    }));
-                }
-                setShowReview(true);
-            } else {
-                throw new Error(result.data.message || 'Xử lý thất bại');
+            if (!ocrResult.data.success) {
+                throw new Error(ocrResult.data.message || 'Xử lý OCR thất bại');
             }
+
+            const data = ocrResult.data.data;
+            const newDocId = ocrResult.data.docId;
+
+            // Xây dựng tiền tố chuẩn hoá cho các file đính kèm
+            const safeSoKyHieu = (data.soKyHieu || "NOSO").replace(/\//g, "-").replace(/\\/g, "-");
+            const ngayBanHanhStr = data.ngayBanHanh || format(new Date(), 'yyyy-MM-dd'); // Fallback lấy ngày hiện tại nếu AI không đọc được
+
+            // Bước B: Upload tệp đính kèm với định dạng tên chuẩn hoá
+            let attachmentResults: any[] = [];
+            if (attachments.length > 0) {
+                setUploadStatus(`Đang upload ${attachments.length} tệp đính kèm...`);
+                attachmentResults = await Promise.all(attachments.map(async (file, index) => {
+                    const stt = (index + 1).toString().padStart(2, '0');
+                    const safeOriginalName = file.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
+                    const standardizedAttachName = `${ngayBanHanhStr}_${safeSoKyHieu}_DinhKem_${stt}_${safeOriginalName}`;
+
+                    const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string, oauthToken: string }, any>(functions, 'uploadFileToDriveBase64');
+                    const uploaded = await uploadFn({
+                        fileName: standardizedAttachName,
+                        mimeType: file.type,
+                        base64Data: await fileToBase64(file),
+                        oauthToken: googleAccessToken
+                    });
+
+                    return {
+                        id: crypto.randomUUID(), // Tạo ID tĩnh cho attachment
+                        fileName: standardizedAttachName,
+                        originalName: file.name,
+                        fileSize: file.size,
+                        mimeType: file.type,
+                        driveFileId: uploaded.data.file.id,
+                        webViewLink: uploaded.data.file.webViewLink,
+                        uploadedAt: new Date().toISOString()
+                    };
+                }));
+            }
+
+            // Gán data vào form Review
+            setDocId(newDocId);
+
+            // Chuẩn hóa tên file ban đầu cho file chính
+            const safeTrichYeu = (data.trichYeu || "KhongTrichYeu")
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-zA-Z0-9 -]/g, "")
+                .replace(/\s+/g, "_")
+                .substring(0, 50);
+            const initialStandardName = `${ngayBanHanhStr}_${safeSoKyHieu}_${safeTrichYeu}`;
+
+            setOcrData({
+                ...data,
+                fileNameStandardized: initialStandardName,
+                attachments: attachmentResults // Lưu mảng đính kèm vào OCR data để review và đẩy lên Firestore
+            });
+
+
+
+            // Tự động bật form lịch họp nếu là Giấy mời
+            const loai = (data.loaiVanBan || '').toLowerCase();
+            if (loai.includes('giấy mời') || loai.includes('thông báo họp') || loai.includes('lịch họp')) {
+                setShowMeetingForm(true);
+                setMeetingData(prev => ({
+                    ...prev,
+                    diaDiemHop: data.diaDiemHop || '',
+                    ngayHop: data.ngayHop || '',
+                    thoiGianHop: data.thoiGianHop || '',
+                    title: data.trichYeu || ''
+                }));
+            }
+            setShowReview(true);
         } catch (error: any) {
             console.error('Lỗi quá trình xử lý:', error);
             const errorMessage = error?.message || '';
