@@ -11,6 +11,7 @@ import {
 import { formatDateTime } from '../utils/formatVN';
 import { UpdateTaskModal } from '../components/UpdateTaskModal';
 import { AdminEditTaskModal } from '../components/AdminEditTaskModal';
+import { AssignTaskFromManagerModal } from '../components/AssignTaskFromManagerModal';
 import { GenericConfirmModal } from '../components/GenericConfirmModal';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -38,6 +39,7 @@ export const TasksManagement = () => {
     const [selectedTaskToUpdate, setSelectedTaskToUpdate] = useState<any | null>(null);
     const [deleteModal, setDeleteModal] = useState({ isOpen: false, taskId: '' });
     const [adminEditTask, setAdminEditTask] = useState<any | null>(null);
+    const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
 
     // Upload file state
     const [uploadingTaskId, setUploadingTaskId] = useState<string | null>(null);
@@ -274,22 +276,31 @@ export const TasksManagement = () => {
 
                     {/* Filter bar for all_tasks */}
                     {activeTab === 'all_tasks' && (
-                        <div className="flex items-center gap-3 px-5 py-3 bg-amber-50/70 border-b">
-                            <Filter className="w-4 h-4 text-amber-600" />
-                            <span className="text-sm font-medium text-gray-700">Lọc theo người dùng:</span>
-                            <select
-                                value={filterUser}
-                                onChange={(e) => setFilterUser(e.target.value)}
-                                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none min-w-[180px]"
+                        <div className="flex items-center justify-between px-5 py-3 bg-amber-50/70 border-b">
+                            <div className="flex items-center gap-3">
+                                <Filter className="w-4 h-4 text-amber-600" />
+                                <span className="text-sm font-medium text-gray-700">Lọc theo người dùng:</span>
+                                <select
+                                    value={filterUser}
+                                    onChange={(e) => setFilterUser(e.target.value)}
+                                    className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none min-w-[180px]"
+                                >
+                                    <option value="">Tất cả ({tasks.length} công việc)</option>
+                                    {uniqueAssignees.map((a: any) => (
+                                        <option key={a.id} value={a.id}>{a.name}</option>
+                                    ))}
+                                </select>
+                                {filterUser && (
+                                    <button onClick={() => setFilterUser('')} className="text-xs text-amber-700 hover:text-amber-900 font-medium underline">Bỏ lọc</button>
+                                )}
+                            </div>
+                            <button
+                                onClick={() => setIsAssignModalOpen(true)}
+                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
                             >
-                                <option value="">Tất cả ({tasks.length} công việc)</option>
-                                {uniqueAssignees.map((a: any) => (
-                                    <option key={a.id} value={a.id}>{a.name}</option>
-                                ))}
-                            </select>
-                            {filterUser && (
-                                <button onClick={() => setFilterUser('')} className="text-xs text-amber-700 hover:text-amber-900 font-medium underline">Bỏ lọc</button>
-                            )}
+                                <Send className="w-4 h-4" />
+                                Giao việc mới
+                            </button>
                         </div>
                     )}
 
@@ -694,6 +705,15 @@ export const TasksManagement = () => {
                 message="Bạn có chắc chắn muốn xóa phân công này? Hành động này không thể hoàn tác."
                 confirmText="Xóa"
                 type="danger"
+            />
+            {/* Modal Giao việc từ Quản lý toàn bộ */}
+            <AssignTaskFromManagerModal
+                isOpen={isAssignModalOpen}
+                onClose={() => setIsAssignModalOpen(false)}
+                onSuccess={() => {
+                    setIsAssignModalOpen(false);
+                    fetchTasks();
+                }}
             />
         </div>
     );
