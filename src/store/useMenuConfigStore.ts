@@ -19,7 +19,7 @@ export interface MenuConfigItem {
 export const DEFAULT_MENU_ITEMS: Omit<MenuConfigItem, 'id'>[] = [
     { key: 'dashboard', name: 'Tổng quan', path: '/', icon: 'LayoutDashboard', order: 1, status: 'active', adminOnly: false },
     { key: 'projects', name: 'Quản lý Dự án', path: '/projects', icon: 'FolderTree', order: 2, status: 'active', adminOnly: false },
-    { key: 'tasks', name: 'Công việc', path: '/tasks', icon: 'ListChecks', order: 2.5, status: 'active', adminOnly: false },
+    { key: 'tasks', name: 'Quản lý công việc', path: '/tasks', icon: 'ListChecks', order: 2.5, status: 'active', adminOnly: false },
     { key: 'mindmap', name: 'Sơ đồ Mindmap', path: '/mindmap', icon: 'Share2', order: 3, status: 'active', adminOnly: false },
     { key: 'documents', name: 'Văn bản & Hồ sơ', path: '/documents', icon: 'FileText', order: 4, status: 'active', adminOnly: false },
     { key: 'internal_docs', name: 'Sổ Công văn Nội bộ', path: '/internal-docs', icon: 'BookOpen', order: 5, status: 'active', adminOnly: false },

@@ -445,12 +445,12 @@ export const Dashboard = () => {
                     )}
                 </div>
 
-                {/* ── Bảng Công việc của tôi ── */}
+                {/* ── Bảng Quản lý công việc ── */}
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-8">
                     <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <CalendarCheck className="w-4 h-4 text-emerald-600" />
-                            <h2 className="text-base font-semibold text-gray-800">Công việc được giao cho tôi</h2>
+                            <h2 className="text-base font-semibold text-gray-800">Quản lý công việc được giao</h2>
                         </div>
                         <span className="text-xs font-bold bg-emerald-50 text-emerald-600 px-2 py-1 rounded-full">{myTasks.length} việc đang chờ</span>
                     </div>
