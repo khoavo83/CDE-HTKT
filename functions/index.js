@@ -519,12 +519,15 @@ exports.onDocumentStatusUpdate = onDocumentUpdated("vanban/{docId}", async (even
                     if (attachment.driveFileId) {
                         try {
                             const originalFileName = attachment.fileName || "Attachment";
-                            // Lấy đuôi mở rộng (ví dụ .docx)
-                            const fileExtMatch = originalFileName.match(/\.[0-9a-z]+$/i);
-                            const originalExt = fileExtMatch ? fileExtMatch[0] : '';
 
-                            // Tạo tên mới: TenFileChinh_DinhKem_1.docx
-                            const newAttachmentName = `${baseMainFileName}_DinhKem_${index}${originalExt}`;
+                            // Kiểm tra xem tên file đã được format chuẩn từ client chưa (bắt đầu bằng yyyy-MM-dd hoặc chuẩn hoá mới chứa "_DinhKem_")
+                            // Nếu đã chuẩn hóa, giữ nguyên tên. Nếu chưa, mới tự động sinh tên.
+                            let newAttachmentName = originalFileName;
+                            if (!originalFileName.includes("_DinhKem_")) {
+                                const fileExtMatch = originalFileName.match(/\.[0-9a-z]+$/i);
+                                const originalExt = fileExtMatch ? fileExtMatch[0] : '';
+                                newAttachmentName = `${baseMainFileName}_DinhKem_${index}${originalExt}`;
+                            }
 
                             await moveFile(attachment.driveFileId, newAttachmentName, targetFolderId);
 

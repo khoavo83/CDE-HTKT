@@ -125,35 +125,8 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
             const safeSoKyHieu = (data.soKyHieu || "NOSO").replace(/\//g, "-").replace(/\\/g, "-");
             const ngayBanHanhStr = data.ngayBanHanh || format(new Date(), 'yyyy-MM-dd'); // Fallback lấy ngày hiện tại nếu AI không đọc được
 
-            // Bước B: Upload tệp đính kèm với định dạng tên chuẩn hoá
-            let attachmentResults: any[] = [];
-            if (attachments.length > 0) {
-                setUploadStatus(`Đang upload ${attachments.length} tệp đính kèm...`);
-                attachmentResults = await Promise.all(attachments.map(async (file, index) => {
-                    const stt = (index + 1).toString().padStart(2, '0');
-                    const safeOriginalName = file.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
-                    const standardizedAttachName = `${ngayBanHanhStr}_${safeSoKyHieu}_DinhKem_${stt}_${safeOriginalName}`;
-
-                    const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string, oauthToken: string }, any>(functions, 'uploadFileToDriveBase64');
-                    const uploaded = await uploadFn({
-                        fileName: standardizedAttachName,
-                        mimeType: file.type,
-                        base64Data: await fileToBase64(file),
-                        oauthToken: googleAccessToken
-                    });
-
-                    return {
-                        id: crypto.randomUUID(), // Tạo ID tĩnh cho attachment
-                        fileName: standardizedAttachName,
-                        originalName: file.name,
-                        fileSize: file.size,
-                        mimeType: file.type,
-                        driveFileId: uploaded.data.file.id,
-                        webViewLink: uploaded.data.file.webViewLink,
-                        uploadedAt: new Date().toISOString()
-                    };
-                }));
-            }
+            // Tạm thời chỉ lưu mảng rỗng cho attachments, sẽ upload ở bước Final Save
+            const attachmentResults: any[] = [];
 
             // Gán data vào form Review
             setDocId(newDocId);
@@ -238,8 +211,48 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
             const { arrayUnion } = await import('firebase/firestore');
             const user = JSON.parse(localStorage.getItem('user_cde') || '{}');
 
+            // Bước C: Upload tệp đính kèm (nếu có) TRƯỚC khi lưu Firestore
+            let finalAttachments = [...(ocrData.attachments || [])];
+            if (attachments.length > 0) {
+                const { googleAccessToken } = useAuthStore.getState();
+                const { httpsCallable } = await import('firebase/functions');
+                const { functions } = await import('../firebase/config');
+
+                setUploadStatus(`Đang upload ${attachments.length} tệp đính kèm hồ sơ...`);
+
+                const safeSoKyHieu = (ocrData.soKyHieu || "NOSO").replace(/\//g, "-").replace(/\\/g, "-");
+                const ngayBanHanhStr = ocrData.ngayBanHanh || format(new Date(), 'yyyy-MM-dd');
+
+                const newUploads = await Promise.all(attachments.map(async (file, index) => {
+                    const stt = (finalAttachments.length + index + 1).toString().padStart(2, '0');
+                    const safeOriginalName = file.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
+                    const standardizedAttachName = `${ngayBanHanhStr}_${safeSoKyHieu}_DinhKem_${stt}_${safeOriginalName}`;
+
+                    const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string, oauthToken: string }, any>(functions, 'uploadFileToDriveBase64');
+                    const uploaded = await uploadFn({
+                        fileName: standardizedAttachName,
+                        mimeType: file.type,
+                        base64Data: await fileToBase64(file),
+                        oauthToken: googleAccessToken!
+                    });
+
+                    return {
+                        id: crypto.randomUUID(),
+                        fileName: standardizedAttachName,
+                        originalName: file.name,
+                        fileSize: file.size,
+                        mimeType: file.type,
+                        driveFileId: uploaded.data.file.id,
+                        webViewLink: uploaded.data.file.webViewLink,
+                        uploadedAt: new Date().toISOString()
+                    };
+                }));
+                finalAttachments = [...finalAttachments, ...newUploads];
+            }
+
             await updateDoc(doc(db, 'vanban', docId), {
                 ...ocrData,
+                attachments: finalAttachments,
                 trangThaiDuLieu: 'COMPLETED',
                 history: arrayUnion({
                     action: "REVIEW_AND_SAVE",
@@ -437,6 +450,36 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                                     </div>
                                 </div>
 
+                                {ocrData.attachments && ocrData.attachments.length > 0 && (
+                                    <div className="col-span-2 mt-1 pt-3 border-t border-gray-100">
+                                        <div className="bg-gray-50/50 p-3 rounded-lg border border-gray-200">
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                                                <Paperclip className="w-3 h-3" /> Danh sách tệp đính kèm ({ocrData.attachments.length})
+                                            </label>
+                                            <div className="space-y-2">
+                                                {ocrData.attachments.map((file: any, idx: number) => (
+                                                    <div key={idx} className="flex items-center justify-between text-xs bg-white p-2 rounded border border-gray-100 shadow-sm">
+                                                        <div className="flex items-center gap-2 truncate pr-4">
+                                                            <div className="w-6 h-6 rounded bg-blue-100 flex items-center justify-center shrink-0">
+                                                                <FileText className="w-3 h-3 text-blue-600" />
+                                                            </div>
+                                                            <span className="font-medium text-gray-700 truncate" title={file.fileName}>{file.fileName}</span>
+                                                        </div>
+                                                        <a
+                                                            href={file.webViewLink}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-blue-500 hover:text-blue-700 font-bold shrink-0"
+                                                        >
+                                                            Xem
+                                                        </a>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Form Lịch họp (hiện khi AI nhận diện Giấy mời) */}
                                 <div className="col-span-2 mt-1 pt-3 border-t border-gray-100">
                                     <button
@@ -538,72 +581,170 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                                         </div>
                                     )}
                                 </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <>
-                            {/* AI Notice */}
-                            <div className="flex items-start gap-2 text-sm text-blue-700 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                                <Sparkles className="w-4 h-4 shrink-0 mt-0.5" />
-                                <span>AI Gemini sẽ tự động đọc và trích xuất thông tin từ file của bạn.</span>
-                            </div>
 
-                            <div className="space-y-5">
-                                {/* Văn bản chính */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
-                                        <FileText className="w-4 h-4" /> Văn bản chính (Bắt buộc)
+                                {/* Form chọn Đính kèm mới ở bước Review */}
+                                <div className="col-span-2 mt-4 pt-4 border-t border-gray-100">
+                                    <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5 uppercase tracking-wide text-[10px]">
+                                        <Paperclip className="w-4 h-4 text-blue-600" /> Tệp hồ sơ đính kèm (Dự thảo, phụ lục...)
                                     </label>
-                                    <div className="relative border-2 border-dashed border-blue-200 rounded-lg p-5 text-center hover:bg-blue-50 transition-colors cursor-pointer">
-                                        <input
-                                            type="file"
-                                            accept="application/pdf,image/*"
-                                            onChange={(e) => setMainFile(e.target.files?.[0] || null)}
-                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                            disabled={isUploading}
-                                        />
-                                        {mainFile ? (
-                                            <div>
-                                                <p className="text-sm font-semibold text-blue-600 truncate">✅ {mainFile.name}</p>
-                                                <p className="text-xs text-gray-400 mt-1">{(mainFile.size / 1024).toFixed(1)} KB</p>
-                                            </div>
-                                        ) : (
-                                            <div>
-                                                <Upload className="w-8 h-8 mx-auto text-blue-300 mb-2" />
-                                                <p className="text-sm text-gray-500">Kéo thả hoặc nhấn để chọn PDF / Hình ảnh</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Đính kèm */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center gap-1.5">
-                                        <Paperclip className="w-4 h-4" /> Tệp đính kèm (tuỳ chọn)
-                                    </label>
-                                    <p className="text-xs text-gray-500 font-normal italic mb-3">Hỗ trợ tải lên file Word dự thảo - Hệ thống sẽ tự động đồng bộ tên trên Drive với tệp PDF gốc</p>
-                                    <div className="relative border-2 border-dashed border-gray-200 rounded-lg p-4 text-center hover:bg-gray-50 transition-colors">
+                                    <div className="relative border-2 border-dashed border-gray-200 rounded-lg p-4 text-center hover:bg-gray-50 transition-colors cursor-pointer">
                                         <input
                                             type="file"
                                             multiple
-                                            onChange={(e) => { if (e.target.files) setAttachments(Array.from(e.target.files)); }}
+                                            onChange={(e) => {
+                                                if (e.target.files) {
+                                                    const files = Array.from(e.target.files);
+                                                    setAttachments(prev => [...prev, ...files]);
+                                                }
+                                            }}
                                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                             disabled={isUploading}
                                         />
-                                        {attachments.length > 0 ? (
-                                            <p className="text-sm font-medium text-gray-600">📎 Đã chọn {attachments.length} tệp</p>
-                                        ) : (
-                                            <p className="text-sm text-gray-400">Chọn nhiều tệp đính kèm...</p>
-                                        )}
+                                        <div className="flex flex-col items-center gap-1">
+                                            <Upload className="w-6 h-6 text-gray-400" />
+                                            <p className="text-xs text-gray-500 font-medium">Chọn thêm file đính kèm từ máy tính</p>
+                                        </div>
                                     </div>
+
+                                    {/* Danh sách file chuẩn bị upload */}
                                     {attachments.length > 0 && (
-                                        <ul className="mt-2 text-xs text-gray-500 max-h-20 overflow-y-auto space-y-0.5 px-2">
-                                            {attachments.map((f, i) => <li key={i} className="truncate">• {f.name}</li>)}
-                                        </ul>
+                                        <div className="mt-3 space-y-2">
+                                            <p className="text-[10px] font-bold text-amber-600 uppercase">Tệp chuẩn bị tải lên ({attachments.length}):</p>
+                                            <div className="max-h-32 overflow-y-auto space-y-2 pr-1">
+                                                {attachments.map((file, idx) => (
+                                                    <div key={idx} className="flex items-center justify-between text-xs bg-amber-50/50 p-2 rounded border border-amber-100">
+                                                        <div className="flex items-center gap-2 truncate pr-4">
+                                                            <FileText className="w-3 h-3 text-amber-500 shrink-0" />
+                                                            <span className="truncate italic text-gray-600 font-medium">{file.name}</span>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))}
+                                                            className="text-red-400 hover:text-red-600 font-bold px-2 py-1 bg-white border border-red-100 rounded"
+                                                        >
+                                                            Xóa
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Danh sách đã có từ OCR (thường là rỗng nếu mới tải) */}
+                                    {ocrData.attachments && ocrData.attachments.length > 0 && (
+                                        <div className="mt-4 pt-4 border-t border-gray-100">
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                                                <Paperclip className="w-3 h-3" /> Tệp đã lưu ({ocrData.attachments.length})
+                                            </p>
+                                            <div className="space-y-2">
+                                                {ocrData.attachments.map((file: any, idx: number) => (
+                                                    <div key={idx} className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded border border-gray-100">
+                                                        <div className="flex items-center gap-2 truncate pr-4">
+                                                            <FileText className="w-3 h-3 text-blue-500 shrink-0" />
+                                                            <span className="truncate text-gray-700">{file.fileName}</span>
+                                                        </div>
+                                                        <a href={file.webViewLink} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Xem</a>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
                             </div>
-                        </>
+                        </div>
+                    ) : (
+                        <div className="space-y-5">
+                            {/* AI Notice */}
+                            <div className="flex items-start gap-2 text-sm text-blue-700 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                <Sparkles className="w-4 h-4 shrink-0 mt-0.5" />
+                                <span>AI Gemini sẽ tự động đọc và trích xuất thông tin từ file Văn bản chính của bạn.</span>
+                            </div>
+
+                            {/* ═══════ PHẦN 1: Văn bản chính ═══════ */}
+                            <div className="bg-white border border-blue-200 rounded-xl p-4 shadow-sm">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">1</div>
+                                    <label className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+                                        <FileText className="w-4 h-4 text-blue-600" /> Văn bản chính <span className="text-red-500">*</span>
+                                    </label>
+                                </div>
+                                <div className="relative border-2 border-dashed border-blue-200 rounded-lg p-6 text-center hover:bg-blue-50 transition-colors cursor-pointer">
+                                    <input
+                                        type="file"
+                                        accept="application/pdf,image/*"
+                                        onChange={(e) => setMainFile(e.target.files?.[0] || null)}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                        disabled={isUploading}
+                                    />
+                                    {mainFile ? (
+                                        <div className="flex flex-col items-center">
+                                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mb-2">
+                                                <FileText className="w-5 h-5 text-blue-600" />
+                                            </div>
+                                            <p className="text-sm font-bold text-blue-600 truncate max-w-[90%]">✅ {mainFile.name}</p>
+                                            <p className="text-xs text-gray-400 mt-1">{(mainFile.size / 1024).toFixed(1)} KB · Nhấn để thay đổi</p>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <Upload className="w-8 h-8 mx-auto text-blue-300 mb-2" />
+                                            <p className="text-sm font-medium text-gray-500">Kéo thả hoặc nhấn để chọn PDF / Hình ảnh</p>
+                                            <p className="text-xs text-gray-400 mt-1">AI sẽ tự động đọc và trích xuất thông tin</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* ═══════ PHẦN 2: Các tài liệu đính kèm ═══════ */}
+                            <div className="bg-white border border-amber-200 rounded-xl p-4 shadow-sm">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <div className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-bold">2</div>
+                                    <label className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+                                        <Paperclip className="w-4 h-4 text-amber-600" /> Các tài liệu đính kèm <span className="text-gray-400 font-normal text-xs">(tuỳ chọn)</span>
+                                    </label>
+                                </div>
+                                <p className="text-xs text-gray-500 italic mb-3">Dự thảo Word, phụ lục, bảng vẽ... Hệ thống sẽ tự đổi tên theo Số ký hiệu sau khi OCR.</p>
+                                <div className="relative border-2 border-dashed border-amber-200 rounded-lg p-4 text-center hover:bg-amber-50/50 transition-colors cursor-pointer">
+                                    <input
+                                        type="file"
+                                        multiple
+                                        onChange={(e) => {
+                                            if (e.target.files) {
+                                                setAttachments(prev => [...prev, ...Array.from(e.target.files!)]);
+                                            }
+                                        }}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                        disabled={isUploading}
+                                    />
+                                    <div className="flex flex-col items-center gap-1">
+                                        <Upload className="w-6 h-6 text-amber-400" />
+                                        <p className="text-xs text-gray-500 font-medium">Chọn nhiều file đính kèm từ máy tính</p>
+                                    </div>
+                                </div>
+
+                                {/* Danh sách file đã chọn */}
+                                {attachments.length > 0 && (
+                                    <div className="mt-3 space-y-1.5">
+                                        <p className="text-[10px] font-bold text-amber-600 uppercase">Đã chọn {attachments.length} tệp:</p>
+                                        <div className="max-h-28 overflow-y-auto space-y-1.5 pr-1">
+                                            {attachments.map((file, idx) => (
+                                                <div key={idx} className="flex items-center justify-between text-xs bg-amber-50/50 p-2 rounded border border-amber-100">
+                                                    <div className="flex items-center gap-2 truncate pr-3">
+                                                        <FileText className="w-3 h-3 text-amber-500 shrink-0" />
+                                                        <span className="truncate text-gray-600 font-medium">{file.name}</span>
+                                                        <span className="text-gray-400 shrink-0">({(file.size / 1024).toFixed(0)} KB)</span>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))}
+                                                        className="text-red-400 hover:text-red-600 font-bold px-1.5 py-0.5 text-[10px] bg-white border border-red-100 rounded shrink-0"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     )}
                 </div>
 

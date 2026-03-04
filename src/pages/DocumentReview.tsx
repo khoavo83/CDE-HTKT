@@ -582,19 +582,64 @@ export const DocumentReview = () => {
                             )}
                         </fieldset>
 
-                        {/* Đính kèm */}
-                        {docData.dinhKem && docData.dinhKem.length > 0 && (
-                            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                                <p className="text-sm font-medium text-gray-700 mb-2">
-                                    📎 Đính kèm ({docData.dinhKem.length} tệp):
-                                </p>
-                                <ul className="space-y-1">
-                                    {docData.dinhKem.map((att: any, idx: number) => (
-                                        <li key={idx} className="text-xs text-gray-600 truncate">
-                                            • {att.fileName || att.name}
-                                        </li>
+                        {/* Tệp hồ sơ đính kèm */}
+                        {((docData.attachments && docData.attachments.length > 0) || (docData.dinhKem && docData.dinhKem.length > 0)) && (
+                            <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center gap-2">
+                                    <span className="text-blue-600">📎</span>
+                                    <h3 className="text-sm font-bold text-gray-700">
+                                        Tệp hồ sơ đính kèm ({(docData.attachments?.length || 0) + (docData.dinhKem?.length || 0)} tệp)
+                                    </h3>
+                                </div>
+                                <div className="divide-y divide-gray-100">
+                                    {/* Hiển thị attachments mới (có link Drive) */}
+                                    {docData.attachments?.map((att: any, idx: number) => (
+                                        <div key={`att-${idx}`} className="px-4 py-3 flex items-center justify-between hover:bg-blue-50/50 transition-colors">
+                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                                                    <FileText className="w-4 h-4 text-blue-600" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm font-medium text-gray-800 truncate" title={att.fileName || att.originalName}>
+                                                        {att.fileName || att.originalName}
+                                                    </p>
+                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                        {att.originalName && att.fileName !== att.originalName && (
+                                                            <span className="text-[10px] text-gray-400 italic truncate max-w-[200px]" title={att.originalName}>Gốc: {att.originalName}</span>
+                                                        )}
+                                                        {att.fileSize && (
+                                                            <span className="text-[10px] text-gray-400">{(att.fileSize / 1024).toFixed(0)} KB</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {att.webViewLink && (
+                                                <a
+                                                    href={att.webViewLink}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors shrink-0 ml-3"
+                                                >
+                                                    <ExternalLink className="w-3 h-3" /> Xem
+                                                </a>
+                                            )}
+                                        </div>
                                     ))}
-                                </ul>
+
+                                    {/* Hiển thị dinhKem legacy (không có link Drive) */}
+                                    {docData.dinhKem?.map((att: any, idx: number) => (
+                                        <div key={`dk-${idx}`} className="px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                                                    <FileText className="w-4 h-4 text-gray-500" />
+                                                </div>
+                                                <p className="text-sm text-gray-600 truncate" title={att.fileName || att.name}>
+                                                    {att.fileName || att.name}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
 

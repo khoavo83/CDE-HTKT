@@ -108,7 +108,7 @@ export const MainLayout = () => {
             )}
 
             {/* Sidebar */}
-            <aside className={`fixed md:relative flex flex-col w-64 h-full bg-white border-r border-gray-200 z-50 transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+            <aside className={`fixed md:relative flex flex-col w-60 h-full bg-white border-r border-gray-200 z-50 transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
                 <div className="p-6 flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-bold text-primary-600">CDE - HTKT</h2>

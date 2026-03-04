@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, where, addDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { useAuthStore } from '../store/useAuthStore';
-import { Loader2, X, Send, Search, FileText, UserCheck, Users, Link as LinkIcon } from 'lucide-react';
+import { Loader2, X, Send, Search, FileText, UserCheck, Users, Link as LinkIcon, Paperclip } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { DocAttachmentSelectorModal } from './DocAttachmentSelectorModal';
 
@@ -21,6 +21,7 @@ interface VanBanItem {
     ngayBanHanh: string;
     coQuanBanHanh: string;
     loaiVanBan: string;
+    dinhKem?: any[];
 }
 
 interface AssignTaskFromManagerModalProps {
@@ -200,24 +201,46 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
                                     </div>
                                 </button>
                             ) : (
-                                <div className="flex items-start justify-between bg-white p-3 rounded-lg border border-blue-200 shadow-sm">
-                                    <div className="flex items-start gap-3">
-                                        <div className="mt-0.5 w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-                                            <FileText className="w-4 h-4 text-blue-600" />
-                                        </div>
-                                        <div>
-                                            <div className="text-sm font-bold text-gray-800">
-                                                {selectedVanBan.loaiVanBan} {selectedVanBan.soKyHieu && `số ${selectedVanBan.soKyHieu}`}
+                                <div className="space-y-3">
+                                    <div className="flex items-start justify-between bg-white p-3 rounded-lg border border-blue-200 shadow-sm">
+                                        <div className="flex items-start gap-3">
+                                            <div className="mt-0.5 w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                                                <FileText className="w-4 h-4 text-blue-600" />
                                             </div>
-                                            <div className="text-xs text-gray-600 mt-1 line-clamp-2">{selectedVanBan.trichYeu}</div>
+                                            <div>
+                                                <div className="text-sm font-bold text-gray-800">
+                                                    {selectedVanBan.loaiVanBan} {selectedVanBan.soKyHieu && `số ${selectedVanBan.soKyHieu}`}
+                                                </div>
+                                                <div className="text-xs text-gray-600 mt-1 line-clamp-2">{selectedVanBan.trichYeu}</div>
+                                            </div>
                                         </div>
+                                        <button
+                                            onClick={() => setSelectedVanBan(null)}
+                                            className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded"
+                                        >
+                                            Gỡ bỏ
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={() => setSelectedVanBan(null)}
-                                        className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded"
-                                    >
-                                        Gỡ bỏ
-                                    </button>
+
+                                    {selectedVanBan.dinhKem && selectedVanBan.dinhKem.length > 0 && (
+                                        <div className="pl-11 space-y-1.5">
+                                            <p className="text-[10px] font-bold text-blue-400 uppercase tracking-tight">Tệp phụ lục đính kèm ({selectedVanBan.dinhKem.length})</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {selectedVanBan.dinhKem.map((file: any, index: number) => (
+                                                    <a
+                                                        key={index}
+                                                        href={file.webViewLink}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 border border-gray-200 rounded text-[11px] text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-colors"
+                                                    >
+                                                        <Paperclip className="w-3 h-3" />
+                                                        <span className="max-w-[150px] truncate">{file.fileName || file.originalName || 'Đính kèm'}</span>
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -348,7 +371,7 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
                         )}
                     </button>
                 </div>
-            </div>
+            </div >
 
             <DocAttachmentSelectorModal
                 isOpen={isDocModalOpen}
@@ -358,6 +381,6 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
                     setIsDocModalOpen(false);
                 }}
             />
-        </div>
+        </div >
     );
 };

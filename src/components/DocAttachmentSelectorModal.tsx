@@ -14,6 +14,7 @@ export interface VanBanItem {
     nguoiKy?: string;
     kyHieuLuuTru?: string;
     phanLoaiVanBan: 'INCOMING' | 'OUTGOING';
+    dinhKem?: any[];
 }
 
 interface DocAttachmentSelectorModalProps {
