@@ -85,8 +85,8 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
             try {
                 // Since firestore doesn't support generic full text search natively easily,
                 // we'll fetch recently added documents or a limited set and filter client side
-                // For a robust app, you'd use Algolia or similar. We'll do a simple fetch limited to 'documents' collection
-                const q = query(collection(db, 'documents'));
+                // For a robust app, you'd use Algolia or similar. We'll do a simple fetch limited to 'vanban' collection
+                const q = query(collection(db, 'vanban'));
                 const querySnapshot = await getDocs(q);
 
                 const results: VanBanItem[] = [];
