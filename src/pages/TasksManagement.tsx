@@ -68,10 +68,12 @@ export const TasksManagement = () => {
 
             setTasks(data);
 
-            // Fetch VB info for display
+            // Fetch VB info for display (vanBanId + bcDocId)
             const vanBanIds = [...new Set(data.map((t: any) => t.vanBanId).filter(Boolean))];
+            const bcDocIds = [...new Set(data.map((t: any) => t.bcDocId).filter(Boolean))];
+            const allIds = [...new Set([...vanBanIds, ...bcDocIds])];
             const newCache: Record<string, any> = { ...vanBanCache };
-            for (const vbId of vanBanIds) {
+            for (const vbId of allIds) {
                 if (!newCache[vbId]) {
                     try {
                         const vbDoc = await getDoc(doc(db, 'vanban', vbId));
@@ -354,7 +356,7 @@ export const TasksManagement = () => {
                                                         </div>
                                                     </td>
                                                 </tr>
-                                                {/* Expanded: result + files */}
+                                                {/* Expanded: result + VB đi + files */}
                                                 {isExpanded && (
                                                     <tr>
                                                         <td colSpan={8} className="px-6 py-4 bg-slate-50 border-t">
@@ -364,6 +366,42 @@ export const TasksManagement = () => {
                                                                     <p className="text-sm text-gray-800 whitespace-pre-wrap bg-white p-3 rounded-lg border">{task.result}</p>
                                                                 </div>
                                                             )}
+                                                            {/* Hiển thị VB đi đã tạo từ Báo cáo Hoàn thành */}
+                                                            {task.bcDocId && vanBanCache[task.bcDocId] && (() => {
+                                                                const bcVb = vanBanCache[task.bcDocId];
+                                                                const vbLabel = [
+                                                                    bcVb.loaiVanBan || '',
+                                                                    bcVb.soKyHieu ? `số ${bcVb.soKyHieu}` : '',
+                                                                    bcVb.ngayBanHanh ? `ngày ${new Date(bcVb.ngayBanHanh).toLocaleDateString('vi-VN')}` : '',
+                                                                    bcVb.coQuanBanHanh ? `của ${bcVb.coQuanBanHanh}` : '',
+                                                                    bcVb.trichYeu ? bcVb.trichYeu : ''
+                                                                ].filter(Boolean).join(' ');
+                                                                return (
+                                                                    <div className="mb-3">
+                                                                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Văn bản kết quả:</p>
+                                                                        <div
+                                                                            onClick={() => navigate(`/documents/${task.bcDocId}`)}
+                                                                            className="flex items-start gap-3 p-3 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer group"
+                                                                        >
+                                                                            <div className="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center shrink-0 mt-0.5">
+                                                                                <FileText className="w-5 h-5 text-red-600" />
+                                                                            </div>
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <p className="text-sm text-gray-900 group-hover:text-blue-700 transition-colors leading-relaxed">
+                                                                                    {vbLabel || bcVb.fileNameOriginal || 'Văn bản đi'}
+                                                                                </p>
+                                                                                {bcVb.phanLoaiVanBan && (
+                                                                                    <span className={`inline-flex items-center gap-1 mt-1.5 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${bcVb.phanLoaiVanBan === 'OUTGOING' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+                                                                                        }`}>
+                                                                                        {bcVb.phanLoaiVanBan === 'OUTGOING' ? '📤 Văn bản đi' : '📥 Văn bản đến'}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                            <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-blue-500 shrink-0 mt-1" />
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })()}
                                                             {task.reportFiles && task.reportFiles.length > 0 && (
                                                                 <div>
                                                                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">File đính kèm:</p>
