@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuthStore } from '../store/useAuthStore';
-import { CheckCircle2, Clock, CheckSquare, Edit3, Trash2, Send, ChevronDown, ChevronUp, UserPlus, Users } from 'lucide-react';
+import { CheckCircle2, Clock, CheckSquare, Edit3, Trash2, Send, ChevronDown, ChevronUp, UserPlus, Users, Settings } from 'lucide-react';
 import { formatDateTime } from '../utils/formatVN';
 import { AssignTaskModal } from './AssignTaskModal';
 import { UpdateTaskModal } from './UpdateTaskModal';
+import { AdminEditTaskModal } from './AdminEditTaskModal';
 import { GenericConfirmModal } from './GenericConfirmModal';
 import toast from 'react-hot-toast';
 
@@ -25,6 +26,7 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
 
     // Delete confirm
     const [deleteModal, setDeleteModal] = useState({ isOpen: false, taskId: '' });
+    const [adminEditTask, setAdminEditTask] = useState<any | null>(null);
 
     const fetchTasks = async () => {
         if (!vanBanId) {
@@ -252,6 +254,11 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                                             <Trash2 className="w-4 h-4 ml-1" />
                                                         </button>
                                                     )}
+                                                    {user?.role === 'admin' && (
+                                                        <button onClick={() => setAdminEditTask(task)} className="text-amber-600 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 p-1.5 rounded-md transition-colors" title="Chỉnh sửa (Admin)">
+                                                            <Settings className="w-4 h-4" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -303,6 +310,15 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                 onClose={() => setDeleteModal({ isOpen: false, taskId: '' })}
                 onConfirm={() => handleDeleteTask(deleteModal.taskId)}
             />
+
+            {adminEditTask && (
+                <AdminEditTaskModal
+                    isOpen={!!adminEditTask}
+                    onClose={() => setAdminEditTask(null)}
+                    task={adminEditTask}
+                    onSuccess={fetchTasks}
+                />
+            )}
         </div>
     );
 };

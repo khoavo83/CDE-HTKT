@@ -6,10 +6,11 @@ import { useAuthStore } from '../store/useAuthStore';
 import {
     CheckCircle2, Clock, Loader2, Trash2, Send, ChevronDown, ChevronUp,
     Edit3, FileText, ExternalLink, Upload, Paperclip, Download, ListChecks,
-    UserCheck, Users, ClipboardList, Filter
+    UserCheck, Users, ClipboardList, Filter, Settings
 } from 'lucide-react';
 import { formatDateTime } from '../utils/formatVN';
 import { UpdateTaskModal } from '../components/UpdateTaskModal';
+import { AdminEditTaskModal } from '../components/AdminEditTaskModal';
 import { GenericConfirmModal } from '../components/GenericConfirmModal';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -36,6 +37,7 @@ export const TasksManagement = () => {
     const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
     const [selectedTaskToUpdate, setSelectedTaskToUpdate] = useState<any | null>(null);
     const [deleteModal, setDeleteModal] = useState({ isOpen: false, taskId: '' });
+    const [adminEditTask, setAdminEditTask] = useState<any | null>(null);
 
     // Upload file state
     const [uploadingTaskId, setUploadingTaskId] = useState<string | null>(null);
@@ -353,6 +355,11 @@ export const TasksManagement = () => {
                                                                     <Trash2 className="w-4 h-4" />
                                                                 </button>
                                                             )}
+                                                            {user?.role === 'admin' && (
+                                                                <button onClick={() => setAdminEditTask(task)} className="text-amber-600 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 p-1.5 rounded-md transition-colors" title="Chỉnh sửa (Admin)">
+                                                                    <Settings className="w-4 h-4" />
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -441,6 +448,15 @@ export const TasksManagement = () => {
                     isOpen={!!selectedTaskToUpdate}
                     onClose={() => setSelectedTaskToUpdate(null)}
                     task={selectedTaskToUpdate}
+                    onSuccess={fetchTasks}
+                />
+            )}
+
+            {adminEditTask && (
+                <AdminEditTaskModal
+                    isOpen={!!adminEditTask}
+                    onClose={() => setAdminEditTask(null)}
+                    task={adminEditTask}
                     onSuccess={fetchTasks}
                 />
             )}
