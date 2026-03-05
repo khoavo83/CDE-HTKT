@@ -201,25 +201,26 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
             // Bước C: Upload tệp đính kèm (nếu có) TRƯỚC khi lưu Firestore
             let finalAttachments = [...(ocrData.attachments || [])];
             if (attachments.length > 0) {
-
-                setUploadStatus(`Đang upload ${attachments.length} tệp đính kèm hồ sơ...`);
-
                 const safeSoKyHieu = (ocrData.soKyHieu || "NOSO").replace(/\//g, "-").replace(/\\/g, "-");
                 const ngayBanHanhStr = ocrData.ngayBanHanh || format(new Date(), 'yyyy-MM-dd');
+                const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string }, any>(functions, 'uploadFileToDriveBase64');
 
-                const newUploads = await Promise.all(attachments.map(async (file, index) => {
-                    const stt = (finalAttachments.length + index + 1).toString().padStart(2, '0');
+                for (let i = 0; i < attachments.length; i++) {
+                    const file = attachments[i];
+                    setUploadStatus(`Đang tải tệp đính kèm ${i + 1}/${attachments.length}: ${file.name}...`);
+
+                    const stt = (finalAttachments.length + 1).toString().padStart(2, '0');
                     const safeOriginalName = file.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
                     const standardizedAttachName = `${ngayBanHanhStr}_${safeSoKyHieu}_DinhKem_${stt}_${safeOriginalName}`;
 
-                    const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string }, any>(functions, 'uploadFileToDriveBase64');
+                    const base64 = await fileToBase64(file);
                     const uploaded = await uploadFn({
                         fileName: standardizedAttachName,
                         mimeType: file.type,
-                        base64Data: await fileToBase64(file)
+                        base64Data: base64
                     });
 
-                    return {
+                    finalAttachments.push({
                         id: crypto.randomUUID(),
                         fileName: standardizedAttachName,
                         originalName: file.name,
@@ -228,9 +229,8 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                         driveFileId: uploaded.data.file.id,
                         webViewLink: uploaded.data.file.webViewLink,
                         uploadedAt: new Date().toISOString()
-                    };
-                }));
-                finalAttachments = [...finalAttachments, ...newUploads];
+                    });
+                }
             }
 
             await updateDoc(doc(db, 'vanban', docId), {
