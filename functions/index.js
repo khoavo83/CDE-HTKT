@@ -1,7 +1,6 @@
 const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentUpdated, onDocumentWritten, onDocumentCreated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");
-const functions = require("firebase-functions"); // v1 API - cần cho functions.config()
 
 // Thiết lập vùng mặc định cho toàn bộ Functions là Singapore (gần Việt Nam và cùng vùng với DB của bạn)
 setGlobalOptions({ region: "asia-southeast1" });
@@ -82,10 +81,11 @@ async function getDriveService() {
 
     console.log("[DEBUG] Loading Master Credentials and Google APIs...");
     const { google } = require("googleapis");
-    const config = functions.config().google || {};
-    const clientId = config.client_id || process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = config.client_secret || process.env.GOOGLE_CLIENT_SECRET;
-    const refreshToken = config.refresh_token || process.env.GOOGLE_REFRESH_TOKEN;
+
+    // Firebase Functions v2 sử dụng process.env để lấy biến môi trường
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
 
     if (!clientId || !clientSecret || !refreshToken) {
         console.error("[ERROR] Missing Master Google Credentials in config.");
