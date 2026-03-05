@@ -11,6 +11,8 @@ import { ReportCompletionModal } from '../components/ReportCompletionModal';
 import { DeleteConfirmModal } from '../components/DeleteConfirmModal';
 import { moveToTrash } from '../utils/trashUtils';
 import { isoToVN } from '../utils/formatVN';
+import { GenericConfirmModal } from '../components/GenericConfirmModal';
+
 
 interface ProjectNode {
     id: string;
@@ -97,6 +99,9 @@ export const Projects = () => {
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
     const [taskForm, setTaskForm] = useState({ name: '', description: '', startDate: '', endDate: '', phuTrach: '', nguoiPhoiHop: [] as string[], priority: 'MEDIUM' as string, notes: '' });
     const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+    const [isTaskSaving, setIsTaskSaving] = useState(false);
+    const [isTaskConfirmOpen, setIsTaskConfirmOpen] = useState(false);
+
 
     const { user } = useAuthStore();
     const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
@@ -1218,38 +1223,67 @@ export const Projects = () => {
                             </div>
                         </div>
                         <div className="px-6 py-4 bg-gray-50 border-t flex justify-end gap-3 shrink-0">
-                            <button type="button" onClick={() => setIsTaskModalOpen(false)} className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-medium hover:bg-gray-100">Hủy bỏ</button>
-                            <button type="button" onClick={async () => {
-                                if (!taskForm.name.trim()) return;
-                                const taskData: any = {
-                                    name: taskForm.name,
-                                    type: 'TASK',
-                                    parentId: selectedNodeId,
-                                    description: taskForm.description,
-                                    status: 'PENDING',
-                                    startDate: taskForm.startDate,
-                                    endDate: taskForm.endDate,
-                                    phuTrach: taskForm.phuTrach,
-                                    nguoiPhoiHop: taskForm.nguoiPhoiHop,
-                                    priority: taskForm.priority,
-                                    notes: taskForm.notes,
-                                };
-                                if (taskModalMode === 'add') {
-                                    const newId = `task_${Date.now()}`;
-                                    taskData.createdAt = Date.now();
-                                    taskData.order = Date.now();
-                                    await setDoc(doc(db, 'project_nodes', newId), taskData);
-                                } else if (editingTaskId) {
-                                    await updateDoc(doc(db, 'project_nodes', editingTaskId), taskData);
-                                }
-                                setIsTaskModalOpen(false);
-                            }} className="px-6 py-2 bg-primary-600 text-white rounded-md font-medium hover:bg-primary-700 shadow-sm">
+                            <button type="button" onClick={() => setIsTaskModalOpen(false)} className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 font-medium hover:bg-gray-100" disabled={isTaskSaving}>Hủy bỏ</button>
+                            <button
+                                type="button"
+                                disabled={isTaskSaving || !taskForm.name.trim()}
+                                onClick={() => setIsTaskConfirmOpen(true)}
+                                className="px-6 py-2 bg-primary-600 text-white rounded-md font-medium hover:bg-primary-700 shadow-sm disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {isTaskSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                                 {taskModalMode === 'add' ? 'Giao việc' : 'Lưu thay đổi'}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
+
+            <GenericConfirmModal
+                isOpen={isTaskConfirmOpen}
+                onClose={() => setIsTaskConfirmOpen(false)}
+                onConfirm={async () => {
+                    if (!taskForm.name.trim() || isTaskSaving) return;
+                    setIsTaskSaving(true);
+                    try {
+                        const taskData: any = {
+                            name: taskForm.name,
+                            type: 'TASK',
+                            parentId: selectedNodeId,
+                            description: taskForm.description,
+                            status: taskModalMode === 'add' ? 'PENDING' : (allNodes.find(n => n.id === editingTaskId)?.status || 'PENDING'),
+                            startDate: taskForm.startDate,
+                            endDate: taskForm.endDate,
+                            phuTrach: taskForm.phuTrach,
+                            nguoiPhoiHop: taskForm.nguoiPhoiHop,
+                            priority: taskForm.priority,
+                            notes: taskForm.notes,
+                        };
+
+                        if (taskModalMode === 'add') {
+                            const newId = `task_${Date.now()}`;
+                            taskData.createdAt = Date.now();
+                            taskData.order = Date.now();
+                            taskData.createdBy = user?.email || user?.uid || '';
+                            await setDoc(doc(db, 'project_nodes', newId), taskData);
+                            toast.success('Đã giao việc thành công.');
+                        } else if (editingTaskId) {
+                            await updateDoc(doc(db, 'project_nodes', editingTaskId), taskData);
+                            toast.success('Đã cập nhật công việc.');
+                        }
+                        setIsTaskModalOpen(false);
+                    } catch (error: any) {
+                        console.error('Lỗi khi lưu Task:', error);
+                        toast.error('Lỗi khi lưu công việc: ' + error.message);
+                    } finally {
+                        setIsTaskSaving(false);
+                        setIsTaskConfirmOpen(false);
+                    }
+                }}
+                title="Xác nhận Giao việc"
+                message={`Bạn có chắc chắn muốn ${taskModalMode === 'add' ? 'giao việc' : 'cập nhật công việc'} này không?`}
+                confirmText={taskModalMode === 'add' ? 'Giao việc' : 'Cập nhật'}
+            />
+
 
             {/* Modal Đính kèm Văn bản */}
             {isAttachDocModalOpen && (

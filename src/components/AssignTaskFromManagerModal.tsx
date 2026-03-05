@@ -4,7 +4,9 @@ import { db, auth } from '../firebase/config';
 import { useAuthStore } from '../store/useAuthStore';
 import { Loader2, X, Send, Search, FileText, UserCheck, Users, Link as LinkIcon, Paperclip } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { GenericConfirmModal } from './GenericConfirmModal';
 import { DocAttachmentSelectorModal } from './DocAttachmentSelectorModal';
+
 
 interface UserItem {
     id: string;
@@ -48,6 +50,8 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
     const [selectedCollaborators, setSelectedCollaborators] = useState<string[]>([]);
     const [content, setContent] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showConfirm, setShowConfirm] = useState(false);
+
 
     useEffect(() => {
         if (!isOpen) return;
@@ -99,6 +103,10 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
             return;
         }
 
+        setShowConfirm(true);
+    };
+
+    const executeSubmit = async () => {
         const assigneeUser = users.find(u => u.id === selectedAssignee);
         const firestoreUser = auth.currentUser;
         const currentUserId = firestoreUser?.uid || user?.uid;
@@ -156,8 +164,10 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
             toast.error('Đã xảy ra lỗi khi lưu vào database: ' + error.message);
         } finally {
             setIsSubmitting(false);
+            setShowConfirm(false);
         }
     };
+
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -372,6 +382,15 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
                     </button>
                 </div>
             </div >
+
+            <GenericConfirmModal
+                isOpen={showConfirm}
+                onClose={() => setShowConfirm(false)}
+                onConfirm={executeSubmit}
+                title="Xác nhận Giao việc"
+                message="Bạn có chắc chắn muốn giao công việc mới này không?"
+                confirmText="Giao việc"
+            />
 
             <DocAttachmentSelectorModal
                 isOpen={isDocModalOpen}

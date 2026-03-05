@@ -4,6 +4,8 @@ import { db, auth } from '../firebase/config';
 import { useAuthStore } from '../store/useAuthStore';
 import { Loader2, X, Send, Users, UserCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { GenericConfirmModal } from './GenericConfirmModal';
+
 
 interface UserItem {
     id: string;
@@ -30,6 +32,8 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
     const [selectedCollaborators, setSelectedCollaborators] = useState<string[]>([]);
     const [content, setContent] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showConfirm, setShowConfirm] = useState(false);
+
 
     useEffect(() => {
         if (!isOpen) return;
@@ -75,29 +79,27 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
     const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
         if (e && e.preventDefault) e.preventDefault();
 
-        console.log('[AssignTaskModal] Bắt đầu submit...', { selectedAssignee, contentKhacRong: !!content.trim() });
-
         if (!selectedAssignee || !content.trim()) {
             toast.error('Vui lòng chọn người phụ trách và nhập nội dung chỉ đạo.');
             return;
         }
 
-        const assigneeUser = users.find(u => u.id === selectedAssignee);
+        setShowConfirm(true);
+    };
 
-        // Sửa lỗi im lặng: dùng auth.currentUser thay vì phụ thuộc mỗi vàozustand user
+    const executeSubmit = async () => {
+        const assigneeUser = users.find(u => u.id === selectedAssignee);
         const firestoreUser = auth.currentUser;
         const currentUserId = firestoreUser?.uid || user?.uid;
         const currentUserName = firestoreUser?.displayName || user?.displayName || user?.email || firestoreUser?.email || 'Người dùng ẩn danh';
 
         if (!assigneeUser) {
-            console.error('[AssignTaskModal] Không tìm thấy assigneeUser trong danh sách users!', { selectedAssignee });
             toast.error('Lỗi dữ liệu hệ thống: Không xác định được người phụ trách.');
             return;
         }
 
         if (!currentUserId) {
-            console.error('[AssignTaskModal] Không xác định được user hiện tại đang đăng nhập!', { firestoreUser, zustandUser: user });
-            toast.error('Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng tải lại trang.');
+            toast.error('Phiên đăng nhập không hợp lệ hoặc đã hết hạn.');
             return;
         }
 
@@ -112,7 +114,7 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
         setIsSubmitting(true);
         try {
             const taskData: any = {
-                vanBanId: vanBanId,
+                vanBanId,
                 assignerId: currentUserId,
                 assignerName: currentUserName,
                 assigneeId: assigneeUser.id,
@@ -126,23 +128,26 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
                 taskData.collaborators = collaboratorsData;
             }
 
-            console.log('[AssignTaskModal] Đang gọi addDoc với taskData:', taskData);
             await addDoc(collection(db, 'vanban_tasks'), taskData);
 
-            console.log('[AssignTaskModal] addDoc THÀNH CÔNG cho vanBanId:', vanBanId);
-            toast.success('Đã phân công xử lý văn bản thành công!');
+            toast.success('Đã giao công việc thành công!');
+
+            // Reset states
             setContent('');
             setSelectedAssignee('');
             setSelectedCollaborators([]);
+
             onSuccess();
             onClose();
         } catch (error: any) {
-            console.error('[AssignTaskModal] Lỗi khi addDoc:', error);
+            console.error('Lỗi khi addDoc:', error);
             toast.error('Đã xảy ra lỗi khi lưu vào database: ' + error.message);
         } finally {
             setIsSubmitting(false);
+            setShowConfirm(false);
         }
     };
+
 
     return (
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 fade-in">
@@ -275,6 +280,15 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
                     </div>
                 </div>
             </div>
+
+            <GenericConfirmModal
+                isOpen={showConfirm}
+                onClose={() => setShowConfirm(false)}
+                onConfirm={executeSubmit}
+                title="Xác nhận Giao việc"
+                message="Bạn có chắc chắn muốn giao công việc này không?"
+                confirmText="Giao việc"
+            />
         </div>
     );
 };
