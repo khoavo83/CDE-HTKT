@@ -590,15 +590,25 @@ exports.uploadFileToDriveBase64 = onCall({ timeoutSeconds: 300 }, async (request
         throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để thực hiện thao tác này.");
     }
     try {
-        const { fileName, mimeType, base64Data, oauthToken, targetParentId } = request.data;
-        if (!fileName || !base64Data || !oauthToken) {
-            throw new Error("Tuyệt đối phải cung cấp fileName, base64Data và oauthToken để mượn dung lượng Client.");
+        const { fileName, mimeType, base64Data, targetParentId } = request.data;
+        if (!fileName || !base64Data) {
+            throw new Error("Tuyệt đối phải cung cấp fileName và base64Data.");
         }
 
         const { google } = require("googleapis");
-        const oauth2Client = new google.auth.OAuth2();
-        oauth2Client.setCredentials({ access_token: oauthToken });
 
+        // --- SỬ DỤNG MASTER REFRESH TOKEN ---
+        const clientId = process.env.GOOGLE_CLIENT_ID;
+        const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+        const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+
+        if (!clientId || !clientSecret || !refreshToken) {
+            console.error("[ERROR] Missing Master Google Credentials in config.");
+            throw new Error("Hệ thống chưa thiết lập Master Google Token. Vui lòng liên hệ Admin.");
+        }
+
+        const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+        oauth2Client.setCredentials({ refresh_token: refreshToken });
         const drive = google.drive({ version: "v3", auth: oauth2Client });
 
         const fileMetadata = {
