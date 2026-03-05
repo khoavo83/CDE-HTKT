@@ -134,10 +134,9 @@ exports.processDocumentOCR = onCall({ region: 'asia-southeast1', timeoutSeconds:
         const { google } = require("googleapis");
 
         // --- SỬ DỤNG MASTER REFRESH TOKEN TỪ FIREBASE CONFIG ---
-        const config = functions.config().google || {};
-        const clientId = config.client_id || process.env.GOOGLE_CLIENT_ID;
-        const clientSecret = config.client_secret || process.env.GOOGLE_CLIENT_SECRET;
-        const refreshToken = config.refresh_token || process.env.GOOGLE_REFRESH_TOKEN;
+        const clientId = process.env.GOOGLE_CLIENT_ID;
+        const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+        const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
 
         if (!clientId || !clientSecret || !refreshToken) {
             console.error("[ERROR] Missing Master Google Credentials in config.");
