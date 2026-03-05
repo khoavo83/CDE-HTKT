@@ -76,15 +76,9 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
     if (!isOpen) return null;
 
     const handleProcess = async () => {
-        const { googleAccessToken } = useAuthStore.getState();
 
         if (!mainFile) {
             toast.error('Vui lòng chọn Văn bản chính (PDF hoặc Ảnh)!');
-            return;
-        }
-
-        if (!googleAccessToken) {
-            toast.error('Thiếu quyền truy cập Google Drive. Vui lòng đăng xuất và đăng nhập lại bằng Google!');
             return;
         }
 
@@ -110,8 +104,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                 mimeType: mainFile.type,
                 fileNameOriginal: mainFile.name,
                 totalSizeBytes: mainFile.size,
-                dinhKem: [], // Tạm thời để trống, sẽ cập nhật mảng đính kèm sau khi có ID và upload attach
-                oauthToken: googleAccessToken
+                dinhKem: [] // Tạm thời để trống, sẽ cập nhật mảng đính kèm sau khi có ID và upload attach
             });
 
             if (!ocrResult.data.success) {
@@ -214,7 +207,6 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
             // Bước C: Upload tệp đính kèm (nếu có) TRƯỚC khi lưu Firestore
             let finalAttachments = [...(ocrData.attachments || [])];
             if (attachments.length > 0) {
-                const { googleAccessToken } = useAuthStore.getState();
                 const { httpsCallable } = await import('firebase/functions');
                 const { functions } = await import('../firebase/config');
 
@@ -228,12 +220,11 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                     const safeOriginalName = file.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
                     const standardizedAttachName = `${ngayBanHanhStr}_${safeSoKyHieu}_DinhKem_${stt}_${safeOriginalName}`;
 
-                    const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string, oauthToken: string }, any>(functions, 'uploadFileToDriveBase64');
+                    const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string }, any>(functions, 'uploadFileToDriveBase64');
                     const uploaded = await uploadFn({
                         fileName: standardizedAttachName,
                         mimeType: file.type,
-                        base64Data: await fileToBase64(file),
-                        oauthToken: googleAccessToken!
+                        base64Data: await fileToBase64(file)
                     });
 
                     return {

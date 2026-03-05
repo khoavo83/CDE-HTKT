@@ -3,7 +3,6 @@ import { X, Upload, FileText, Loader2, Sparkles, CheckCircle, AlertCircle } from
 import { httpsCallable } from 'firebase/functions';
 import { functions, db } from '../firebase/config';
 import { doc, updateDoc, collection, setDoc } from 'firebase/firestore';
-import { useAuthStore } from '../store/useAuthStore';
 
 interface ReportCompletionModalProps {
     isOpen: boolean;
@@ -42,15 +41,8 @@ export const ReportCompletionModal: React.FC<ReportCompletionModalProps> = ({ is
     if (!isOpen) return null;
 
     const handleReport = async () => {
-        const { googleAccessToken } = useAuthStore.getState();
-
         if (!mainFile) {
             showToast('error', 'Vui lòng chọn Tệp báo cáo (PDF hoặc Ảnh)!');
-            return;
-        }
-
-        if (!googleAccessToken) {
-            showToast('error', 'Bạn phải đăng nhập bằng nút "Google Workspace" để upload file.');
             return;
         }
 
@@ -65,15 +57,13 @@ export const ReportCompletionModal: React.FC<ReportCompletionModalProps> = ({ is
             const processOCR = httpsCallable(functions, 'processDocumentOCR');
 
             const response: any = await processOCR({
-                base64Data, // Cần cho Gemini và Upload
-                mimeType: mainFile.type, // Thêm line này để AI biết định dạng file
+                base64Data,
+                mimeType: mainFile.type,
                 fileNameOriginal: mainFile.name,
                 totalSizeBytes: mainFile.size,
                 dinhKem: [],
-                // Task không có folder riêng, lưu vào folder của node cha
                 folderId: parentDriveFolderId || undefined,
-                nodeId: task.id,
-                oauthToken: googleAccessToken // Truyền token để Functions upload
+                nodeId: task.id
             });
 
             if (response.data.success) {

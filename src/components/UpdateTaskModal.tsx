@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase/config';
-import { useAuthStore } from '../store/useAuthStore';
 import {
     Loader2, X, CheckSquare, Clock, Save, Upload, FileText,
     Sparkles, CheckCircle, AlertCircle
@@ -75,15 +74,8 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
 
     // Handle OCR processing for uploaded file
     const handleOcrProcess = async () => {
-        const { googleAccessToken } = useAuthStore.getState();
-
         if (!reportFile) {
             toast.error('Vui lòng chọn tệp báo cáo (PDF hoặc Ảnh)!');
-            return;
-        }
-
-        if (!googleAccessToken) {
-            toast.error('Bạn phải đăng nhập bằng nút "Google Workspace" để upload file.');
             return;
         }
 
@@ -102,8 +94,7 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
                 fileNameOriginal: reportFile.name,
                 totalSizeBytes: reportFile.size,
                 dinhKem: [],
-                nodeId: task.id,
-                oauthToken: googleAccessToken
+                nodeId: task.id
             });
 
             if (response.data.success) {

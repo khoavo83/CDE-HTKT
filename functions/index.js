@@ -79,19 +79,22 @@ let driveInstance = null;
 async function getDriveService() {
     if (driveInstance) return driveInstance;
 
-    console.log("[DEBUG] Loading Credentials and Google APIs...");
-    const SERVICE_ACCOUNT_PATH = path.resolve(__dirname, "credentials.json");
-    const credentials = require(SERVICE_ACCOUNT_PATH);
-
+    console.log("[DEBUG] Loading Master Credentials and Google APIs...");
     const { google } = require("googleapis");
-    const jwtClient = new google.auth.JWT(
-        credentials.client_email,
-        null,
-        credentials.private_key,
-        ["https://www.googleapis.com/auth/drive"]
-    );
-    await jwtClient.authorize();
-    driveInstance = google.drive({ version: "v3", auth: jwtClient });
+    const config = functions.config().google || {};
+    const clientId = config.client_id || process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = config.client_secret || process.env.GOOGLE_CLIENT_SECRET;
+    const refreshToken = config.refresh_token || process.env.GOOGLE_REFRESH_TOKEN;
+
+    if (!clientId || !clientSecret || !refreshToken) {
+        console.error("[ERROR] Missing Master Google Credentials in config.");
+        throw new Error("Hệ thống chưa thiết lập Master Google Token. Vui lòng liên hệ Admin.");
+    }
+
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+    oauth2Client.setCredentials({ refresh_token: refreshToken });
+
+    driveInstance = google.drive({ version: "v3", auth: oauth2Client });
     return driveInstance;
 }
 
@@ -128,12 +131,20 @@ exports.processDocumentOCR = onCall({ region: 'asia-southeast1', timeoutSeconds:
         let base64Content = "";
 
         const { google } = require("googleapis");
-        const oauthToken = request.data.oauthToken;
-        if (!oauthToken) {
-            throw new Error("Thiếu oauthToken để upload mượn quyền người dùng.");
+
+        // --- SỬ DỤNG MASTER REFRESH TOKEN TỪ FIREBASE CONFIG ---
+        const config = functions.config().google || {};
+        const clientId = config.client_id || process.env.GOOGLE_CLIENT_ID;
+        const clientSecret = config.client_secret || process.env.GOOGLE_CLIENT_SECRET;
+        const refreshToken = config.refresh_token || process.env.GOOGLE_REFRESH_TOKEN;
+
+        if (!clientId || !clientSecret || !refreshToken) {
+            console.error("[ERROR] Missing Master Google Credentials in config.");
+            throw new Error("Hệ thống chưa thiết lập Master Google Token. Vui lòng liên hệ Admin.");
         }
-        const oauth2Client = new google.auth.OAuth2();
-        oauth2Client.setCredentials({ access_token: oauthToken });
+
+        const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+        oauth2Client.setCredentials({ refresh_token: refreshToken });
         const drive = google.drive({ version: "v3", auth: oauth2Client });
 
         if (!driveFileId) {
@@ -184,8 +195,8 @@ exports.processDocumentOCR = onCall({ region: 'asia-southeast1', timeoutSeconds:
             } catch (e) {
                 console.log("Không thể chmod anyone cho file chính", e.message);
             }
-            // [MỚI] Đảm bảo Admin có quyền trên file mới upload
-            await ensureAdminPermission(drive, driveFileId);
+            // Không cần ensureAdminPermission vì file đã được upload bởi Master Admin
+            // await ensureAdminPermission(drive, driveFileId);
 
         } else {
             console.log(`[DEBUG] Đang xử lý file đã có trên Drive: ${driveFileId}`);
@@ -504,8 +515,10 @@ exports.onDocumentStatusUpdate = onDocumentUpdated("vanban/{docId}", async (even
                 await event.data.after.ref.update({ fileNameStandardized: newFileName });
             }
 
-            // 2. Move & Auto-Rename Attachments
-            if (newValue.dinhKem && Array.isArray(newValue.dinhKem)) {
+            // 2. Move & Auto-Rename Attachments (Legacy dinhKem and New attachments)
+            const handleAttachments = async (list, fieldName) => {
+                if (!list || !Array.isArray(list)) return false;
+
                 // Lấy tên cơ sở của file chính (bỏ đuôi .pdf)
                 let baseMainFileName = newFileName;
                 if (baseMainFileName.toLowerCase().endsWith('.pdf')) {
@@ -515,21 +528,21 @@ exports.onDocumentStatusUpdate = onDocumentUpdated("vanban/{docId}", async (even
                 let index = 1;
                 let attachmentUpdated = false;
 
-                for (const attachment of newValue.dinhKem) {
-                    if (attachment.driveFileId) {
+                for (const attachment of list) {
+                    const fileId = attachment.driveFileId;
+                    if (fileId) {
                         try {
-                            const originalFileName = attachment.fileName || "Attachment";
+                            const originalFileName = attachment.fileName || attachment.originalName || "Attachment";
 
-                            // Kiểm tra xem tên file đã được format chuẩn từ client chưa (bắt đầu bằng yyyy-MM-dd hoặc chuẩn hoá mới chứa "_DinhKem_")
-                            // Nếu đã chuẩn hóa, giữ nguyên tên. Nếu chưa, mới tự động sinh tên.
+                            // Kiểm tra xem tên file đã được format chuẩn từ client chưa
                             let newAttachmentName = originalFileName;
                             if (!originalFileName.includes("_DinhKem_")) {
                                 const fileExtMatch = originalFileName.match(/\.[0-9a-z]+$/i);
                                 const originalExt = fileExtMatch ? fileExtMatch[0] : '';
-                                newAttachmentName = `${baseMainFileName}_DinhKem_${index}${originalExt}`;
+                                newAttachmentName = `${baseMainFileName}_DinhKem_${index.toString().padStart(2, '0')}${originalExt}`;
                             }
 
-                            await moveFile(attachment.driveFileId, newAttachmentName, targetFolderId);
+                            await moveFile(fileId, newAttachmentName, targetFolderId);
 
                             if (attachment.fileName !== newAttachmentName) {
                                 attachment.fileName = newAttachmentName;
@@ -538,16 +551,24 @@ exports.onDocumentStatusUpdate = onDocumentUpdated("vanban/{docId}", async (even
 
                             index++;
                         } catch (err) {
-                            console.error(`Error moving attachment ${attachment.driveFileId}:`, err);
+                            console.error(`Error moving attachment ${fileId}:`, err);
                         }
                     }
                 }
+                return attachmentUpdated;
+            };
 
-                // Cập nhật database nếu có tên file đính kèm thay đổi
-                if (attachmentUpdated) {
-                    await event.data.after.ref.update({ dinhKem: newValue.dinhKem });
-                }
+            // Xử lý cả 2 mảng (cũ và mới)
+            const updatedDinhKem = await handleAttachments(newValue.dinhKem, 'dinhKem');
+            if (updatedDinhKem) {
+                await event.data.after.ref.update({ dinhKem: newValue.dinhKem });
             }
+
+            const updatedAttachments = await handleAttachments(newValue.attachments, 'attachments');
+            if (updatedAttachments) {
+                await event.data.after.ref.update({ attachments: newValue.attachments });
+            }
+
 
             console.log(`Auto-Processed Main File ${newValue.driveFileId_Original} by moving directly to target folder.`);
         } catch (error) {
@@ -1414,8 +1435,7 @@ exports.onProjectNodeCreated = onDocumentCreated("project_nodes/{nodeId}", async
             driveFolderLink: folder.data.webViewLink
         });
 
-        // [MỚI] Đảm bảo Admin có quyền trên folder Node mới
-        await ensureAdminPermission(drive, folder.data.id);
+        // Không cần ensureAdminPermission vì file đã được tạo bởi Master Admin
 
         console.log(`Đã tạo thành công thư mục Drive ${folder.data.id} cho Node ${nodeId}`);
     } catch (error) {
@@ -1451,8 +1471,8 @@ exports.onProjectNodeUpdated = onDocumentUpdated("project_nodes/{nodeId}", async
                     fileId: nDriveFolderId,
                     resource: { name: expected }
                 });
-                // [MỚI] Đảm bảo Admin có quyền sau khi đổi tên
-                await ensureAdminPermission(drive, nDriveFolderId);
+                // [MỚI ĐÃ XÓA] Đảm bảo Admin có quyền sau khi đổi tên (Master Admin mặc định)
+                // await ensureAdminPermission(drive, nDriveFolderId);
                 console.log(`Đã đồng bộ tên Drive cho Node ${nId}: ${expected}`);
             } catch (err) {
                 console.error(`Lỗi đổi tên Drive Node ${nId}:`, err.message);
@@ -1507,8 +1527,8 @@ exports.onProjectNodeUpdated = onDocumentUpdated("project_nodes/{nodeId}", async
                                 removeParents: previousParents,
                                 fields: 'id, parents'
                             });
-                            // [MỚI] Đảm bảo Admin có quyền sau khi di chuyển thư mục cha
-                            await ensureAdminPermission(drive, newValue.driveFolderId);
+                            // [MỚI ĐÃ XÓA] Đảm bảo Admin có quyền sau khi di chuyển thư mục cha
+                            // await ensureAdminPermission(drive, newValue.driveFolderId);
                             console.log(`Đã di chuyển folder Drive ${newValue.driveFolderId} sang cha mới ${newParentDriveId}`);
                         } catch (moveErr) {
                             console.error("Lỗi di chuyển folder Drive:", moveErr.message);

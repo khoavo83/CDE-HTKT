@@ -111,11 +111,6 @@ export const Login = () => {
             const result = await signInWithPopup(auth, googleProvider);
             const user = result.user;
 
-            // Bắt Access Token từ Google để dùng cho upload Drive phía client
-            const credential = GoogleAuthProvider.credentialFromResult(result);
-            const accessToken = credential?.accessToken;
-            useAuthStore.getState().setGoogleAccessToken(accessToken || null);
-
             const userRef = doc(db, 'users', user.uid);
             const userSnap = await getDoc(userRef);
 

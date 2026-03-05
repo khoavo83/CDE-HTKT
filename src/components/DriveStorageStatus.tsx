@@ -2,12 +2,10 @@ import { useEffect, useState } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, getDoc, collection, query, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Cloud, HardDrive, AlertCircle, CloudOff } from 'lucide-react';
-import { useAuthStore } from '../store/useAuthStore';
+import { Cloud, HardDrive, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 export const DriveStorageStatus = () => {
-    const { googleAccessToken } = useAuthStore();
     const [driveSettings, setDriveSettings] = useState<any>(null);
     const [isSettingUp, setIsSettingUp] = useState(false);
 
@@ -99,21 +97,9 @@ export const DriveStorageStatus = () => {
                 <p className="text-gray-500">
                     {usedGB} GB / 100 GB
                 </p>
-                <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border ${googleAccessToken
-                    ? 'bg-green-50 border-green-100 text-green-600'
-                    : 'bg-red-50 border-red-100 text-red-500'
-                    }`}>
-                    {googleAccessToken ? (
-                        <>
-                            <Cloud className="w-2.5 h-2.5" />
-                            <span className="uppercase tracking-tighter font-bold text-[9px]">Connected</span>
-                        </>
-                    ) : (
-                        <>
-                            <CloudOff className="w-2.5 h-2.5" />
-                            <span className="uppercase tracking-tighter font-bold text-[9px]">Limited</span>
-                        </>
-                    )}
+                <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border bg-green-50 border-green-100 text-green-600`}>
+                    <Cloud className="w-2.5 h-2.5" />
+                    <span className="uppercase tracking-tighter font-bold text-[9px]">Master</span>
                 </div>
             </div>
 
