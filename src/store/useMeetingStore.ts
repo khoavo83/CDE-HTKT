@@ -50,10 +50,13 @@ export const useMeetingStore = create<MeetingState>((set) => ({
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const list = snapshot.docs.map(d => ({
-                id: d.id,
-                ...d.data()
-            } as Meeting));
+            const list = snapshot.docs.map(d => {
+                const data = d.data();
+                return {
+                    ...data,
+                    id: d.id // Đảm bảo ID được gán sau cùng để không bị ghi đè bởi data
+                } as Meeting;
+            });
 
             // Sắp xếp theo thời gian bắt đầu (ngày đã được sort bởi query)
             const sortedList = [...list].sort((a, b) => {
@@ -71,16 +74,24 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     },
 
     addMeeting: async (meetingData) => {
+        // Sanitization: Loại bỏ id nếu vô tình lọt vào (Firestore tự tạo ID mới)
+        const { id, ...cleanData } = meetingData as any;
+
+        console.log('[useMeetingStore] Đang tạo lịch họp mới:', cleanData.title);
         const docRef = await addDoc(collection(db, 'meetings'), {
-            ...meetingData,
+            ...cleanData,
             createdAt: serverTimestamp()
         });
         return docRef.id;
     },
 
     updateMeeting: async (id, meetingData) => {
+        // Sanitization: Chắc chắn không gửi 'id' và 'createdAt' vào lệnh update
+        const { id: _id, createdAt, ...updateData } = meetingData as any;
+
+        console.log(`[useMeetingStore] Đang cập nhật lịch họp ID: ${id}`);
         const meetingRef = doc(db, 'meetings', id);
-        await updateDoc(meetingRef, meetingData);
+        await updateDoc(meetingRef, updateData);
     },
 
     deleteMeeting: async (id) => {

@@ -4,6 +4,8 @@ import { toast } from 'react-hot-toast';
 import { useUserStore } from '../store/useUserStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useMeetingStore } from '../store/useMeetingStore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase/config';
 
 interface MeetingModalProps {
     isOpen: boolean;
@@ -85,22 +87,25 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({ isOpen, onClose, ini
 
             // Upload file đính kèm nếu có file mới
             if (attachmentFile) {
-                const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
-                const { storage } = await import('../firebase/config');
+                console.log('[MeetingModal] Đang tải file đính kèm lên Storage:', attachmentFile.name);
                 const fileRef = ref(storage, `meeting-attachments/${Date.now()}_${attachmentFile.name}`);
                 await uploadBytes(fileRef, attachmentFile);
                 const downloadUrl = await getDownloadURL(fileRef);
                 finalData.attachmentUrl = downloadUrl;
                 finalData.attachmentName = attachmentFile.name;
-                finalData.attachmentName = attachmentFile.name;
             }
 
+            // Sanitization tại component: Loại bỏ id và createdAt gốc nếu có
+            const { id: _id, createdAt: _createdAt, ...payload } = finalData as any;
+
             if (isExistingMeeting) {
-                await updateMeeting(initialData.id, finalData);
+                console.log(`[MeetingModal] Thực hiện CẬP NHẬT lịch họp ID: ${initialData.id}`);
+                await updateMeeting(initialData.id, payload);
                 toast.success('Cập nhật lịch họp thành công!');
             } else {
+                console.log('[MeetingModal] Thực hiện TẠO MỚI lịch họp');
                 await addMeeting({
-                    ...finalData,
+                    ...payload,
                     creatorId: currentUser.uid
                 });
                 toast.success('Tạo lịch họp thành công!');
