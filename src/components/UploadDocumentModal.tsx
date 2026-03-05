@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { X, Upload, FileText, Paperclip, Loader2, Sparkles, FolderTree, Calendar, MapPin, Clock, Users, ChevronDown, ChevronUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { httpsCallable } from 'firebase/functions';
+import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { db, functions } from '../firebase/config';
 import { useAuthStore } from '../store/useAuthStore';
 import { useUserStore } from '../store/useUserStore';
 import { useMeetingStore } from '../store/useMeetingStore';
 import { ProjectTreeSelectorModal } from './ProjectTreeSelectorModal';
-
-
 import { format } from 'date-fns';
 
 // Chuyển File sang Base64 string
@@ -87,8 +88,6 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
             const base64Data = await fileToBase64(mainFile);
 
             setUploadStatus('Đang chuẩn bị dữ liệu và upload lên hệ thống lưu trữ tập trung...');
-            const { httpsCallable } = await import('firebase/functions');
-            const { functions } = await import('../firebase/config');
 
             // 1. Lọc và chuẩn bị xử lý OCR mảng attachment trước (nếu cần đổi tên ngay lúc này thì chưa có số ký hiệu/ngày ban hành từ file chính)
             // Tuy nhiên, việc chuẩn hoá tên file đính kèm cần phụ thuộc vào thông tin trích xuất của file chính.
@@ -197,18 +196,11 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
         setIsUploading(true);
         setUploadStatus('Đang lưu thông tin cuối cùng...');
         try {
-            const { db } = await import('../firebase/config');
-            const { doc, updateDoc } = await import('firebase/firestore');
-
-            // Cập nhật thông tin văn bản đã chỉnh sửa
-            const { arrayUnion } = await import('firebase/firestore');
             const user = JSON.parse(localStorage.getItem('user_cde') || '{}');
 
             // Bước C: Upload tệp đính kèm (nếu có) TRƯỚC khi lưu Firestore
             let finalAttachments = [...(ocrData.attachments || [])];
             if (attachments.length > 0) {
-                const { httpsCallable } = await import('firebase/functions');
-                const { functions } = await import('../firebase/config');
 
                 setUploadStatus(`Đang upload ${attachments.length} tệp đính kèm hồ sơ...`);
 
