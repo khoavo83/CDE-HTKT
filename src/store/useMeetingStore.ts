@@ -55,22 +55,9 @@ export const useMeetingStore = create<MeetingState>((set) => ({
                 ...d.data()
             } as Meeting));
 
-            // Deduplicate: Lọc bỏ các bản ghi trùng lặp tuyệt đối (cùng title, date, startTime)
-            // Giữ lại bản ghi có createdAt mới nhất (nếu có) hoặc bản ghi đầu tiên
-            const uniqueMeetings = list.reduce((acc: Meeting[], current) => {
-                const isDuplicate = acc.find(item =>
-                    item.title === current.title &&
-                    item.date === current.date &&
-                    item.startTime === current.startTime
-                );
-                if (!isDuplicate) {
-                    acc.push(current);
-                }
-                return acc;
-            }, []);
-
-            const sortedList = uniqueMeetings.sort((a, b) => {
-                if (a.date !== b.date) return 0; // Đã sort bởi query theo ngày
+            // Sắp xếp theo thời gian bắt đầu (ngày đã được sort bởi query)
+            const sortedList = [...list].sort((a, b) => {
+                if (a.date !== b.date) return 0;
                 return a.startTime.localeCompare(b.startTime);
             });
 

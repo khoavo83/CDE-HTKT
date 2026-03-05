@@ -120,12 +120,13 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({ isOpen, onClose, ini
 
         setIsDeleting(true);
         try {
-            console.log(`[DEBUG] Đang xóa cuộc họp có ID: ${initialData.id}`);
-            await deleteMeeting(initialData.id);
+            const targetId = initialData.id;
+            console.log(`[MeetingModal] Bắt đầu xóa cuộc họp ID: ${targetId}`);
+            await deleteMeeting(targetId);
             toast.success('Đã xóa cuộc họp thành công!');
-            onClose();
+            onClose(); // Đóng modal ngay sau khi xóa thành công
         } catch (error) {
-            console.error('Lỗi khi xóa cuộc họp:', error);
+            console.error('[MeetingModal] Lỗi khi xóa cuộc họp:', error);
             toast.error('Lỗi khi xóa cuộc họp. Vui lòng thử lại.');
         } finally {
             setIsDeleting(false);
