@@ -1,6 +1,7 @@
 const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentUpdated, onDocumentWritten, onDocumentCreated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");
+const functions = require("firebase-functions"); // v1 API - cần cho functions.config()
 
 // Thiết lập vùng mặc định cho toàn bộ Functions là Singapore (gần Việt Nam và cùng vùng với DB của bạn)
 setGlobalOptions({ region: "asia-southeast1" });
