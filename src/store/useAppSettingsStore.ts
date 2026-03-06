@@ -38,12 +38,30 @@ export const useAppSettingsStore = create<AppSettingsState>((set) => ({
             if (docSnap.exists()) {
                 set({ settings: docSnap.data() as AppSettings, isLoading: false });
             } else {
-                // Initialize default if not exists
-                await setDoc(docRef, DEFAULT_SETTINGS);
+                // Chỉ tự động khởi tạo nếu là Admin hoặc đã đăng nhập (tránh lỗi Permission khi chưa Auth)
+                const { auth } = await import('../firebase/config');
+                if (auth.currentUser) {
+                    await setDoc(docRef, DEFAULT_SETTINGS);
+                }
                 set({ settings: DEFAULT_SETTINGS, isLoading: false });
             }
         } catch (error: any) {
-            console.error('Error fetching app settings:', error);
+            console.group('🔴 Lỗi fetchSettings (Permission Debug)');
+            console.error('Chi tiết lỗi:', error);
+            try {
+                const { auth } = await import('../firebase/config');
+                const currentUser = auth.currentUser;
+                console.table({
+                    code: error.code,
+                    message: error.message,
+                    authenticated: !!currentUser,
+                    uid: currentUser?.uid || 'anonymous',
+                    email: currentUser?.email || 'N/A'
+                });
+            } catch (authErr) {
+                console.warn('Không thể lấy info Auth để debug:', authErr);
+            }
+            console.groupEnd();
             set({ error: error.message, isLoading: false });
         }
     },

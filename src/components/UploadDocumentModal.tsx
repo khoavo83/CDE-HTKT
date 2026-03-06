@@ -196,6 +196,18 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
         setIsUploading(true);
         setUploadStatus('Đang lưu thông tin cuối cùng...');
         try {
+            // Validation: Kiểm tra Luồng văn bản và Mức độ khẩn
+            if (!ocrData.phanLoaiVanBan) {
+                toast.error('Vui lòng chọn "Luồng văn bản" trước khi lưu!');
+                setIsUploading(false);
+                return;
+            }
+            if (!ocrData.mucDoKhan) {
+                toast.error('Vui lòng chọn "Mức độ khẩn" trước khi lưu!');
+                setIsUploading(false);
+                return;
+            }
+
             const user = JSON.parse(localStorage.getItem('user_cde') || '{}');
 
             // Bước C: Upload tệp đính kèm (nếu có) TRƯỚC khi lưu Firestore
@@ -409,7 +421,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 col-span-2 mt-1 pt-3 border-t border-gray-100">
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Luồng Văn bản</label>
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Luồng Văn bản <span className="text-red-500">*</span></label>
                                         <select
                                             value={ocrData.phanLoaiVanBan || ''}
                                             onChange={(e) => setOcrData({ ...ocrData, phanLoaiVanBan: e.target.value })}
@@ -421,7 +433,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                                         </select>
                                     </div>
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mức độ Khẩn</label>
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mức độ Khẩn <span className="text-red-500">*</span></label>
                                         <select
                                             value={ocrData.mucDoKhan || 'THUONG'}
                                             onChange={(e) => setOcrData({ ...ocrData, mucDoKhan: e.target.value })}
