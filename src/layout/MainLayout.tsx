@@ -92,6 +92,8 @@ export const MainLayout = () => {
     const visibleItems = menuItems
         .filter(item => {
             if (item.status === 'inactive') return false;          // Ẩn hoàn toàn
+            // Danh mục Hệ thống (categories) được phép hiển thị cho mọi người dùng (đã qua lớp bảo mật Tab bên trong)
+            if (item.key === 'categories') return true;
             if (item.adminOnly && user.role !== 'admin') return false; // Admin-only
             return true;
         })
@@ -208,12 +210,12 @@ export const MainLayout = () => {
                                 {user.photoURL ? (
                                     <img src={user.photoURL} alt="Avatar" className="w-full h-full object-cover" />
                                 ) : (
-                                    user.displayName.charAt(0).toUpperCase()
+                                    (user.hoTen || user.displayName).charAt(0).toUpperCase()
                                 )}
                             </div>
                             <div className="flex-1 min-w-0 pr-1">
                                 <p className="text-sm font-bold text-gray-900 truncate hover:text-primary-600 transition-colors">
-                                    {user.displayName}
+                                    {user.hoTen || user.displayName}
                                 </p>
                                 <p className="text-[11px] font-medium text-gray-500 truncate capitalize bg-gray-100 px-1.5 py-0.5 rounded-md inline-block mt-0.5">{user.role}</p>
                             </div>

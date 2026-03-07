@@ -1599,3 +1599,129 @@ exports.onVanBanUpdated = onDocumentUpdated("vanban/{vanBanId}", async (event) =
         }
     }
 });
+
+/**
+ * Cloud Function: Xóa vĩnh viễn văn bản và dọn dẹp toàn bộ tệp trên Google Drive.
+ * Bao gồm: File chính, tệp đính kèm, và các Shortcut trong Mindmap Node.
+ */
+exports.permanentlyDeleteDocument = onCall({ region: "asia-southeast1", timeoutSeconds: 300 }, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để thực hiện thao tác này.");
+    }
+
+    try {
+        const { docId, sourceCollection = 'trash' } = request.data;
+        if (!docId) throw new Error("Thiếu ID văn bản cần xóa.");
+
+        console.log(`[DEEP DELETE] Starting cleanup for doc: ${docId} from ${sourceCollection}`);
+
+        // 1. Lấy dữ liệu văn bản từ Firestore
+        const docRef = db.collection(sourceCollection).doc(docId);
+        const docSnap = await docRef.get();
+        if (!docSnap.exists) {
+            throw new Error(`Không tìm thấy văn bản ID ${docId} trong bộ sưu tập ${sourceCollection}`);
+        }
+        const data = docSnap.data();
+        const drive = await getDriveService();
+
+        // 2. Thu thập danh sách File ID cần xóa trên Drive
+        const fileIdsToDelete = new Set();
+
+        // File gốc
+        const mainFileId = data.driveFileId_Original || data.driveId || data.fileId;
+        if (mainFileId) fileIdsToDelete.add(mainFileId);
+
+        // Tệp đính kèm (dinhKem legacy)
+        if (data.dinhKem && Array.isArray(data.dinhKem)) {
+            data.dinhKem.forEach(att => {
+                if (att.driveFileId) fileIdsToDelete.add(att.driveFileId);
+            });
+        }
+
+        // Tệp đính kèm mới (attachments)
+        if (data.attachments && Array.isArray(data.attachments)) {
+            data.attachments.forEach(att => {
+                if (att.driveFileId) fileIdsToDelete.add(att.driveFileId);
+            });
+        }
+
+        // 3. Xử lý các Shortcut trong Cấu trúc dự án (Mindmap) và tìm kiếm toàn Drive
+        // a. Tìm tất cả shortcuts trỏ tới mainFileId trên toàn Drive (QUAN TRỌNG: để dọn dẹp các link tự động)
+        if (mainFileId) {
+            try {
+                console.log(`[DEEP DELETE] Searching for all shortcuts pointing to ${mainFileId}...`);
+                const response = await drive.files.list({
+                    q: `mimeType = 'application/vnd.google-apps.shortcut' and shortcutDetails.targetId = '${mainFileId}'`,
+                    fields: 'files(id, name)',
+                    supportsAllDrives: true,
+                    includeItemsFromAllDrives: true
+                });
+
+                if (response.data.files && response.data.files.length > 0) {
+                    console.log(`[DEEP DELETE] Found ${response.data.files.length} shortcuts to delete.`);
+                    response.data.files.forEach(f => {
+                        console.log(`[DEEP DELETE] Adding shortcut to delete queue: ${f.name} (${f.id})`);
+                        fileIdsToDelete.add(f.id);
+                    });
+                }
+            } catch (err) {
+                console.error(`[DEEP DELETE] Error searching for shortcuts:`, err.message);
+                // Có thể bỏ qua lỗi search và tiếp tục các bước sau
+            }
+        }
+
+        // b. Dọn dẹp bảng vanban_node_links trong Firestore
+        const linksSnap = await db.collection("vanban_node_links").where("vanBanId", "==", docId).get();
+        if (!linksSnap.empty) {
+            console.log(`[DEEP DELETE] Found ${linksSnap.size} Firestore project links to cleanup.`);
+            for (const linkDoc of linksSnap.docs) {
+                const linkData = linkDoc.data();
+                if (linkData.driveShortcutId) {
+                    fileIdsToDelete.add(linkData.driveShortcutId);
+                }
+                await linkDoc.ref.delete();
+            }
+        }
+
+        // 4. Thực hiện xóa file trên Drive
+        const deleteResults = [];
+        for (const fileId of fileIdsToDelete) {
+            try {
+                // Xóa vĩnh viễn thay vì trashed để "làm sạch dữ liệu" như yêu cầu
+                await drive.files.delete({ fileId: fileId, supportsAllDrives: true });
+                deleteResults.push({ id: fileId, status: 'deleted' });
+                console.log(`[DEEP DELETE] Deleted Drive file: ${fileId}`);
+            } catch (err) {
+                // Nếu file không tồn tại (404), coi như đã xóa
+                if (err.code === 404) {
+                    deleteResults.push({ id: fileId, status: 'already_missing' });
+                } else {
+                    console.error(`[DEEP DELETE] Failed to delete file ${fileId}:`, err.message);
+                    deleteResults.push({ id: fileId, status: 'error', message: err.message });
+                }
+            }
+        }
+
+        // 5. Xóa record chính trong Firestore (vanban hoặc trash)
+        await docRef.delete();
+
+        // 6. Xóa các log liên quan (tùy chọn - ở đây xóa gọn để sạch dữ liệu)
+        const logsSnap = await db.collection("vanban_logs").where("vanBanId", "==", docId).get();
+        if (!logsSnap.empty) {
+            const batch = db.batch();
+            logsSnap.docs.forEach(l => batch.delete(l.ref));
+            await batch.commit();
+        }
+
+        return {
+            success: true,
+            docId,
+            filesProcessed: deleteResults.length,
+            details: deleteResults
+        };
+
+    } catch (error) {
+        console.error("permanentlyDeleteDocument Error:", error);
+        throw new HttpsError("internal", error.message);
+    }
+});

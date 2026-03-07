@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { Loader2, X, Send, Users, UserCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { GenericConfirmModal } from './GenericConfirmModal';
+import { logVanBanActivity } from '../utils/vanbanLogUtils';
 
 
 interface UserItem {
@@ -129,6 +130,15 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
             }
 
             await addDoc(collection(db, 'vanban_tasks'), taskData);
+
+            // Log activity
+            await logVanBanActivity({
+                vanBanId,
+                action: 'TASK_ASSIGN',
+                details: `Giao việc cho ${taskData.assigneeName}. Nội dung: ${taskData.content.substring(0, 100)}${taskData.content.length > 100 ? '...' : ''}`,
+                userId: currentUserId,
+                userName: currentUserName
+            });
 
             toast.success('Đã giao công việc thành công!');
 

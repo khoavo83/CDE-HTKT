@@ -27,7 +27,7 @@ export const DEFAULT_MENU_ITEMS: Omit<MenuConfigItem, 'id'>[] = [
     { key: 'bim', name: 'Mô hình BIM 3D', path: '/bim', icon: 'Box', order: 7, status: 'coming_soon', adminOnly: false },
     { key: 'map', name: 'Bản đồ Số (GIS)', path: '/map', icon: 'Map', order: 8, status: 'active', adminOnly: false },
     { key: 'users', name: 'Quản lý Người dùng', path: '/users', icon: 'Users', order: 9, status: 'active', adminOnly: true },
-    { key: 'categories', name: 'Danh mục Hệ thống', path: '/categories', icon: 'Settings', order: 10, status: 'active', adminOnly: true },
+    { key: 'categories', name: 'Danh mục Hệ thống', path: '/categories', icon: 'Settings', order: 10, status: 'active', adminOnly: false },
     { key: 'feedbacks', name: 'Quản lý Góp ý', path: '/feedbacks', icon: 'MessageSquare', order: 11, status: 'active', adminOnly: true },
     { key: 'trash', name: 'Thùng rác Dữ liệu', path: '/trash', icon: 'Trash', order: 12, status: 'active', adminOnly: true },
 ];

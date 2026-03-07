@@ -10,6 +10,8 @@ import { useCategoryStore } from '../store/useCategoryStore';
 import { useCategoryTabStore } from '../store/useCategoryTabStore';
 import { ProjectTreeSelectorModal } from '../components/ProjectTreeSelectorModal';
 import { DocumentTasks } from '../components/DocumentTasks';
+import { DocumentActivityLog } from '../components/DocumentActivityLog';
+import { logVanBanActivity } from '../utils/vanbanLogUtils';
 import toast from 'react-hot-toast';
 
 interface DocumentForm {
@@ -188,6 +190,16 @@ export const DocumentReview = () => {
             }
 
             await fetchLinkedNodes();
+
+            // LOG HOẠT ĐỘNG
+            await logVanBanActivity({
+                vanBanId: id,
+                action: 'LINK_STORAGE',
+                details: `Cập nhật vị trí lưu trữ dự án (${selectedNodes.length} vị trí).`,
+                userId: user?.uid || '',
+                userName: user?.hoTen || user?.displayName || 'User'
+            });
+
             toast.success('Đã cập nhật vị trí lưu trữ dự án thành công!', { id: loadingToast });
             setIsProjectTreeOpen(false);
         } catch (error: any) {
@@ -276,6 +288,16 @@ export const DocumentReview = () => {
             await updateDoc(docRef, {
                 ...formData
             });
+
+            // LOG HOẠT ĐỘNG
+            await logVanBanActivity({
+                vanBanId: id,
+                action: 'EDIT',
+                details: `Chỉnh sửa thông tin văn bản: ${formData.soKyHieu || 'N/A'}. Nội dung: ${formData.trichYeu?.substring(0, 50)}...`,
+                userId: user?.uid || '',
+                userName: user?.hoTen || user?.displayName || 'User'
+            });
+
             setConfirmModal({ isOpen: false, type: null });
             setIsEditing(false); // Đóng form về chế độ xem
             // Optional: Hiển thị toast notice thay vì alert
@@ -292,6 +314,15 @@ export const DocumentReview = () => {
     const confirmDelete = async () => {
         if (!id || confirmModal.type !== 'delete') return;
         try {
+            // LOG HOẠT ĐỘNG TRƯỚC KHI XÓA
+            await logVanBanActivity({
+                vanBanId: id,
+                action: 'DELETE',
+                details: `Xóa văn bản: ${docData.fileNameOriginal}`,
+                userId: user?.uid || '',
+                userName: user?.hoTen || user?.displayName || 'User'
+            });
+
             await deleteDoc(doc(db, 'vanban', id));
             setConfirmModal({ isOpen: false, type: null });
             navigate('/documents');
@@ -338,6 +369,15 @@ export const DocumentReview = () => {
 
                 // Cập nhật docData cục bộ để đồng bộ UI
                 setDocData((prev: any) => ({ ...prev, ...newData }));
+
+                // LOG HOẠT ĐỘNG
+                await logVanBanActivity({
+                    vanBanId: id,
+                    action: 'AI_RECHECK',
+                    details: 'AI (Gemini) rà soát lại và cập nhật thông tin trích xuất.',
+                    userId: user?.uid || '',
+                    userName: user?.hoTen || user?.displayName || 'User'
+                });
 
                 toast.success('AI đã rà soát và cập nhật thông tin thành công!');
             }
@@ -514,8 +554,9 @@ export const DocumentReview = () => {
                                         {...register('mucDoKhan')}
                                         className="w-full px-3 py-2 border rounded-md focus:ring-1 focus:ring-blue-500 outline-none disabled:bg-gray-50 disabled:text-gray-600 disabled:border-transparent transiton-colors bg-white"
                                     >
-                                        <option value="THUONG">Thường</option>
-                                        <option value="KHAN">Khẩn / Hỏa tốc</option>
+                                        <option value="THUONG">🌿 Bình thường</option>
+                                        <option value="KHAN">⚡ Khẩn</option>
+                                        <option value="HOA_TOC">🔥 Hỏa tốc</option>
                                     </select>
                                 </div>
                                 <div>
@@ -645,7 +686,10 @@ export const DocumentReview = () => {
 
                         {/* Tracking Tác vụ */}
                         {!isEditing && id && (
-                            <DocumentTasks vanBanId={id} />
+                            <div className="space-y-6">
+                                <DocumentTasks vanBanId={id} />
+                                <DocumentActivityLog vanBanId={id} />
+                            </div>
                         )}
 
                         <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">

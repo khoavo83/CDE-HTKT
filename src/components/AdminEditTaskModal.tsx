@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useUserStore } from '../store/useUserStore';
-import { Loader2, X, Settings, Calendar, User } from 'lucide-react';
+import { Loader2, X, Settings, Calendar, User, FileText, Users, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface AdminEditTaskModalProps {
@@ -19,6 +19,11 @@ export const AdminEditTaskModal: React.FC<AdminEditTaskModalProps> = ({ isOpen, 
     // Form fields
     const [createdAt, setCreatedAt] = useState('');
     const [assignerId, setAssignerId] = useState('');
+    const [content, setContent] = useState('');
+    const [assigneeId, setAssigneeId] = useState('');
+    const [collaboratorIds, setCollaboratorIds] = useState<string[]>([]);
+    const [result, setResult] = useState('');
+    const [status, setStatus] = useState('');
 
     useEffect(() => {
         if (isOpen && task) {
@@ -30,6 +35,11 @@ export const AdminEditTaskModal: React.FC<AdminEditTaskModalProps> = ({ isOpen, 
                 setCreatedAt(local);
             }
             setAssignerId(task.assignerId || '');
+            setContent(task.content || '');
+            setAssigneeId(task.assigneeId || '');
+            setCollaboratorIds(task.collaboratorIds || []);
+            setResult(task.result || '');
+            setStatus(task.status || 'PENDING');
             fetchUsers();
         }
     }, [isOpen, task]);
@@ -48,6 +58,21 @@ export const AdminEditTaskModal: React.FC<AdminEditTaskModalProps> = ({ isOpen, 
                 updates.createdAt = new Date(createdAt).toISOString();
             }
 
+            // Update content
+            if (content !== task.content) {
+                updates.content = content;
+            }
+
+            // Update resut
+            if (result !== task.result) {
+                updates.result = result;
+            }
+
+            // Update status
+            if (status !== task.status) {
+                updates.status = status;
+            }
+
             // Update assigner
             if (assignerId && assignerId !== task.assignerId) {
                 const selectedUser = users.find(u => u.uid === assignerId);
@@ -55,6 +80,24 @@ export const AdminEditTaskModal: React.FC<AdminEditTaskModalProps> = ({ isOpen, 
                     updates.assignerId = selectedUser.uid;
                     updates.assignerName = selectedUser.displayName || selectedUser.email;
                 }
+            }
+
+            // Update assignee
+            if (assigneeId && assigneeId !== task.assigneeId) {
+                const selectedUser = users.find(u => u.uid === assigneeId);
+                if (selectedUser) {
+                    updates.assigneeId = selectedUser.uid;
+                    updates.assigneeName = selectedUser.displayName || selectedUser.email;
+                }
+            }
+
+            // Update collaborators
+            if (JSON.stringify(collaboratorIds) !== JSON.stringify(task.collaboratorIds || [])) {
+                updates.collaboratorIds = collaboratorIds;
+                updates.collaboratorNames = collaboratorIds.map(id => {
+                    const u = users.find(user => user.uid === id);
+                    return u ? (u.displayName || u.email) : 'N/A';
+                });
             }
 
             if (Object.keys(updates).length === 0) {
@@ -92,48 +135,137 @@ export const AdminEditTaskModal: React.FC<AdminEditTaskModalProps> = ({ isOpen, 
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-5">
-                    {/* Task info */}
-                    <div className="bg-gray-50 p-3 rounded-lg text-sm text-gray-600 border">
-                        <p className="font-medium text-gray-800 mb-1">Nội dung:</p>
-                        <p className="italic line-clamp-2">{task.content}</p>
-                    </div>
-
-                    {/* Thời gian giao */}
+                <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+                    {/* Nội dung giao việc */}
                     <div>
                         <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                            <Calendar className="w-4 h-4 text-blue-500" />
-                            Thời gian giao
+                            <FileText className="w-4 h-4 text-blue-500" />
+                            Nội dung giao việc
                         </label>
-                        <input
-                            type="datetime-local"
-                            value={createdAt}
-                            onChange={(e) => setCreatedAt(e.target.value)}
-                            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow"
+                        <textarea
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                            rows={3}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-shadow resize-none"
+                            required
                         />
                     </div>
 
-                    {/* Người giao */}
+                    <div className="grid grid-cols-2 gap-4">
+                        {/* Thời gian giao */}
+                        <div>
+                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                                <Calendar className="w-4 h-4 text-blue-500" />
+                                Thời gian giao
+                            </label>
+                            <input
+                                type="datetime-local"
+                                value={createdAt}
+                                onChange={(e) => setCreatedAt(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-shadow text-sm"
+                            />
+                        </div>
+
+                        {/* Trạng thái */}
+                        <div>
+                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                                <Settings className="w-4 h-4 text-gray-500" />
+                                Trạng thái
+                            </label>
+                            <select
+                                value={status}
+                                onChange={(e) => setStatus(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-shadow bg-white text-sm"
+                            >
+                                <option value="PENDING">Chưa nhận</option>
+                                <option value="PROCESSING">Đang xử lý</option>
+                                <option value="COMPLETED">Hoàn thành</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        {/* Người giao */}
+                        <div>
+                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                                <User className="w-4 h-4 text-indigo-500" />
+                                Người giao
+                            </label>
+                            <select
+                                value={assignerId}
+                                onChange={(e) => setAssignerId(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-shadow bg-white text-sm"
+                            >
+                                <option value="">-- Chọn --</option>
+                                {users.map((u: any) => (
+                                    <option key={u.uid} value={u.uid}>
+                                        {u.displayName || u.email}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Người xử lý */}
+                        <div>
+                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                                <User className="w-4 h-4 text-green-500" />
+                                Người xử lý
+                            </label>
+                            <select
+                                value={assigneeId}
+                                onChange={(e) => setAssigneeId(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-shadow bg-white text-sm"
+                            >
+                                <option value="">-- Chọn --</option>
+                                {users.map((u: any) => (
+                                    <option key={u.uid} value={u.uid}>
+                                        {u.displayName || u.email}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Người phối hợp */}
                     <div>
                         <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                            <User className="w-4 h-4 text-indigo-500" />
-                            Người giao
+                            <Users className="w-4 h-4 text-teal-500" />
+                            Người phối hợp
                         </label>
-                        <select
-                            value={assignerId}
-                            onChange={(e) => setAssignerId(e.target.value)}
-                            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow bg-white"
-                        >
-                            <option value="">-- Chọn người giao --</option>
+                        <div className="grid grid-cols-2 gap-2 p-3 border border-gray-200 rounded-lg bg-gray-50 max-h-40 overflow-y-auto">
                             {users.map((u: any) => (
-                                <option key={u.uid} value={u.uid}>
-                                    {u.displayName || u.email}
-                                </option>
+                                <label key={u.uid} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-white p-1 rounded transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={collaboratorIds.includes(u.uid)}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setCollaboratorIds([...collaboratorIds, u.uid]);
+                                            } else {
+                                                setCollaboratorIds(collaboratorIds.filter(id => id !== u.uid));
+                                            }
+                                        }}
+                                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span className="truncate">{u.displayName || u.email}</span>
+                                </label>
                             ))}
-                        </select>
-                        {task.assignerName && (
-                            <p className="text-xs text-gray-400 mt-1">Hiện tại: {task.assignerName}</p>
-                        )}
+                        </div>
+                    </div>
+
+                    {/* Kết quả xử lý */}
+                    <div>
+                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                            <MessageSquare className="w-4 h-4 text-amber-500" />
+                            Kết quả xử lý
+                        </label>
+                        <textarea
+                            value={result}
+                            onChange={(e) => setResult(e.target.value)}
+                            rows={3}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-shadow resize-none"
+                            placeholder="Nhập kết quả xử lý..."
+                        />
                     </div>
 
                     {/* Buttons */}

@@ -6,6 +6,8 @@ import {
     Loader2, X, CheckSquare, Clock, Save, Upload, FileText,
     Sparkles, CheckCircle, AlertCircle
 } from 'lucide-react';
+import { useAuthStore } from '../store/useAuthStore';
+import { logVanBanActivity } from '../utils/vanbanLogUtils';
 import toast from 'react-hot-toast';
 
 interface UpdateTaskModalProps {
@@ -25,6 +27,7 @@ const fileToBase64 = (file: File): Promise<string> =>
     });
 
 export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClose, task, onSuccess }) => {
+    const { user } = useAuthStore();
     const [status, setStatus] = useState(task?.status || 'PENDING');
     const [result, setResult] = useState(task?.result || '');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,6 +64,20 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
             }
 
             await updateDoc(taskRef, updates);
+
+            // Log activity
+            if (user) {
+                await logVanBanActivity({
+                    vanBanId: task.vanBanId,
+                    action: status === 'COMPLETED' ? 'TASK_COMPLETE' : 'TASK_UPDATE',
+                    details: status === 'COMPLETED'
+                        ? `Hoàn thành công việc. Kết quả: ${result.trim().substring(0, 100)}${result.length > 100 ? '...' : ''}`
+                        : `Cập nhật tiến độ: ${status}. Ghi chú: ${result.trim().substring(0, 100)}${result.length > 100 ? '...' : ''}`,
+                    userId: user.uid,
+                    userName: user.hoTen || user.displayName || user.email || 'Người dùng'
+                });
+            }
+
             toast.success("Đã cập nhật tiến độ thành công!");
             onSuccess();
             onClose();
@@ -140,6 +157,17 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
                 result: result.trim() || ocrData.trichYeu || '',
                 bcDocId: docId
             });
+
+            // Log activity
+            if (user) {
+                await logVanBanActivity({
+                    vanBanId: task.vanBanId,
+                    action: 'TASK_COMPLETE',
+                    details: `Hoàn thành công việc (có đính kèm báo cáo). Kết quả: ${(result.trim() || ocrData.trichYeu || '').substring(0, 100)}...`,
+                    userId: user.uid,
+                    userName: user.hoTen || user.displayName || user.email || 'Người dùng'
+                });
+            }
 
             toast.success('Đã báo cáo hoàn thành và lưu Văn bản đi thành công! \ud83c\udf89');
             onSuccess();
@@ -268,8 +296,8 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
                                             <input type="radio" className="sr-only" name="status" value="PENDING" checked={status === 'PENDING'} onChange={(e) => setStatus(e.target.value)} />
                                             <span className="text-xs font-medium text-gray-500">Chờ xử lý</span>
                                         </label>
-                                        <label className={`flex flex-col items-center justify-center p-3 border rounded-lg cursor-pointer transition-colors ${status === 'IN_PROGRESS' ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500' : 'hover:bg-blue-50'}`}>
-                                            <input type="radio" className="sr-only" name="status" value="IN_PROGRESS" checked={status === 'IN_PROGRESS'} onChange={(e) => setStatus(e.target.value)} />
+                                        <label className={`flex flex-col items-center justify-center p-3 border rounded-lg cursor-pointer transition-colors ${status === 'PROCESSING' ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500' : 'hover:bg-blue-50'}`}>
+                                            <input type="radio" className="sr-only" name="status" value="PROCESSING" checked={status === 'PROCESSING'} onChange={(e) => setStatus(e.target.value)} />
                                             <span className="text-xs font-medium text-blue-700 flex items-center gap-1"><Clock className="w-3 h-3" /> Đang xử lý</span>
                                         </label>
                                         <label className={`flex flex-col items-center justify-center p-3 border rounded-lg cursor-pointer transition-colors ${status === 'COMPLETED' ? 'bg-green-50 border-green-500 ring-1 ring-green-500' : 'hover:bg-green-50'}`}>
@@ -355,7 +383,7 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
                                     </div>
                                 )}
 
-                                {status === 'IN_PROGRESS' && (
+                                {status === 'PROCESSING' && (
                                     <div className="animate-in slide-in-from-top-2 duration-300">
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
                                             Cập nhật tiến độ (Tùy chọn)

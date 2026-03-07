@@ -298,39 +298,39 @@ export const Dashboard = () => {
 
                 {/* ── Row 6 (Moved): Bảng danh sách Dự án ── (Note: Moved this up) */}
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center gap-4">
-                        <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center shrink-0">
+                    <Link to="/projects" className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center gap-4 hover:shadow-md hover:border-blue-300 transition-all group cursor-pointer">
+                        <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors">
                             <FolderTree className="w-6 h-6 text-blue-600" />
                         </div>
                         <div>
-                            <p className="text-xs text-gray-500 font-medium">Dự án</p>
-                            <p className="text-2xl font-bold text-gray-900">{projects.length || 3}</p>
+                            <p className="text-xs text-gray-500 font-medium font-bold">Dự án</p>
+                            <p className="text-2xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{projects.length || 3}</p>
                             <p className="text-[11px] text-blue-500 mt-0.5">Đang triển khai</p>
                         </div>
-                    </div>
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center gap-4">
-                        <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center shrink-0">
+                    </Link>
+                    <Link to="/documents" className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center gap-4 hover:shadow-md hover:border-purple-300 transition-all group cursor-pointer">
+                        <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-purple-100 transition-colors">
                             <FileText className="w-6 h-6 text-purple-600" />
                         </div>
                         <div>
-                            <p className="text-xs text-gray-500 font-medium">Tổng Văn bản</p>
-                            <p className="text-2xl font-bold text-gray-900">{stats.documents}</p>
+                            <p className="text-xs text-gray-500 font-medium font-bold">Tổng Văn bản</p>
+                            <p className="text-2xl font-bold text-gray-900 group-hover:text-purple-600 transition-colors">{stats.documents}</p>
                             <div className="flex items-center gap-2 mt-0.5">
                                 <span className="flex items-center gap-1 text-[11px] text-indigo-500"><ArrowDownLeft className="w-3 h-3" />{stats.incoming}</span>
                                 <span className="flex items-center gap-1 text-[11px] text-orange-500"><ArrowUpRight className="w-3 h-3" />{stats.outgoing}</span>
                             </div>
                         </div>
-                    </div>
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center gap-4">
-                        <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
+                    </Link>
+                    <Link to="/tasks" className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center gap-4 hover:shadow-md hover:border-emerald-300 transition-all group cursor-pointer">
+                        <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-emerald-100 transition-colors">
                             <CheckCircle className="w-6 h-6 text-emerald-600" />
                         </div>
                         <div>
-                            <p className="text-xs text-gray-500 font-medium">Hạng mục HT</p>
-                            <p className="text-2xl font-bold text-gray-900">{nodeStats.categoriesDone}<span className="text-sm font-normal text-gray-400">/{nodeStats.categories}</span></p>
-                            <p className="text-[11px] text-emerald-500 mt-0.5">{Math.round(nodeStats.categoriesDone / (nodeStats.categories || 1) * 100)}% hoàn thành</p>
+                            <p className="text-xs text-gray-500 font-medium font-bold">Công việc</p>
+                            <p className="text-2xl font-bold text-gray-900 group-hover:text-emerald-600 transition-colors">{nodeStats.tasksDone}<span className="text-sm font-normal text-gray-400">/{nodeStats.tasks}</span></p>
+                            <p className="text-[11px] text-emerald-500 mt-0.5">{Math.round(nodeStats.tasksDone / (nodeStats.tasks || 1) * 100)}% hoàn thành</p>
                         </div>
-                    </div>
+                    </Link>
                     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center gap-4">
                         <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center shrink-0">
                             <HardHat className="w-6 h-6 text-amber-600" />
@@ -445,57 +445,6 @@ export const Dashboard = () => {
                     )}
                 </div>
 
-                {/* ── Bảng Quản lý công việc ── */}
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-8">
-                    <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <CalendarCheck className="w-4 h-4 text-emerald-600" />
-                            <h2 className="text-base font-semibold text-gray-800">Quản lý công việc</h2>
-                        </div>
-                        <span className="text-xs font-bold bg-emerald-50 text-emerald-600 px-2 py-1 rounded-full">{myTasks.length} việc đang chờ</span>
-                    </div>
-
-                    {myTasks.length === 0 ? (
-                        <div className="py-12 text-center text-sm text-gray-400">
-                            Bạn chưa có công việc nào được giao.
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="bg-gray-50 border-b border-gray-100 text-left">
-                                        <th className="py-3 px-4 font-semibold text-gray-500 uppercase tracking-wide">Tên Công việc</th>
-                                        <th className="py-3 px-4 font-semibold text-gray-500 uppercase tracking-wide text-center">Độ ưu tiên</th>
-                                        <th className="py-3 px-4 font-semibold text-gray-500 uppercase tracking-wide">Hạn chót</th>
-                                        <th className="py-3 px-4 font-semibold text-gray-500 uppercase tracking-wide">Vai trò</th>
-                                        <th className="py-3 px-4 font-semibold text-gray-500 uppercase tracking-wide text-right">Lệnh</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {myTasks.map(task => (
-                                        <tr key={task.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors last:border-0">
-                                            <td className="py-4 px-4 font-medium text-gray-900">{task.name}</td>
-                                            <td className="py-4 px-4 text-center">
-                                                <StatusBadge status={task.priority === 'HIGH' ? 'Ưu tiên Cao' : task.priority === 'MEDIUM' ? 'Trung bình' : 'Thấp'} />
-                                            </td>
-                                            <td className="py-4 px-4 text-gray-500 font-medium">{task.endDate ? isoToVN(task.endDate) : '—'}</td>
-                                            <td className="py-4 px-4">
-                                                {task.phuTrach === user?.uid ? (
-                                                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-bold uppercase">Phụ trách</span>
-                                                ) : (
-                                                    <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-bold uppercase">Phối hợp</span>
-                                                )}
-                                            </td>
-                                            <td className="py-4 px-4 text-right">
-                                                <Link to="/projects" className="text-primary-600 hover:text-primary-700 font-bold hover:underline">Xem chi tiết</Link>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </div>
 
 
                 {/* ── Row 2: Tiến độ tổng thể + Pie Chart ── */}

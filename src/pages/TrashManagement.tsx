@@ -4,6 +4,8 @@ import { db } from '../firebase/config';
 import { Trash, RefreshCw, Trash2, Search, Filter, AlertCircle } from 'lucide-react';
 import { isoToVN } from '../utils/formatVN';
 import { restoreFromTrash } from '../utils/trashUtils';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../firebase/config';
 import toast from 'react-hot-toast';
 
 interface TrashItem {
@@ -71,13 +73,21 @@ export const TrashManagement = () => {
             message: `HÀNH ĐỘNG NGUY HIỂM: Bạn có chắc chắn muốn xóa VĨNH VIỄN dữ liệu này?\n\n"${item.metaSummary}"\n\nKhông thể phục hồi sau khi xóa!`,
             type: 'danger',
             onConfirm: async () => {
-                const toastId = toast.loading('Đang xóa vĩnh viễn...');
+                const toastId = toast.loading('Đang dọn dẹp dữ liệu trên Drive và xóa vĩnh viễn...');
                 setConfirmAction(null);
                 try {
-                    await deleteDoc(doc(db, 'trash', item.id));
-                    toast.success('Đã xóa vĩnh viễn', { id: toastId });
+                    // Nếu là Văn bản, sử dụng Deep Delete Cloud Function
+                    if (item.originalCollection === 'vanban' || item.originalCollection === 'internal_documents') {
+                        const permanentlyDeleteDocument = httpsCallable(functions, 'permanentlyDeleteDocument');
+                        await permanentlyDeleteDocument({ docId: item.id, sourceCollection: 'trash' });
+                    } else {
+                        // Các loại dữ liệu khác vẫn xóa thông thường
+                        await deleteDoc(doc(db, 'trash', item.id));
+                    }
+                    toast.success('Đã dọn dẹp và xóa vĩnh viễn thành công', { id: toastId });
                 } catch (error) {
-                    toast.error('Lỗi khi xóa vĩnh viễn', { id: toastId });
+                    console.error('Lỗi khi xóa vĩnh viễn:', error);
+                    toast.error('Lỗi khi xóa vĩnh viễn: ' + (error as Error).message, { id: toastId });
                 }
             }
         });
@@ -235,7 +245,7 @@ export const TrashManagement = () => {
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
                         <div className="p-6">
                             <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 mx-auto ${confirmAction.type === 'danger' ? 'bg-red-100 text-red-600' :
-                                    confirmAction.type === 'warning' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
+                                confirmAction.type === 'warning' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
                                 }`}>
                                 <AlertCircle className="w-6 h-6" />
                             </div>
@@ -255,7 +265,7 @@ export const TrashManagement = () => {
                                 <button
                                     onClick={confirmAction.onConfirm}
                                     className={`flex-1 px-4 py-2.5 text-white rounded-xl font-bold transition-all shadow-lg ${confirmAction.type === 'danger' ? 'bg-red-600 hover:bg-red-700 shadow-red-100' :
-                                            confirmAction.type === 'warning' ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-100' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-100'
+                                        confirmAction.type === 'warning' ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-100' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-100'
                                         }`}
                                 >
                                     Xác nhận

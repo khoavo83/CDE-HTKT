@@ -1,0 +1,107 @@
+import React from 'react';
+import { X, FileText, ExternalLink } from 'lucide-react';
+import { getDocIconConfig, getDocFormattedTitle } from '../utils/docUtils';
+
+interface DocumentPreviewModalProps {
+    doc: any;
+    onClose: () => void;
+}
+
+export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ doc: previewDoc, onClose }) => {
+    if (!previewDoc) return null;
+
+    const { Icon, bg, color } = getDocIconConfig(previewDoc);
+    const previewUrl = previewDoc.storageUrl || null;
+    const drivePreviewUrl = previewDoc.driveFileId_Original
+        ? `https://drive.google.com/file/d/${previewDoc.driveFileId_Original}/preview`
+        : null;
+
+    return (
+        <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/70 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[92vh] mx-4 flex flex-col overflow-hidden">
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 bg-gray-50 shrink-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <span className={`w-9 h-9 rounded-lg ${bg} ${color} flex items-center justify-center shrink-0`}>
+                            <Icon className="w-5 h-5" />
+                        </span>
+                        <div className="min-w-0">
+                            <h3 className="font-bold text-gray-900 truncate text-sm leading-tight" title={getDocFormattedTitle(previewDoc)}>
+                                {getDocFormattedTitle(previewDoc)}
+                            </h3>
+                            <p className="text-[10px] text-gray-500 truncate mt-0.5">
+                                {previewDoc.coQuanBanHanh}{previewDoc.ngayBanHanh ? ` • ${previewDoc.ngayBanHanh}` : ''}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-4">
+                        {previewDoc.storageUrl ? (
+                            <a href={previewDoc.storageUrl} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 text-sm text-blue-600 border border-blue-200 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors font-medium">
+                                <ExternalLink className="w-3.5 h-3.5" /> Mở gốc
+                            </a>
+                        ) : previewDoc.driveFileId_Original ? (
+                            <a href={`https://drive.google.com/file/d/${previewDoc.driveFileId_Original}/view`} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 text-sm text-blue-600 border border-blue-200 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors font-medium">
+                                <ExternalLink className="w-3.5 h-3.5" /> Mở gốc
+                            </a>
+                        ) : null}
+                        <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-lg transition-colors">
+                            <X className="w-5 h-5 text-gray-500" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Body */}
+                <div className="flex flex-1 overflow-hidden">
+                    {/* Left: Metadata */}
+                    <div className="w-72 shrink-0 border-r border-gray-200 overflow-y-auto p-5 space-y-4 bg-white">
+                        {[
+                            { label: 'Loại Văn bản', value: previewDoc.loaiVanBan },
+                            { label: 'Số Ký hiệu', value: previewDoc.soKyHieu },
+                            { label: 'Ngày ban hành', value: previewDoc.ngayBanHanh },
+                            { label: 'Cơ quan BH', value: previewDoc.coQuanBanHanh },
+                            { label: 'Người ký', value: previewDoc.nguoiKy },
+                            { label: 'Số trang', value: previewDoc.soTrang },
+                        ].map(({ label, value }) => value ? (
+                            <div key={label}>
+                                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">{label}</p>
+                                <p className="text-sm text-gray-800 font-medium">{value}</p>
+                            </div>
+                        ) : null)}
+                        {previewDoc.trichYeu && (
+                            <div className="pt-3 border-t border-gray-100">
+                                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Trích yếu</p>
+                                <p className="text-sm text-gray-700 leading-relaxed">{previewDoc.trichYeu}</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Right: Preview */}
+                    <div className="flex-1 flex flex-col bg-gray-100 overflow-hidden">
+                        {previewUrl ? (
+                            previewDoc.fileNameOriginal?.toLowerCase().endsWith('.pdf')
+                                ? <iframe src={previewUrl} className="flex-1 border-none w-full h-full" title="PDF Preview" />
+                                : <div className="flex-1 flex items-center justify-center p-6 overflow-auto">
+                                    <img src={previewUrl} alt="Xem trước" className="max-w-full max-h-full object-contain shadow-lg rounded-lg" />
+                                </div>
+                        ) : drivePreviewUrl ? (
+                            <iframe src={drivePreviewUrl} className="w-full h-full flex-1 border-none" allow="autoplay" title="Drive Preview" />
+                        ) : (
+                            <div className="flex-1 flex flex-col items-center justify-center gap-4 text-gray-500">
+                                <FileText className="w-16 h-16 text-gray-300" />
+                                <div className="text-center">
+                                    <p className="font-semibold text-gray-700">{previewDoc.fileNameOriginal || 'Không rõ tên file'}</p>
+                                    <p className="text-sm text-gray-400 mt-1">Văn bản này chưa có tệp đính kèm để xem trước</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};

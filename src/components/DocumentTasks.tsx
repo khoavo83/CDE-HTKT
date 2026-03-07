@@ -1,18 +1,67 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuthStore } from '../store/useAuthStore';
-import { CheckCircle2, Clock, CheckSquare, Edit3, Trash2, Send, ChevronDown, ChevronUp, UserPlus, Users, Settings } from 'lucide-react';
+import { CheckCircle2, Clock, CheckSquare, Edit3, Trash2, Send, ChevronDown, ChevronUp, UserPlus, Users, Settings, FileText, ExternalLink } from 'lucide-react';
 import { formatDateTime } from '../utils/formatVN';
 import { AssignTaskModal } from './AssignTaskModal';
 import { UpdateTaskModal } from './UpdateTaskModal';
 import { AdminEditTaskModal } from './AdminEditTaskModal';
 import { GenericConfirmModal } from './GenericConfirmModal';
+import { DocumentPreviewModal } from './DocumentPreviewModal';
+import { getDocIconConfig, getDocFormattedTitle } from '../utils/docUtils';
+import { logVanBanActivity } from '../utils/vanbanLogUtils';
 import toast from 'react-hot-toast';
 
 interface DocumentTasksProps {
     vanBanId: string;
 }
+
+const TaskFileBadge = ({ docId, onOpenPreview }: { docId: string, onOpenPreview: (doc: any) => void }) => {
+    const [docData, setDocData] = useState<any | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchDoc = async () => {
+            try {
+                const d = await getDoc(doc(db, 'vanban', docId));
+                if (d.exists()) {
+                    setDocData({ id: d.id, ...d.data() });
+                }
+            } catch (e) {
+                console.error('[TaskFileBadge] Error:', e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchDoc();
+    }, [docId]);
+
+    if (loading) return <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-100 text-[10px] text-gray-400 animate-pulse"><div className="w-3 h-3 border-2 border-gray-200 border-t-indigo-500 rounded-full animate-spin" /> Đang tải tệp...</div>;
+    if (!docData) return null;
+
+    const { Icon, color, bg } = getDocIconConfig(docData);
+    const title = getDocFormattedTitle(docData);
+
+    return (
+        <button
+            type="button"
+            onClick={() => onOpenPreview(docData)}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-indigo-100 shadow-sm hover:shadow-md hover:border-indigo-300 transition-all text-left group max-w-full overflow-hidden"
+        >
+            <span className={`w-7 h-7 rounded-md ${bg} ${color} flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform`}>
+                <Icon className="w-4 h-4" />
+            </span>
+            <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-bold text-gray-900 truncate leading-tight mb-0.5">{title}</p>
+                <div className="flex items-center gap-1.5">
+                    <span className="text-[9px] text-gray-500 font-medium px-1.5 py-0.5 bg-gray-50 rounded border border-gray-100">Tệp báo cáo</span>
+                    <span className="text-[9px] text-indigo-500 font-semibold group-hover:underline flex items-center gap-0.5">Click để xem chi tiết <ExternalLink className="w-2.5 h-2.5" /></span>
+                </div>
+            </div>
+        </button>
+    );
+};
 
 export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
     const { user } = useAuthStore();
@@ -27,6 +76,10 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
     // Delete confirm
     const [deleteModal, setDeleteModal] = useState({ isOpen: false, taskId: '' });
     const [adminEditTask, setAdminEditTask] = useState<any | null>(null);
+
+    // Preview state
+    const [previewDocData, setPreviewDocData] = useState<any | null>(null);
+    const [loadingPreview, setLoadingPreview] = useState(false);
 
     const fetchTasks = async () => {
         if (!vanBanId) {
@@ -71,7 +124,21 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
 
     const handleDeleteTask = async (taskId: string) => {
         try {
+            // Get task info for logging before deletion
+            const taskToDelete = tasks.find(t => t.id === taskId);
+
             await deleteDoc(doc(db, 'vanban_tasks', taskId));
+
+            if (taskToDelete && user) {
+                await logVanBanActivity({
+                    vanBanId,
+                    action: 'TASK_DELETE',
+                    details: `Xóa phân công của ${taskToDelete.assigneeName}. Nội dung: ${taskToDelete.content.substring(0, 50)}...`,
+                    userId: user.uid,
+                    userName: user.hoTen || user.displayName || user.email || 'Người dùng'
+                });
+            }
+
             toast.success('Đã xóa phân công!');
             fetchTasks();
         } catch (err) {
@@ -87,11 +154,40 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
             await updateDoc(taskRef, {
                 status: 'IN_PROGRESS'
             });
+
+            if (user) {
+                await logVanBanActivity({
+                    vanBanId,
+                    action: 'TASK_ACCEPT',
+                    details: `Chấp nhận thực hiện công việc: ${task.content.substring(0, 100)}${task.content.length > 100 ? '...' : ''}`,
+                    userId: user.uid,
+                    userName: user.hoTen || user.displayName || user.email || 'Người dùng'
+                });
+            }
+
             toast.success('Đã nhận việc! Đang tiến hành.');
             fetchTasks(); // Reload bảng
         } catch (error) {
             console.error(error);
             toast.error('Có lỗi xảy ra khi nhận việc.');
+        }
+    };
+
+    const handleOpenPreview = async (docId: string) => {
+        if (!docId) return;
+        setLoadingPreview(true);
+        try {
+            const d = await getDoc(doc(db, 'vanban', docId));
+            if (d.exists()) {
+                setPreviewDocData({ id: d.id, ...d.data() });
+            } else {
+                toast.error('Không tìm thấy thông tin tệp đính kèm.');
+            }
+        } catch (e) {
+            console.error('[DocumentTasks] Error fetching preview doc:', e);
+            toast.error('Có lỗi xảy ra khi tải thông tin tệp.');
+        } finally {
+            setLoadingPreview(false);
         }
     };
 
@@ -130,6 +226,7 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                 </h3>
                 {canAssignTask && (
                     <button
+                        type="button"
                         onClick={() => setIsAssignModalOpen(true)}
                         className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-1.5 rounded-md text-sm font-medium hover:bg-indigo-700 transition shadow-sm"
                     >
@@ -141,7 +238,7 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
             {error && (
                 <div className="p-4 text-center text-red-500 text-sm bg-red-50 border-b border-red-100">
                     ⚠️ {error}
-                    <button onClick={fetchTasks} className="ml-2 text-red-700 underline hover:no-underline">Thử lại</button>
+                    <button type="button" onClick={fetchTasks} className="ml-2 text-red-700 underline hover:no-underline">Thử lại</button>
                 </div>
             )}
 
@@ -155,7 +252,7 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                         <thead className="bg-gray-50">
                             <tr>
                                 <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12">STT</th>
-                                <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-28 text-nowrap">Đến ngày</th>
+                                <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Đến ngày</th>
                                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[25%]">Nội dung chỉ đạo</th>
                                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P.Trách</th>
                                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P.Hợp</th>
@@ -182,13 +279,14 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                             <td className="px-4 py-4 text-sm text-center text-gray-600 font-medium">
                                                 {task.createdAt ? formatDateTime(task.createdAt) : ''}
                                             </td>
-                                            <td className="px-4 py-4 text-sm text-gray-900">
-                                                <div className="line-clamp-2">{task.content}</div>
+                                            <td className="px-4 py-4 text-sm text-gray-900 break-words">
+                                                <div>{task.content}</div>
                                                 <div className="text-gray-400 text-xs font-normal mt-1 flex justify-between items-center gap-2">
                                                     <span>Giao bởi: {task.assignerName}</span>
                                                 </div>
                                                 {task.result && (
                                                     <button
+                                                        type="button"
                                                         onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
                                                         className="text-indigo-600 mt-2 text-xs font-medium flex items-center gap-1 hover:text-indigo-800"
                                                     >
@@ -198,13 +296,13 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                                 )}
                                             </td>
                                             <td className="px-4 py-4 text-sm">
-                                                <span className="text-blue-700 font-medium bg-blue-50 px-2 py-0.5 rounded-full inline-block w-fit whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{task.assigneeName}</span>
+                                                <span className="text-blue-700 font-medium bg-blue-50 px-2 py-0.5 rounded-full inline-block w-fit break-words">{task.assigneeName}</span>
                                             </td>
                                             <td className="px-4 py-4 text-sm">
                                                 {task.collaborators && task.collaborators.length > 0 ? (
                                                     <div className="flex flex-wrap gap-1">
                                                         {task.collaborators.map((c: any) => (
-                                                            <span key={c.id} title={c.name} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-purple-100 text-purple-800 rounded-full font-medium whitespace-nowrap">
+                                                            <span key={c.id} title={c.name} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-purple-100 text-purple-800 rounded-full font-medium break-words">
                                                                 {c.name}
                                                             </span>
                                                         ))}
@@ -220,6 +318,7 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                                 <div className="flex items-center justify-end gap-1.5">
                                                     {canEdit && task.status === 'PENDING' && (
                                                         <button
+                                                            type="button"
                                                             onClick={() => handleAcceptTask(task)}
                                                             className="text-green-700 hover:text-green-900 bg-green-50 p-1.5 rounded-md hover:bg-green-100 transition-colors"
                                                             title="Nhận việc"
@@ -229,6 +328,7 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                                     )}
                                                     {canEdit && task.status === 'IN_PROGRESS' && (
                                                         <button
+                                                            type="button"
                                                             onClick={() => setSelectedTaskToUpdate(task)}
                                                             className="text-blue-600 hover:text-blue-900 bg-blue-50 p-1.5 rounded-md hover:bg-blue-100 transition-colors"
                                                             title="Báo cáo thay đổi tiến độ"
@@ -238,6 +338,7 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                                     )}
                                                     {canEdit && task.status === 'COMPLETED' && (
                                                         <button
+                                                            type="button"
                                                             onClick={() => setSelectedTaskToUpdate(task)}
                                                             className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 p-1.5 rounded-md hover:bg-indigo-100 transition-colors"
                                                             title="Sửa báo cáo"
@@ -247,6 +348,7 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                                     )}
                                                     {canDelete && (
                                                         <button
+                                                            type="button"
                                                             onClick={() => setDeleteModal({ isOpen: true, taskId: task.id })}
                                                             className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded-md transition-colors"
                                                             title="Xóa phân công này"
@@ -255,7 +357,7 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                                         </button>
                                                     )}
                                                     {user?.role === 'admin' && (
-                                                        <button onClick={() => setAdminEditTask(task)} className="text-amber-600 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 p-1.5 rounded-md transition-colors" title="Chỉnh sửa (Admin)">
+                                                        <button type="button" onClick={() => setAdminEditTask(task)} className="text-amber-600 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 p-1.5 rounded-md transition-colors" title="Chỉnh sửa (Admin)">
                                                             <Settings className="w-4 h-4" />
                                                         </button>
                                                     )}
@@ -265,12 +367,22 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                         {/* Row showing result if expanded */}
                                         {isExpanded && task.result && (
                                             <tr className="bg-indigo-50/40">
-                                                <td colSpan={6} className="px-6 py-4 text-sm">
-                                                    <div className="pl-4 border-l-4 border-indigo-400 rounded-r-md py-2">
-                                                        <p className="font-semibold text-indigo-900 text-xs mb-2 uppercase tracking-wide">
-                                                            Kết quả xử lý (Hoàn thành lúc: {task.completedAt ? formatDateTime(task.completedAt) : 'Chưa rõ'})
-                                                        </p>
-                                                        <div className="text-gray-800 whitespace-pre-wrap leading-relaxed bg-white border border-indigo-100 p-3 rounded">{task.result}</div>
+                                                <td colSpan={7} className="px-6 py-4 text-sm">
+                                                    <div className="pl-4 border-l-4 border-indigo-400 rounded-r-md py-2 flex flex-col gap-3">
+                                                        <div className="flex flex-col gap-1.5">
+                                                            <p className="font-semibold text-indigo-900 text-[10px] uppercase tracking-wide">
+                                                                Kết quả xử lý (Hoàn thành lúc: {task.completedAt ? formatDateTime(task.completedAt) : 'Chưa rõ'})
+                                                            </p>
+                                                            <div className="text-gray-800 whitespace-pre-wrap leading-relaxed bg-white border border-indigo-100 p-3 rounded text-sm">{task.result}</div>
+                                                        </div>
+                                                        {task.bcDocId && (
+                                                            <div className="mt-1">
+                                                                <TaskFileBadge
+                                                                    docId={task.bcDocId}
+                                                                    onOpenPreview={setPreviewDocData}
+                                                                />
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -317,6 +429,13 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                     onClose={() => setAdminEditTask(null)}
                     task={adminEditTask}
                     onSuccess={fetchTasks}
+                />
+            )}
+
+            {previewDocData && (
+                <DocumentPreviewModal
+                    doc={previewDocData}
+                    onClose={() => setPreviewDocData(null)}
                 />
             )}
         </div>

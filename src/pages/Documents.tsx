@@ -1,31 +1,89 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { collection, query, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
-import { Link } from 'react-router-dom';
-import { Clock, FileCheck, Eye, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Search, ChevronLeft, ChevronRight, Upload, Download } from 'lucide-react';
+import { collection, query, orderBy, onSnapshot, doc, deleteDoc, where, getDocs, getDoc, updateDoc } from 'firebase/firestore';
+import { db, functions } from '../firebase/config';
+import { Link, useNavigate } from 'react-router-dom';
+import { Settings, Eye, Trash2, Search, Filter, Clock, FileCheck, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, UserCheck, CheckCircle2, AlertCircle, Trash, ArrowUpDown, Send, Download, Upload } from 'lucide-react';
+import { httpsCallable } from 'firebase/functions';
 import { UploadDocumentModal } from '../components/UploadDocumentModal';
-import { isoToVN, formatBytes } from '../utils/formatVN';
+import { AssignTaskFromManagerModal } from '../components/AssignTaskFromManagerModal';
+import { AdminEditTaskModal } from '../components/AdminEditTaskModal';
+import { UpdateTaskModal } from '../components/UpdateTaskModal';
+import { GenericConfirmModal } from '../components/GenericConfirmModal';
+import { DocumentPreviewModal } from '../components/DocumentPreviewModal';
+import { isoToVN, formatBytes, formatDateTime } from '../utils/formatVN';
+import { getDocIconConfig, getDocFormattedTitle } from '../utils/docUtils';
 import { useAuthStore } from '../store/useAuthStore';
 import { utils, writeFile } from 'xlsx';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
+import { logVanBanActivity } from '../utils/vanbanLogUtils';
+
+const TaskFileLinks = ({ docId, onOpenPreview }: { docId: string, onOpenPreview: (doc: any) => void }) => {
+    const [docData, setDocData] = useState<any | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchDoc = async () => {
+            try {
+                const d = await getDoc(doc(db, 'vanban', docId));
+                if (d.exists()) {
+                    setDocData({ id: d.id, ...d.data() });
+                }
+            } catch (e) {
+                console.error('[TaskFileLinks] Error:', e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchDoc();
+    }, [docId]);
+
+    if (loading) return <div className="text-[10px] text-gray-400 italic animate-pulse">Đang tải tệp...</div>;
+    if (!docData) return null;
+
+    const { Icon, color, bg } = getDocIconConfig(docData);
+    const title = getDocFormattedTitle(docData);
+
+    return (
+        <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onOpenPreview(docData); }}
+            className="flex items-center gap-1.5 text-[10px] text-blue-600 hover:text-blue-800 font-bold bg-blue-50 px-2 py-1.5 rounded border border-blue-100 transition-colors w-fit text-left"
+        >
+            <Icon className="w-3 h-3 flex-shrink-0" />
+            <span className="truncate max-w-[180px]">{title}</span>
+        </button>
+    );
+};
 
 export const Documents = () => {
     const { user } = useAuthStore();
+    const navigate = useNavigate();
     const [docs, setDocs] = useState<any[]>([]);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
-    const [activeTab, setActiveTab] = useState<'ALL' | 'INCOMING' | 'OUTGOING' | 'UNSORTED' | 'SORTED'>('ALL');
+    const [activeTab, setActiveTab] = useState<'ALL' | 'INCOMING' | 'OUTGOING' | 'UNSORTED' | 'SORTED' | 'PROCESSING'>('ALL');
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const pageSize = 10;
     const [nodeLinks, setNodeLinks] = useState<any[]>([]);
 
-    // Popup xác nhận xoá
+    // Popup xác nhận xoá văn bản
     const [confirmDeleteModal, setConfirmDeleteModal] = useState<{
         isOpen: boolean;
         docId: string | null;
     }>({ isOpen: false, docId: null });
+
+    // State cho tab PROCESSING
+    const [tasks, setTasks] = useState<any[]>([]);
+    const [loadingTasks, setLoadingTasks] = useState(false);
+    const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+    const [adminEditTask, setAdminEditTask] = useState<any | null>(null);
+    const [selectedTaskToUpdate, setSelectedTaskToUpdate] = useState<any | null>(null);
+    const [deleteTaskModal, setDeleteTaskModal] = useState({ isOpen: false, taskId: '' });
+    const [vanBanCache, setVanBanCache] = useState<Record<string, any>>({});
+    const [previewDocData, setPreviewDocData] = useState<any | null>(null);
+    const [loadingPreview, setLoadingPreview] = useState(false);
 
     // Kéo thả độ rộng cột
     const [colWidths, setColWidths] = useState({
@@ -105,6 +163,80 @@ export const Documents = () => {
         };
     }, []);
 
+    const fetchTasks = async () => {
+        setLoadingTasks(true);
+        try {
+            const q = query(collection(db, 'vanban_tasks'));
+            const snap = await getDocs(q);
+            const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+            // Sort newest first
+            data.sort((a: any, b: any) => {
+                const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                return bTime - aTime;
+            });
+
+            setTasks(data);
+
+            // Fetch VB info for display
+            const vanBanIds = [...new Set(data.map((t: any) => t.vanBanId).filter(Boolean))];
+            const newCache: Record<string, any> = { ...vanBanCache };
+            for (const vbId of vanBanIds) {
+                if (!newCache[vbId]) {
+                    try {
+                        const vbDoc = await getDoc(doc(db, 'vanban', vbId));
+                        if (vbDoc.exists()) {
+                            newCache[vbId] = { id: vbDoc.id, ...vbDoc.data() };
+                        }
+                    } catch { /* skip */ }
+                }
+            }
+            setVanBanCache(newCache);
+        } catch (err: any) {
+            console.error('Error fetching tasks:', err);
+            toast.error('Lỗi khi tải danh sách văn bản xử lý.');
+        } finally {
+            setLoadingTasks(false);
+        }
+    };
+
+    const handleOpenPreview = async (docId: string) => {
+        if (!docId) return;
+        setLoadingPreview(true);
+        try {
+            const vbDoc = await getDoc(doc(db, 'vanban', docId));
+            if (vbDoc.exists()) {
+                setPreviewDocData({ id: vbDoc.id, ...vbDoc.data() });
+            } else {
+                toast.error('Không tìm thấy tệp đính kèm.');
+            }
+        } catch (error) {
+            console.error('Error fetching preview doc:', error);
+            toast.error('Lỗi khi tải thông tin tệp.');
+        } finally {
+            setLoadingPreview(false);
+        }
+    };
+
+    const confirmDeleteTask = async () => {
+        if (!deleteTaskModal.taskId) return;
+        try {
+            await deleteDoc(doc(db, 'vanban_tasks', deleteTaskModal.taskId));
+            toast.success('Đã xóa phân công công việc.');
+            setDeleteTaskModal({ isOpen: false, taskId: '' });
+            fetchTasks();
+        } catch (err) {
+            toast.error('Lỗi khi xóa công việc.');
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'PROCESSING') {
+            fetchTasks();
+        }
+    }, [activeTab]);
+
     const handleSort = (key: string) => {
         let direction: 'asc' | 'desc' = 'asc';
         if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -118,6 +250,28 @@ export const Documents = () => {
         return new Set(nodeLinks.map(link => link.vanBanId));
     }, [nodeLinks]);
 
+    const filteredTasks = useMemo(() => {
+        if (activeTab !== 'PROCESSING') return [];
+        let result = tasks;
+
+        if (searchTerm.trim()) {
+            const lowerTerm = searchTerm.toLowerCase();
+            result = result.filter(task => {
+                const vb = vanBanCache[task.vanBanId];
+                return (
+                    (task.content && task.content.toLowerCase().includes(lowerTerm)) ||
+                    (task.assigneeName && task.assigneeName.toLowerCase().includes(lowerTerm)) ||
+                    (task.assignerName && task.assignerName.toLowerCase().includes(lowerTerm)) ||
+                    (task.collaboratorNames && task.collaboratorNames.some((name: string) => name.toLowerCase().includes(lowerTerm))) ||
+                    (task.result && task.result.toLowerCase().includes(lowerTerm)) ||
+                    (vb && vb.soKyHieu && vb.soKyHieu.toLowerCase().includes(lowerTerm)) ||
+                    (vb && vb.trichYeu && vb.trichYeu.toLowerCase().includes(lowerTerm))
+                );
+            });
+        }
+        return result;
+    }, [tasks, activeTab, searchTerm, vanBanCache]);
+
     const filteredDocs = useMemo(() => {
         let result = docs;
 
@@ -128,6 +282,8 @@ export const Documents = () => {
             result = result.filter(doc => !sortedDocIds.has(doc.id)); // Chưa sắp xếp
         } else if (activeTab === 'SORTED') {
             result = result.filter(doc => sortedDocIds.has(doc.id)); // Đã sắp xếp
+        } else if (activeTab === 'PROCESSING') {
+            return []; // Hanled by filteredTasks
         } else {
             result = result.filter(doc => doc.phanLoaiVanBan === activeTab); // INCOMING hoặc OUTGOING
         }
@@ -217,6 +373,15 @@ export const Documents = () => {
                     <p className="text-sm text-gray-500 mt-1">Hệ thống xử lý văn bản AI OCR tự động + Đính kèm</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    {activeTab === 'PROCESSING' && user?.role !== 'viewer' && (
+                        <button
+                            onClick={() => setIsAssignModalOpen(true)}
+                            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-bold shadow-sm shadow-blue-200"
+                        >
+                            <Send className="w-4 h-4" />
+                            Giao việc mới
+                        </button>
+                    )}
                     <button
                         onClick={exportToExcel}
                         className="flex items-center gap-2 bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-lg hover:bg-emerald-100 transition font-bold shadow-sm"
@@ -224,7 +389,7 @@ export const Documents = () => {
                         <Download className="w-4 h-4" />
                         Xuất Excel
                     </button>
-                    {user?.role !== 'viewer' && (
+                    {activeTab !== 'PROCESSING' && user?.role !== 'viewer' && (
                         <button
                             onClick={() => setIsUploadModalOpen(true)}
                             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-bold shadow-sm shadow-blue-200"
@@ -241,7 +406,7 @@ export const Documents = () => {
                 <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg w-fit border border-gray-200 shadow-sm overflow-x-auto scrollbar-hide">
                     <button
                         onClick={() => setActiveTab('ALL')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors shrink-0 ${activeTab === 'ALL' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`px - 4 py - 2 rounded - md text - sm font - medium transition - colors shrink - 0 ${activeTab === 'ALL' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
                     >
                         Tổng hợp
                         <span className="ml-2 inline-flex items-center justify-center bg-gray-200 text-gray-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
@@ -250,7 +415,7 @@ export const Documents = () => {
                     </button>
                     <button
                         onClick={() => setActiveTab('INCOMING')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors shrink-0 ${activeTab === 'INCOMING' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`px - 4 py - 2 rounded - md text - sm font - medium transition - colors shrink - 0 ${activeTab === 'INCOMING' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
                     >
                         Văn bản đến
                         <span className="ml-2 inline-flex items-center justify-center bg-indigo-100 text-indigo-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
@@ -259,7 +424,7 @@ export const Documents = () => {
                     </button>
                     <button
                         onClick={() => setActiveTab('OUTGOING')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors shrink-0 ${activeTab === 'OUTGOING' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`px - 4 py - 2 rounded - md text - sm font - medium transition - colors shrink - 0 ${activeTab === 'OUTGOING' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
                     >
                         Văn bản đi
                         <span className="ml-2 inline-flex items-center justify-center bg-orange-100 text-orange-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
@@ -268,7 +433,7 @@ export const Documents = () => {
                     </button>
                     <button
                         onClick={() => setActiveTab('UNSORTED')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors shrink-0 ${activeTab === 'UNSORTED' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`px - 4 py - 2 rounded - md text - sm font - medium transition - colors shrink - 0 ${activeTab === 'UNSORTED' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
                     >
                         Chưa sắp xếp
                         <span className="ml-2 inline-flex items-center justify-center bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
@@ -277,11 +442,20 @@ export const Documents = () => {
                     </button>
                     <button
                         onClick={() => setActiveTab('SORTED')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors shrink-0 ${activeTab === 'SORTED' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`px - 4 py - 2 rounded - md text - sm font - medium transition - colors shrink - 0 ${activeTab === 'SORTED' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
                     >
                         Đã sắp xếp
                         <span className="ml-2 inline-flex items-center justify-center bg-teal-100 text-teal-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                             {docs.filter(d => sortedDocIds.has(d.id)).length}
+                        </span>
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('PROCESSING')}
+                        className={`px - 4 py - 2 rounded - md text - sm font - medium transition - colors shrink - 0 ${activeTab === 'PROCESSING' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
+                    >
+                        Xử lý Văn bản
+                        <span className="ml-2 inline-flex items-center justify-center bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                            {tasks.length}
                         </span>
                     </button>
                 </div>
@@ -306,7 +480,146 @@ export const Documents = () => {
                 onClose={() => setIsUploadModalOpen(false)}
             />
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300">
+            {activeTab === 'PROCESSING' ? (
+                <table className="w-full text-left border-collapse min-w-max">
+                    <thead>
+                        <tr className="bg-gray-50 border-b border-gray-200 text-sm font-medium text-gray-500">
+                            <th className="p-4 border-r border-gray-200 w-16 text-center">STT</th>
+                            <th className="p-4 border-r border-gray-200 w-64">Văn bản</th>
+                            <th className="p-4 border-r border-gray-200 w-64">Nội dung xử lý</th>
+                            <th className="p-4 border-r border-gray-200 w-32">Xử lý chính</th>
+                            <th className="p-4 border-r border-gray-200 w-40">Phối hợp</th>
+                            <th className="p-4 border-r border-gray-200 w-64">Kết quả xử lý</th>
+                            <th className="p-4 border-r border-gray-200 w-28 text-center">Trạng thái</th>
+                            <th className="p-4 text-center w-28">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 text-sm">
+                        {loadingTasks ? (
+                            <tr>
+                                <td colSpan={8} className="p-8 text-center text-gray-500 bg-gray-50/50">
+                                    Đang tải dữ liệu...
+                                </td>
+                            </tr>
+                        ) : filteredTasks.length === 0 ? (
+                            <tr>
+                                <td colSpan={8} className="p-8 text-center text-gray-500 bg-gray-50/50">
+                                    Không tìm thấy phân công xử lý phù hợp.
+                                </td>
+                            </tr>
+                        ) : (
+                            filteredTasks.map((task, index) => {
+                                const vb = vanBanCache[task.vanBanId];
+                                return (
+                                    <tr key={task.id} className="even:bg-slate-50 odd:bg-white hover:bg-blue-50/50 transition-colors">
+                                        <td className="p-4 text-center border-r border-gray-100 font-medium text-gray-400">{index + 1}</td>
+                                        <td className="p-4 border-r border-gray-100">
+                                            {vb ? (
+                                                <div className="flex flex-col gap-1">
+                                                    <Link to={`/ documents / ${vb.id} `} className="text-blue-600 font-bold hover:underline line-clamp-1">
+                                                        {vb.soKyHieu} {vb.ngayBanHanh && `ngày ${isoToVN(vb.ngayBanHanh)} `}
+                                                    </Link>
+                                                    <span className="text-xs text-gray-500 line-clamp-1">{vb.trichYeu}</span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-gray-400 italic">Đang tải văn bản...</span>
+                                            )}
+                                        </td>
+                                        <td className="p-4 border-r border-gray-100">
+                                            <div className="text-[11px] font-bold text-gray-500 mb-1">
+                                                Giao bởi: <span className="text-gray-900">{task.assignerName || '--'}</span>
+                                            </div>
+                                            <div className="text-gray-800 leading-relaxed line-clamp-2" title={task.content}>
+                                                {task.content}
+                                            </div>
+                                            <div className="mt-1 flex items-center gap-2 text-[10px] text-gray-400 italic">
+                                                <Clock className="w-3 h-3" />
+                                                {task.createdAt ? isoToVN(task.createdAt.split('T')[0]) : '--'}
+                                            </div>
+                                        </td>
+                                        <td className="p-4 border-r border-gray-100">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
+                                                    <UserCheck className="w-4 h-4" />
+                                                </div>
+                                                <span className="font-medium text-gray-700">{task.assigneeName || 'N/A'}</span>
+                                            </div>
+                                        </td>
+                                        <td className="p-4 border-r border-gray-100">
+                                            {task.collaboratorNames && task.collaboratorNames.length > 0 ? (
+                                                <div className="flex flex-wrap gap-1">
+                                                    {task.collaboratorNames.map((name: string, i: number) => (
+                                                        <span key={i} className="px-1.5 py-0.5 bg-gray-50 text-gray-600 rounded text-[10px] font-medium border border-gray-100">
+                                                            {name}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <span className="text-gray-400 italic font-normal text-xs">Không có</span>
+                                            )}
+                                        </td>
+                                        <td className="p-4 border-r border-gray-100">
+                                            <div className="space-y-1.5 font-medium">
+                                                {task.result && (
+                                                    <p className="text-gray-700 line-clamp-2" title={task.result}>
+                                                        {task.result}
+                                                    </p>
+                                                )}
+                                                {task.bcDocId && (
+                                                    <TaskFileLinks
+                                                        docId={task.bcDocId}
+                                                        onOpenPreview={setPreviewDocData}
+                                                    />
+                                                )}
+                                                {!task.result && !task.bcDocId && (
+                                                    <span className="text-xs text-gray-300 italic font-normal">Chưa có kết quả</span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="p-4 border-r border-gray-100 text-center">
+                                            <span className={`px - 2.5 py - 1 rounded - full text - [10px] font - bold uppercase tracking - wider ${task.status === 'COMPLETED' ? 'bg-green-100 text-green-700 border border-green-200' :
+                                                task.status === 'PROCESSING' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                                                    'bg-amber-100 text-amber-700 border border-amber-200'
+                                                } `}>
+                                                {task.status === 'COMPLETED' ? 'Hoàn thành' : task.status === 'PROCESSING' ? 'Đang làm' : 'Chưa nhận'}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-center">
+                                            <div className="flex items-center justify-center gap-1">
+                                                <button
+                                                    onClick={() => setSelectedTaskToUpdate(task)}
+                                                    className="p-2 text-gray-400 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-100 rounded-lg shadow-sm transition-colors"
+                                                    title="Cập nhật trạng thái"
+                                                >
+                                                    <CheckCircle2 className="w-4 h-4" />
+                                                </button>
+                                                {user?.role === 'admin' && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => setAdminEditTask(task)}
+                                                            className="p-2 text-gray-400 hover:text-amber-600 bg-white hover:bg-amber-50 border border-gray-100 rounded-lg shadow-sm transition-colors"
+                                                            title="Sửa công việc"
+                                                        >
+                                                            <Settings className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setDeleteTaskModal({ isOpen: true, taskId: task.id })}
+                                                            className="p-2 text-gray-400 hover:text-red-600 bg-white hover:bg-red-50 border border-gray-100 rounded-lg shadow-sm transition-colors"
+                                                            title="Xóa công việc"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })
+                        )}
+                    </tbody>
+                </table>
+            ) : (
                 <table className="w-full text-left border-collapse table-fixed min-w-max">
                     <thead>
                         <tr className="bg-gray-50 border-b border-gray-200 text-sm font-medium text-gray-500">
@@ -390,8 +703,8 @@ export const Documents = () => {
                                 </td>
                                 <td className="p-4 text-gray-800 leading-relaxed break-words border-r border-gray-100" title={doc.loaiVanBan}>
                                     <div className="flex items-center gap-2">
-                                        {doc.phanLoaiVanBan === 'OUTGOING' && <ArrowUp className={`w-4 h-4 flex-shrink-0 ${doc.mucDoKhan === 'KHAN' ? 'text-red-600' : 'text-green-600'}`} />}
-                                        {doc.phanLoaiVanBan === 'INCOMING' && <ArrowDown className={`w-4 h-4 flex-shrink-0 ${doc.mucDoKhan === 'KHAN' ? 'text-red-600' : 'text-blue-600'}`} />}
+                                        {doc.phanLoaiVanBan === 'OUTGOING' && <ArrowUp className={`w - 4 h - 4 flex - shrink - 0 ${doc.mucDoKhan === 'KHAN' ? 'text-red-600' : 'text-green-600'} `} />}
+                                        {doc.phanLoaiVanBan === 'INCOMING' && <ArrowDown className={`w - 4 h - 4 flex - shrink - 0 ${doc.mucDoKhan === 'KHAN' ? 'text-red-600' : 'text-blue-600'} `} />}
                                         <span>{doc.loaiVanBan || '--'}</span>
                                     </div>
                                 </td>
@@ -405,20 +718,38 @@ export const Documents = () => {
                                     <div className="flex items-center justify-center gap-1">
 
                                         <Link
-                                            to={`/documents/${doc.id}`}
+                                            to={`/ documents / ${doc.id} `}
                                             className="text-gray-400 hover:text-blue-600 bg-white hover:bg-blue-50 p-2 rounded-lg transition-colors border border-gray-100 shadow-sm"
                                             title="Xem chi tiết"
                                         >
                                             <Eye className="w-4 h-4" />
                                         </Link>
                                         {user?.role === 'admin' && (
-                                            <button
-                                                onClick={() => handleDeleteClick(doc.id)}
-                                                className="text-gray-400 hover:text-red-600 bg-white hover:bg-red-50 p-2 rounded-lg transition-colors border border-gray-100 shadow-sm"
-                                                title="Xóa văn bản"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            <>
+                                                <button
+                                                    onClick={() => {
+                                                        const isDeep = window.confirm("CẢNH BÁO: Bạn có muốn XÓA VĨNH VIỄN văn bản này và TẤT CẢ TỆP trên Drive (Bao gồm cả tệp đính kèm và link cấu trúc)?\n\nHành động này không thể hoàn tác!");
+                                                        if (isDeep) {
+                                                            const toastId = toast.loading('Đang dọn dẹp Drive và xóa vĩnh viễn...');
+                                                            const permanentlyDeleteDocument = httpsCallable(functions, 'permanentlyDeleteDocument');
+                                                            permanentlyDeleteDocument({ docId: doc.id, sourceCollection: 'vanban' })
+                                                                .then(() => toast.success('Đã dọn dẹp và xóa sạch dữ liệu.', { id: toastId }))
+                                                                .catch(err => toast.error('Lỗi khi xóa: ' + err.message, { id: toastId }));
+                                                        }
+                                                    }}
+                                                    className="text-gray-400 hover:text-red-700 bg-white hover:bg-red-50 p-2 rounded-lg transition-colors border border-gray-100 shadow-sm"
+                                                    title="Xóa vĩnh viễn & Dọn dẹp Drive"
+                                                >
+                                                    <Trash className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteClick(doc.id)}
+                                                    className="text-gray-400 hover:text-red-600 bg-white hover:bg-red-50 p-2 rounded-lg transition-colors border border-gray-100 shadow-sm"
+                                                    title="Bỏ vào thùng rác"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </>
                                         )}
                                     </div>
                                 </td>
@@ -433,9 +764,12 @@ export const Documents = () => {
                         )}
                     </tbody>
                 </table>
+            )
+            }
 
-                {/* Phân trang (Pagination) */}
-                {totalPages > 1 && (
+            {/* Phân trang (Pagination) */}
+            {
+                activeTab !== 'PROCESSING' && totalPages > 1 && (
                     <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
                         <div className="text-sm text-gray-500">
                             Hiển thị <span className="font-medium text-gray-900">{paginatedDocs.length}</span> trên tổng số <span className="font-medium text-gray-900">{filteredDocs.length}</span> văn bản
@@ -458,39 +792,68 @@ export const Documents = () => {
                             </button>
                         </div>
                     </div>
-                )}
-            </div>
+                )
+            }
 
-            {/* Popup Xác nhận Xóa */}
-            {confirmDeleteModal.isOpen && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center fade-in">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden transform transition-all scale-100">
-                        <div className="px-6 py-4 border-b bg-red-50 border-red-100">
-                            <h3 className="text-lg font-bold text-red-800 flex items-center gap-2">
-                                <Trash2 className="w-5 h-5" />
-                                Xác nhận xóa tài liệu
-                            </h3>
-                        </div>
-                        <div className="px-6 py-6 text-gray-600">
-                            Bạn có thật sự muốn xóa vĩnh viễn văn bản này khỏi hệ thống? Tuyệt đối không thể hoàn tác nếu đã xóa!
-                        </div>
-                        <div className="px-6 py-4 bg-gray-50 border-t flex justify-end gap-3">
-                            <button
-                                onClick={() => setConfirmDeleteModal({ isOpen: false, docId: null })}
-                                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-                            >
-                                Hủy bỏ
-                            </button>
-                            <button
-                                onClick={confirmDelete}
-                                className="px-6 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors font-medium"
-                            >
-                                Chắc chắn Xóa
-                            </button>
-                        </div>
+            {/* Modal Quản lý Công việc */}
+            <AssignTaskFromManagerModal
+                isOpen={isAssignModalOpen}
+                onClose={() => setIsAssignModalOpen(false)}
+                onSuccess={() => {
+                    setIsAssignModalOpen(false);
+                    fetchTasks();
+                }}
+            />
+
+            {
+                adminEditTask && (
+                    <AdminEditTaskModal
+                        isOpen={!!adminEditTask}
+                        onClose={() => setAdminEditTask(null)}
+                        task={adminEditTask}
+                        onSuccess={fetchTasks}
+                    />
+                )
+            }
+
+            {
+                selectedTaskToUpdate && (
+                    <UpdateTaskModal
+                        isOpen={!!selectedTaskToUpdate}
+                        onClose={() => setSelectedTaskToUpdate(null)}
+                        task={selectedTaskToUpdate}
+                        onSuccess={fetchTasks}
+                    />
+                )
+            }
+
+            {/* Modal xoá công việc */}
+            <GenericConfirmModal
+                isOpen={deleteTaskModal.isOpen}
+                onClose={() => setDeleteTaskModal({ isOpen: false, taskId: '' })}
+                onConfirm={confirmDeleteTask}
+                title="Xác nhận xóa công việc"
+                message="Bạn có chắc chắn muốn xóa công việc này không? Hành động này không thể hoàn tác."
+                confirmText="Xác nhận xóa"
+            />
+
+            {/* Document Preview Modal */}
+            {previewDocData && (
+                <DocumentPreviewModal
+                    doc={previewDocData}
+                    onClose={() => setPreviewDocData(null)}
+                />
+            )}
+
+            {/* Loading overlay for preview */}
+            {loadingPreview && (
+                <div className="fixed inset-0 z-[70] bg-black/20 backdrop-blur-[2px] flex items-center justify-center">
+                    <div className="bg-white p-4 rounded-xl shadow-xl flex items-center gap-3">
+                        <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-sm font-medium text-gray-700">Đang tải văn bản...</span>
                     </div>
                 </div>
             )}
-        </div>
+        </div >
     );
 };

@@ -70,24 +70,30 @@ export const CategoriesManagement = () => {
     const [isSyncing, setIsSyncing] = useState(false);
 
     useEffect(() => {
-        if (user?.role === 'admin') {
-            seedInitialTabs();
-            const unsubTabs = fetchTabs();
-            const unsub = fetchCategories();
-            const unsubMenu = fetchMenuConfig();
+        if (!user || user.role === 'viewer' || user.role === 'pending') return;
 
-            // Lắng nghe cấu hình Drive
-            const unsubDrive = onSnapshot(doc(db, 'settings', 'driveFolders'), (snap) => {
+        // Fetch common data for all authorized users
+        seedInitialTabs();
+        const unsubTabs = fetchTabs();
+        const unsub = fetchCategories();
+
+        // Admin-only data
+        let unsubMenu: any = null;
+        let unsubDrive: any = null;
+
+        if (user.role === 'admin') {
+            unsubMenu = fetchMenuConfig();
+            unsubDrive = onSnapshot(doc(db, 'settings', 'driveFolders'), (snap) => {
                 if (snap.exists()) setDriveConfig(snap.data());
             });
-
-            return () => {
-                if (typeof unsubTabs === 'function') unsubTabs();
-                if (typeof unsub === 'function') unsub();
-                if (typeof unsubMenu === 'function') unsubMenu();
-                unsubDrive();
-            };
         }
+
+        return () => {
+            if (typeof unsubTabs === 'function') unsubTabs();
+            if (typeof unsub === 'function') unsub();
+            if (typeof unsubMenu === 'function') unsubMenu();
+            if (unsubDrive) unsubDrive();
+        };
     }, [user, fetchCategories, fetchMenuConfig, fetchTabs, seedInitialTabs]);
 
     // State for sync result logs
@@ -512,7 +518,7 @@ export const CategoriesManagement = () => {
                         <p className="text-sm text-gray-500">Từ điển Dữ liệu dùng chung toàn Hệ thống</p>
                     </div>
                 </div>
-                {activeTab === 'menuConfig' && (
+                {activeTab === 'menuConfig' && user?.role === 'admin' && (
                     <button
                         onClick={seedMenuConfig}
                         className="flex items-center gap-2 bg-amber-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors shadow-sm"
@@ -539,13 +545,15 @@ export const CategoriesManagement = () => {
                             {categories.filter(c => c.type === tab.id).length}
                         </span>
 
-                        <div
-                            onClick={(e) => handleDeleteTab(e, tab.id, tab.label)}
-                            className="ml-2 w-5 h-5 flex items-center justify-center rounded-full text-gray-300 hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
-                            title="Xóa Menu này"
-                        >
-                            <X className="w-3.5 h-3.5" />
-                        </div>
+                        {user?.role === 'admin' && (
+                            <div
+                                onClick={(e) => handleDeleteTab(e, tab.id, tab.label)}
+                                className="ml-2 w-5 h-5 flex items-center justify-center rounded-full text-gray-300 hover:bg-red-100 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                                title="Xóa Menu này"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </div>
+                        )}
                     </button>
                 ))}
 
@@ -596,17 +604,19 @@ export const CategoriesManagement = () => {
 
                 {/* Nút cộng thêm tab dạt vô lề phải */}
                 <div className="flex-1 min-w-[20px]"></div>
-                <button
-                    onClick={() => setIsAddingTab(true)}
-                    className="pb-3 px-2 text-sm font-bold border-b-2 border-transparent text-blue-600 hover:text-blue-800 hover:border-blue-300 transition-colors shrink-0 flex items-center justify-center font-bold"
-                    title="Thêm Danh mục mở rộng mới"
-                >
-                    <Plus className="w-5 h-5" />
-                </button>
+                {user?.role === 'admin' && (
+                    <button
+                        onClick={() => setIsAddingTab(true)}
+                        className="pb-3 px-2 text-sm font-bold border-b-2 border-transparent text-blue-600 hover:text-blue-800 hover:border-blue-300 transition-colors shrink-0 flex items-center justify-center font-bold"
+                        title="Thêm Danh mục mở rộng mới"
+                    >
+                        <Plus className="w-5 h-5" />
+                    </button>
+                )}
             </div>
 
             {/* ===================== TAB: MENU CONFIG ===================== */}
-            {activeTab === 'menuConfig' && (
+            {activeTab === 'menuConfig' && user?.role === 'admin' && (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <div className="flex justify-between items-center mb-4">
                         <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">DANH SÁCH MỤC MENU SIDEBAR</div>
@@ -789,7 +799,7 @@ export const CategoriesManagement = () => {
             )}
 
             {/* ===================== TAB: DRIVE CONFIG ===================== */}
-            {activeTab === 'driveConfig' && (
+            {activeTab === 'driveConfig' && user?.role === 'admin' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 text-gray-700">
                         <div className="flex items-center justify-between mb-6">
@@ -930,7 +940,7 @@ export const CategoriesManagement = () => {
             )}
 
             {/* ===================== TAB: APP SETTINGS ===================== */}
-            {activeTab === 'appSettings' && (
+            {activeTab === 'appSettings' && user?.role === 'admin' && (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <AppSettingsTab />
                 </div>
@@ -1104,12 +1114,12 @@ export const CategoriesManagement = () => {
                                                             }
                                                         </td>
                                                         <td className="px-6 py-3 text-center">
-                                                            {canEditOrDeleteData(user, item.createdBy) && (
-                                                                <div className="flex justify-center gap-2">
-                                                                    <button onClick={() => handleOpenEdit(item)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors shadow-sm" title="Sửa"><Edit2 className="w-4 h-4" /></button>
+                                                            <div className="flex justify-center gap-2">
+                                                                <button onClick={() => handleOpenEdit(item)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors shadow-sm" title="Sửa"><Edit2 className="w-4 h-4" /></button>
+                                                                {user?.role === 'admin' && (
                                                                     <button onClick={() => handleDeleteClick(item.id, item.value)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors shadow-sm" title="Xóa vĩnh viễn"><Trash2 className="w-4 h-4" /></button>
-                                                                </div>
-                                                            )}
+                                                                )}
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 );

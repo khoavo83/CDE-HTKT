@@ -3,6 +3,8 @@ import { X, Upload, FileText, Loader2, Sparkles, CheckCircle, AlertCircle } from
 import { httpsCallable } from 'firebase/functions';
 import { functions, db } from '../firebase/config';
 import { doc, updateDoc, collection, setDoc } from 'firebase/firestore';
+import { useAuthStore } from '../store/useAuthStore';
+import { logVanBanActivity } from '../utils/vanbanLogUtils';
 
 interface ReportCompletionModalProps {
     isOpen: boolean;
@@ -22,6 +24,7 @@ const fileToBase64 = (file: File): Promise<string> =>
     });
 
 export const ReportCompletionModal: React.FC<ReportCompletionModalProps> = ({ isOpen, onClose, task, parentDriveFolderId }) => {
+    const { user } = useAuthStore();
     const [mainFile, setMainFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadStatus, setUploadStatus] = useState<string>('');
@@ -116,9 +119,19 @@ export const ReportCompletionModal: React.FC<ReportCompletionModalProps> = ({ is
                 id: linkRef.id,
                 vanBanId: docId,
                 nodeId: task.id,
-                projectId: task.parentId || 'ROOT',
                 createdAt: new Date().toISOString()
             });
+
+            // 4. Log activity on the newly created document
+            if (user) {
+                await logVanBanActivity({
+                    vanBanId: docId,
+                    action: 'TASK_COMPLETE',
+                    details: `Tạo báo cáo hoàn thành cho công việc: ${task.name}. Kết quả trích xuất từ AI.`,
+                    userId: user.uid,
+                    userName: user.hoTen || user.displayName || user.email || 'Người dùng'
+                });
+            }
 
             showToast('success', 'Đã báo cáo hoàn thành thành công! 🎉');
             setTimeout(() => onClose(), 1500);

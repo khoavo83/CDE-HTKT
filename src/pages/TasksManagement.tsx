@@ -40,6 +40,7 @@ export const TasksManagement = () => {
     const [deleteModal, setDeleteModal] = useState({ isOpen: false, taskId: '' });
     const [adminEditTask, setAdminEditTask] = useState<any | null>(null);
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+    const [isSelfAssign, setIsSelfAssign] = useState(false);
 
     // Upload file state
     const [uploadingTaskId, setUploadingTaskId] = useState<string | null>(null);
@@ -177,7 +178,7 @@ export const TasksManagement = () => {
     const tabs: { key: TabType; label: string; icon: React.ElementType }[] = [
         { key: 'my_tasks', label: 'Tôi phụ trách', icon: UserCheck },
         { key: 'collaborating', label: 'Tôi phối hợp', icon: Users },
-        { key: 'assigned_by_me', label: 'Tôi đã giao', icon: ClipboardList },
+        { key: 'assigned_by_me', label: 'Tôi giao/Tự giao', icon: ClipboardList },
         { key: 'all_tasks', label: 'Quản lý toàn bộ', icon: Filter },
     ];
 
@@ -213,14 +214,38 @@ export const TasksManagement = () => {
         <div className="h-full bg-gray-50 p-4 md:p-6">
             <div className="w-full mx-auto px-2">
                 {/* Header */}
-                <div className="mb-6">
-                    <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                        <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
-                            <ListChecks className="w-5 h-5 text-indigo-600" />
-                        </div>
-                        Quản lý công việc
-                    </h1>
-                    <p className="text-sm text-gray-500 mt-1 ml-[52px]">Theo dõi, nhận việc, báo cáo tiến độ và hoàn thành công việc được giao</p>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                                <ListChecks className="w-5 h-5 text-indigo-600" />
+                            </div>
+                            Quản lý công việc
+                        </h1>
+                        <p className="text-sm text-gray-500 mt-1 ml-[52px]">Theo dõi, nhận việc, báo cáo tiến độ và hoàn thành công việc được giao</p>
+                    </div>
+                    <div className="flex items-center gap-3 ml-[52px] md:ml-0">
+                        <button
+                            onClick={() => {
+                                setIsSelfAssign(true);
+                                setIsAssignModalOpen(true);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors shadow-sm"
+                        >
+                            <UserCheck className="w-4 h-4" />
+                            Tự giao việc
+                        </button>
+                        <button
+                            onClick={() => {
+                                setIsSelfAssign(false);
+                                setIsAssignModalOpen(true);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
+                        >
+                            <Send className="w-4 h-4" />
+                            Giao việc mới
+                        </button>
+                    </div>
                 </div>
 
                 {/* Stats */}
@@ -295,7 +320,10 @@ export const TasksManagement = () => {
                                 )}
                             </div>
                             <button
-                                onClick={() => setIsAssignModalOpen(true)}
+                                onClick={() => {
+                                    setIsSelfAssign(false);
+                                    setIsAssignModalOpen(true);
+                                }}
                                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
                             >
                                 <Send className="w-4 h-4" />
@@ -323,19 +351,16 @@ export const TasksManagement = () => {
                                         <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Ngày giao</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nội dung chỉ đạo</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Văn bản</th>
-                                        {activeTab === 'all_tasks' ? (
-                                            <>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phụ trách</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Người giao</th>
-                                            </>
-                                        ) : (
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                {activeTab === 'assigned_by_me' ? 'P. Trách' : 'Người giao'}
-                                            </th>
+                                        {activeTab === 'all_tasks' && (
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phụ trách</th>
+                                        )}
+                                        {activeTab === 'assigned_by_me' && (
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P. Trách</th>
                                         )}
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P. Hợp</th>
                                         <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Trạng thái</th>
-                                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Tùy chọn</th>
+                                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Kết quả</th>
+                                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-20"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-100">
@@ -350,7 +375,7 @@ export const TasksManagement = () => {
                                                     {/* Group header */}
                                                     {!filterUser && (
                                                         <tr className="bg-indigo-50/80 border-t-2 border-indigo-200">
-                                                            <td colSpan={10} className="px-4 py-2.5">
+                                                            <td colSpan={9} className="px-4 py-2.5">
                                                                 <div className="flex items-center justify-between">
                                                                     <div className="flex items-center gap-2">
                                                                         <div className="w-7 h-7 rounded-full bg-indigo-200 flex items-center justify-center text-xs font-bold text-indigo-700">
@@ -377,15 +402,17 @@ export const TasksManagement = () => {
                                                             <React.Fragment key={task.id}>
                                                                 <tr className={`hover:bg-gray-50 transition-colors ${task.status === 'COMPLETED' ? 'opacity-60' : ''}`}>
                                                                     <td className="px-4 py-4 text-sm text-center font-medium text-gray-500">{index + 1}</td>
-                                                                    <td className="px-4 py-4 text-sm text-center text-gray-600 font-medium">
-                                                                        {task.createdAt ? formatDateTime(task.createdAt) : ''}
+                                                                    <td className="px-4 py-4 text-sm text-center text-gray-600 font-medium whitespace-nowrap">
+                                                                        {task.createdAt ? new Date(task.createdAt).toLocaleDateString('vi-VN') : ''}
                                                                     </td>
                                                                     <td className="px-4 py-4 text-sm text-gray-900">
                                                                         <div className="flex items-start gap-2">
                                                                             <button onClick={() => setExpandedTaskId(isExpanded ? null : task.id)} className="shrink-0 mt-0.5 text-gray-400 hover:text-indigo-600">
                                                                                 {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                                                                             </button>
-                                                                            <span className="line-clamp-2">{task.content}</span>
+                                                                            <span className="line-clamp-2">
+                                                                                <span className="text-gray-500 font-medium">Người giao: {task.assignerName}</span> — {task.content}
+                                                                            </span>
                                                                         </div>
                                                                     </td>
                                                                     <td className="px-4 py-4 text-sm">
@@ -399,7 +426,6 @@ export const TasksManagement = () => {
                                                                     <td className="px-4 py-4 text-sm">
                                                                         <span className="font-medium text-gray-800">{task.assigneeName || '—'}</span>
                                                                     </td>
-                                                                    <td className="px-4 py-4 text-sm text-gray-600">{task.assignerName || '—'}</td>
                                                                     <td className="px-4 py-4 text-sm">
                                                                         {task.collaborators && task.collaborators.length > 0 ? (
                                                                             <div className="flex flex-wrap gap-1">
@@ -411,6 +437,20 @@ export const TasksManagement = () => {
                                                                     </td>
                                                                     <td className="px-4 py-4 text-center">
                                                                         <StatusBadge status={task.status} />
+                                                                    </td>
+                                                                    <td className="px-4 py-4 text-right">
+                                                                        {task.reportFiles && task.reportFiles.length > 0 ? (
+                                                                            <div className="flex flex-col items-end gap-1">
+                                                                                {task.reportFiles.map((f: any, idx: number) => (
+                                                                                    <a key={idx} href={f.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium bg-blue-50 px-2 py-1 rounded border border-blue-100 max-w-[120px] truncate" title={f.name}>
+                                                                                        <Paperclip className="w-3 h-3 shrink-0" />
+                                                                                        {f.name}
+                                                                                    </a>
+                                                                                ))}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <span className="text-gray-400 text-xs">—</span>
+                                                                        )}
                                                                     </td>
                                                                     <td className="px-4 py-4 text-right text-sm font-medium whitespace-nowrap">
                                                                         <div className="flex items-center justify-end gap-1.5">
@@ -516,11 +556,13 @@ export const TasksManagement = () => {
                                                 <React.Fragment key={task.id}>
                                                     <tr className="hover:bg-gray-50 transition-colors">
                                                         <td className="px-4 py-4 text-sm text-center font-medium text-gray-500">{index + 1}</td>
-                                                        <td className="px-4 py-4 text-sm text-center text-gray-600 font-medium">
-                                                            {task.createdAt ? formatDateTime(task.createdAt) : ''}
+                                                        <td className="px-4 py-4 text-sm text-center text-gray-600 font-medium whitespace-nowrap">
+                                                            {task.createdAt ? new Date(task.createdAt).toLocaleDateString('vi-VN') : ''}
                                                         </td>
                                                         <td className="px-4 py-4 text-sm text-gray-900">
-                                                            <div className="line-clamp-2">{task.content}</div>
+                                                            <div className="line-clamp-2">
+                                                                <span className="text-gray-500 font-medium">Người giao: {task.assignerName}</span> — {task.content}
+                                                            </div>
                                                             {(task.result || (task.reportFiles && task.reportFiles.length > 0)) && (
                                                                 <button
                                                                     onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
@@ -541,13 +583,11 @@ export const TasksManagement = () => {
                                                                 <span className="line-clamp-1">{getVanBanLabel(task.vanBanId)}</span>
                                                             </button>
                                                         </td>
-                                                        <td className="px-4 py-4 text-sm">
-                                                            {activeTab === 'assigned_by_me' ? (
+                                                        {activeTab === 'assigned_by_me' && (
+                                                            <td className="px-4 py-4 text-sm">
                                                                 <span className="text-blue-700 font-medium bg-blue-50 px-2 py-0.5 rounded-full text-xs">{task.assigneeName}</span>
-                                                            ) : (
-                                                                <span className="text-gray-600 text-xs">{task.assignerName}</span>
-                                                            )}
-                                                        </td>
+                                                            </td>
+                                                        )}
                                                         <td className="px-4 py-4 text-sm">
                                                             {task.collaborators && task.collaborators.length > 0 ? (
                                                                 <div className="flex flex-wrap gap-1">
@@ -710,10 +750,8 @@ export const TasksManagement = () => {
             <AssignTaskFromManagerModal
                 isOpen={isAssignModalOpen}
                 onClose={() => setIsAssignModalOpen(false)}
-                onSuccess={() => {
-                    setIsAssignModalOpen(false);
-                    fetchTasks();
-                }}
+                onSuccess={fetchTasks}
+                isSelfAssign={isSelfAssign}
             />
         </div>
     );

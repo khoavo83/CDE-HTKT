@@ -10,6 +10,7 @@ import { useUserStore } from '../store/useUserStore';
 import { useMeetingStore } from '../store/useMeetingStore';
 import { ProjectTreeSelectorModal } from './ProjectTreeSelectorModal';
 import { format } from 'date-fns';
+import { logVanBanActivity } from '../utils/vanbanLogUtils';
 
 // Chuyển File sang Base64 string
 const fileToBase64 = (file: File): Promise<string> =>
@@ -133,6 +134,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
 
             setOcrData({
                 ...data,
+                mucDoKhan: data.mucDoKhan || 'THUONG', // Đảm bảo luôn có giá trị mặc định
                 fileNameStandardized: initialStandardName,
                 attachments: attachmentResults // Lưu mảng đính kèm vào OCR data để review và đẩy lên Firestore
             });
@@ -255,6 +257,15 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                     userEmail: user.email || "Unknown",
                     timestamp: new Date().toISOString()
                 })
+            });
+
+            // Log activity: ADD
+            await logVanBanActivity({
+                vanBanId: docId,
+                userId: currentUser?.uid || "Unknown",
+                userName: currentUser?.displayName || currentUser?.email || "Unknown",
+                action: "ADD",
+                details: `Tải lên văn bản mới: ${ocrData.soKyHieu || ''}`
             });
 
             // Tạo lịch họp nếu được chọn
@@ -435,12 +446,13 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                                     <div className="space-y-1">
                                         <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Mức độ Khẩn <span className="text-red-500">*</span></label>
                                         <select
-                                            value={ocrData.mucDoKhan || 'THUONG'}
+                                            value={ocrData.mucDoKhan}
                                             onChange={(e) => setOcrData({ ...ocrData, mucDoKhan: e.target.value })}
                                             className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium text-sm bg-white"
                                         >
-                                            <option value="THUONG">Thường</option>
-                                            <option value="KHAN">Khẩn / Hỏa tốc</option>
+                                            <option value="THUONG">🌿 Bình thường</option>
+                                            <option value="KHAN">⚡ Khẩn</option>
+                                            <option value="HOA_TOC">🔥 Hỏa tốc</option>
                                         </select>
                                     </div>
                                 </div>
