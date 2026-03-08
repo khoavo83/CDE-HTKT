@@ -6,6 +6,7 @@ import { auth, db } from './firebase/config';
 import { useAuthStore } from './store/useAuthStore';
 import { useAppSettingsStore } from './store/useAppSettingsStore';
 import { Toaster } from 'react-hot-toast';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Pages
 import { MainLayout } from './layout/MainLayout';
@@ -67,28 +68,30 @@ function App() {
 
     return (
         <BrowserRouter>
-            <Toaster position="top-right" />
-            <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/pending-approval" element={<PendingApproval />} />
+            <ErrorBoundary>
+                <Toaster position="top-right" />
+                <Routes>
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/pending-approval" element={<PendingApproval />} />
 
-                <Route element={<MainLayout />}>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/projects" element={<Projects />} />
-                    <Route path="/tasks" element={<TasksManagement />} />
-                    <Route path="/mindmap" element={<Mindmap />} />
-                    <Route path="/documents" element={<Documents />} />
-                    <Route path="/documents/:id" element={<DocumentReview />} />
-                    <Route path="/bim" element={<BimViewer />} />
-                    <Route path="/map" element={<MapViewer />} />
-                    <Route path="/internal-docs" element={<InternalDocRegister />} />
-                    <Route path="/meetings" element={<MeetingCalendar />} />
-                    <Route path="/users" element={<UsersManagement />} />
-                    <Route path="/categories" element={<CategoriesManagement />} />
-                    <Route path="/feedbacks" element={<FeedbackManagement />} />
-                    <Route path="/trash" element={<TrashManagement />} />
-                </Route>
-            </Routes>
+                    <Route element={<MainLayout />}>
+                        <Route path="/" element={<Dashboard />} />
+                        <Route path="/projects" element={<Projects />} />
+                        <Route path="/tasks" element={<TasksManagement />} />
+                        <Route path="/mindmap" element={<Mindmap />} />
+                        <Route path="/documents" element={<Documents />} />
+                        <Route path="/documents/:id" element={<DocumentReview />} />
+                        <Route path="/bim" element={<BimViewer />} />
+                        <Route path="/map" element={<MapViewer />} />
+                        <Route path="/internal-docs" element={<InternalDocRegister />} />
+                        <Route path="/meetings" element={<MeetingCalendar />} />
+                        <Route path="/users" element={<UsersManagement />} />
+                        <Route path="/categories" element={<CategoriesManagement />} />
+                        <Route path="/feedbacks" element={<FeedbackManagement />} />
+                        <Route path="/trash" element={<TrashManagement />} />
+                    </Route>
+                </Routes>
+            </ErrorBoundary>
         </BrowserRouter>
     );
 }

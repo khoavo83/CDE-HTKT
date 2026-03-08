@@ -35,6 +35,7 @@ export const DocumentReview = () => {
     const { user } = useAuthStore();
     const [docData, setDocData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState<string | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [isChecking, setIsChecking] = useState(false);
     const [linkedNodes, setLinkedNodes] = useState<{ id: string, name: string }[]>([]);
@@ -72,26 +73,34 @@ export const DocumentReview = () => {
     useEffect(() => {
         const fetchDoc = async () => {
             if (!id) return;
-            const docRef = doc(db, 'vanban', id);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                setDocData(data);
-                reset({
-                    soKyHieu: data.soKyHieu || '',
-                    ngayBanHanh: data.ngayBanHanh || '',
-                    coQuanBanHanh: data.coQuanBanHanh || '',
-                    loaiVanBan: data.loaiVanBan || '',
-                    trichYeu: data.trichYeu || '',
-                    nguoiKy: data.nguoiKy || '',
-                    soTrang: data.soTrang || '',
-                    trangThaiDuLieu: data.trangThaiDuLieu || 'REVIEWING',
-                    phanLoaiVanBan: data.phanLoaiVanBan || '',
-                    mucDoKhan: data.mucDoKhan || 'THUONG',
-                    fileNameOriginal: data.fileNameOriginal || '',
-                });
+            try {
+                setFetchError(null);
+                const docRef = doc(db, 'vanban', id);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    setDocData(data);
+                    reset({
+                        soKyHieu: data.soKyHieu || '',
+                        ngayBanHanh: data.ngayBanHanh || '',
+                        coQuanBanHanh: data.coQuanBanHanh || '',
+                        loaiVanBan: data.loaiVanBan || '',
+                        trichYeu: data.trichYeu || '',
+                        nguoiKy: data.nguoiKy || '',
+                        soTrang: data.soTrang || '',
+                        trangThaiDuLieu: data.trangThaiDuLieu || 'REVIEWING',
+                        phanLoaiVanBan: data.phanLoaiVanBan || '',
+                        mucDoKhan: data.mucDoKhan || 'THUONG',
+                        fileNameOriginal: data.fileNameOriginal || '',
+                    });
+                }
+            } catch (error: any) {
+                console.error('Lỗi khi tải văn bản:', error);
+                setFetchError(error?.message || 'Không thể tải văn bản. Vui lòng thử lại.');
+                toast.error('Lỗi khi tải văn bản: ' + (error?.message || 'Unknown error'));
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         };
         fetchDoc();
     }, [id, reset]);
@@ -391,6 +400,16 @@ export const DocumentReview = () => {
     };
 
     if (loading) return <div className="p-8">Đang tải...</div>;
+    if (fetchError) return (
+        <div className="p-8 flex flex-col items-center gap-4">
+            <div className="text-red-500 font-medium">⚠️ Lỗi khi tải văn bản</div>
+            <div className="text-gray-600 text-sm">{fetchError}</div>
+            <div className="flex gap-3">
+                <button onClick={() => navigate('/documents')} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">← Quay về danh sách</button>
+                <button onClick={() => window.location.reload()} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition">🔄 Tải lại</button>
+            </div>
+        </div>
+    );
     if (!docData) return <div className="p-8 text-red-500">Không tìm thấy tài liệu</div>;
 
     // Xác định icon định dạng file
