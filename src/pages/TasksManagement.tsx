@@ -417,7 +417,7 @@ export const TasksManagement = () => {
                                                                     </td>
                                                                     <td className="px-4 py-4 text-sm">
                                                                         {task.vanBanId ? (
-                                                                            <button onClick={() => navigate(`/documents/${task.vanBanId}`)} className="inline-flex items-center gap-1.5 text-blue-700 hover:text-blue-900 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 text-xs font-medium transition-colors">
+                                                                            <button onClick={() => navigate("/documents/" + task.vanBanId)} className="inline-flex items-center gap-1.5 text-blue-700 hover:text-blue-900 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 text-xs font-medium transition-colors">
                                                                                 <FileText className="w-3.5 h-3.5" />
                                                                                 {getVanBanLabel(task.vanBanId)}
                                                                             </button>
@@ -490,7 +490,7 @@ export const TasksManagement = () => {
                                                                                     <div className="mb-3">
                                                                                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Văn bản kết quả:</p>
                                                                                         <div
-                                                                                            onClick={() => navigate(`/documents/${task.bcDocId}`)}
+                                                                                            onClick={() => navigate("/documents/" + task.bcDocId)}
                                                                                             className="flex items-start gap-3 p-3 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer group"
                                                                                         >
                                                                                             <div className="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center shrink-0 mt-0.5">
@@ -575,7 +575,7 @@ export const TasksManagement = () => {
                                                         </td>
                                                         <td className="px-4 py-4 text-sm">
                                                             <button
-                                                                onClick={() => task.vanBanId && navigate(`/documents/${task.vanBanId}`)}
+                                                                onClick={() => task.vanBanId && navigate("/documents/" + task.vanBanId)}
                                                                 className="text-blue-600 hover:text-blue-800 hover:underline text-xs font-medium flex items-center gap-1"
                                                                 title="Mở văn bản"
                                                             >
@@ -662,7 +662,7 @@ export const TasksManagement = () => {
                                                                         <div className="mb-3">
                                                                             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Văn bản kết quả:</p>
                                                                             <div
-                                                                                onClick={() => navigate(`/documents/${task.bcDocId}`)}
+                                                                                onClick={() => navigate("/documents/" + task.bcDocId)}
                                                                                 className="flex items-start gap-3 p-3 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer group"
                                                                             >
                                                                                 <div className="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center shrink-0 mt-0.5">

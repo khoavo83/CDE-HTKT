@@ -858,7 +858,7 @@ export const Mindmap = () => {
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            navigate(`/documents/${doc.id}`);
+                                                            navigate("/documents/" + doc.id);
                                                         }}
                                                         className="text-gray-400 hover:text-green-600" title="Xem chi tiết"
                                                     >
