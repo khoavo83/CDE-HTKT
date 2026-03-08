@@ -1725,3 +1725,196 @@ exports.permanentlyDeleteDocument = onCall({ region: "asia-southeast1", timeoutS
         throw new HttpsError("internal", error.message);
     }
 });
+
+// ==========================================
+// QUẢN LÝ NGƯỜI DÙNG (USER MANAGEMENT)
+// ==========================================
+
+/**
+ * 1. Thêm người dùng mới bởi Admin
+ * Tạo tài khoản qua Admin SDK (để không bị thoát phiên hiện tại),
+ * sau đó lưu thông tin vào Firestore `users` collection.
+ */
+exports.adminCreateUser = onCall(async (request) => {
+    // 1. Kiểm tra Authentication
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để sử dụng tính năng này.");
+    }
+
+    // 2. Chặn quyền (chỉ Admin/Manager mới được tạo)
+    const callerRef = db.collection("users").doc(request.auth.uid);
+    const callerSnap = await callerRef.get();
+    if (!callerSnap.exists) {
+        throw new HttpsError("permission-denied", "Không tìm thấy thông tin tài khoản của bạn.");
+    }
+    const callerData = callerSnap.data();
+    if (callerData.role !== 'admin' && callerData.role !== 'manager') {
+        throw new HttpsError("permission-denied", "Chỉ Quản trị viên mới có quyền thêm người dùng.");
+    }
+
+    try {
+        const { email, displayName, hoTen, chucVu, department, ngaySinh, phone, role, note } = request.data;
+        const defaultPassword = "123456";
+
+        if (!email) {
+            throw new HttpsError("invalid-argument", "Thiếu Email.");
+        }
+
+        // 3. Tạo Firebase Auth User (Không làm logout Admin)
+        const userRecord = await admin.auth().createUser({
+            email: email,
+            password: defaultPassword,
+            displayName: displayName || hoTen,
+        });
+
+        const newUid = userRecord.uid;
+
+        // 4. Lưu thông tin User vào Firestore
+        const newUserData = {
+            uid: newUid,
+            email: email,
+            displayName: displayName || hoTen || "",
+            hoTen: hoTen || "",
+            chucVu: chucVu || "",
+            department: department || "",
+            ngaySinh: ngaySinh || "",
+            phone: phone || "",
+            note: note || "",
+            role: role || 'viewer', // Mặc định là viewer nếu không truyền
+            createdAt: new Date().toISOString()
+        };
+
+        await db.collection("users").doc(newUid).set(newUserData);
+
+        return {
+            success: true,
+            uid: newUid,
+            message: "Tạo người dùng và mật khẩu mặc định thành công."
+        };
+
+    } catch (error) {
+        console.error("adminCreateUser Error:", error);
+        throw new HttpsError("internal", error.message);
+    }
+});
+
+/**
+ * 2. Đồng bộ mật khẩu người dùng cũ
+ * Quét toàn bộ Firestore `users`, nếu ai đã có UID thì dùng UID đó ép set pass 123456.
+ * Nếu chưa có UID (như import từ Excel), tạo mới Auth User, cấp pass 123456, sau đó chuyển ID sang UID mới.
+ */
+exports.adminSyncAllUsersPassword = onCall(async (request) => {
+    // 1. Kiểm tra Authentication & Role
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để sử dụng tính năng này.");
+    }
+
+    const callerRef = db.collection("users").doc(request.auth.uid);
+    const callerSnap = await callerRef.get();
+    if (!callerSnap.exists) {
+        throw new HttpsError("permission-denied", "Không tìm thấy thông tin tài khoản của bạn.");
+    }
+    const callerData = callerSnap.data();
+    if (callerData.role !== 'admin' && callerData.role !== 'manager') {
+        throw new HttpsError("permission-denied", "Chỉ Quản trị viên mới có quyền chạy đồng bộ.");
+    }
+
+    try {
+        const usersSnap = await db.collection("users").get();
+        let successCount = 0;
+        let failCount = 0;
+        let errors = [];
+
+        for (const userDoc of usersSnap.docs) {
+            const userData = userDoc.data();
+            const docId = userDoc.id;
+            const email = userData.email;
+
+            // Bỏ qua nếu ko có email (không thể tạo Auth)
+            if (!email) {
+                continue;
+            }
+
+            try {
+                if (userData.uid) {
+                    // Cán bộ cũ ĐÃ CÓ tài khoản Auth -> Cập nhật/Ép password về 123456
+                    await admin.auth().updateUser(userData.uid, {
+                        password: "123456"
+                    });
+                    successCount++;
+                } else {
+                    // Người dùng CHƯA CÓ tài khoản Auth (VD: Cán bộ Import từ Excel)
+                    // -> Tạo mới Auth user
+                    const userRecord = await admin.auth().createUser({
+                        email: email,
+                        password: "123456",
+                        displayName: userData.displayName || userData.hoTen || email.split('@')[0],
+                    });
+
+                    const newUid = userRecord.uid;
+
+                    // Cập nhật record Firestore sang doc mới dùng ID = newUid
+                    const updatedData = {
+                        ...userData,
+                        uid: newUid,
+                        role: userData.role === 'unclaimed' ? 'editor' : userData.role // Nâng quyền nếu đang chờ claim
+                    };
+                    delete updatedData.id; // Nếu có dính field id dư thừa
+
+                    await db.collection("users").doc(newUid).set(updatedData);
+
+                    // Xóa record cũ (import excel tạo random string docId)
+                    await db.collection("users").doc(docId).delete();
+
+                    successCount++;
+                }
+            } catch (authErr) {
+                console.error(`[SYNC] Error with email ${email}:`, authErr.message);
+
+                // Handling case where user already exists in Auth but not mapped correctly in Firestore
+                if (authErr.code === 'auth/email-already-exists') {
+                    try {
+                        const existingUserRecord = await admin.auth().getUserByEmail(email);
+                        // Force update password for existing user
+                        await admin.auth().updateUser(existingUserRecord.uid, {
+                            password: "123456"
+                        });
+
+                        // Map the existing auth user to firestore
+                        if (!userData.uid) {
+                            const newUid = existingUserRecord.uid;
+                            const updatedData = {
+                                ...userData,
+                                uid: newUid,
+                                role: userData.role === 'unclaimed' ? 'editor' : userData.role
+                            };
+                            delete updatedData.id;
+
+                            await db.collection("users").doc(newUid).set(updatedData);
+                            await db.collection("users").doc(docId).delete();
+                        }
+                        successCount++;
+                    } catch (innerErr) {
+                        failCount++;
+                        errors.push({ email, error: innerErr.message });
+                    }
+                } else {
+                    failCount++;
+                    errors.push({ email, error: authErr.message });
+                }
+            }
+        }
+
+        return {
+            success: true,
+            message: `Đồng bộ hoàn tất. Thành công: ${successCount}, Thất bại: ${failCount}`,
+            successCount,
+            failCount,
+            errors
+        };
+
+    } catch (error) {
+        console.error("adminSyncAllUsersPassword Error:", error);
+        throw new HttpsError("internal", error.message);
+    }
+});

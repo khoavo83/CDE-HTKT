@@ -5,10 +5,13 @@ import { db } from '../firebase/config';
 import { useAuthStore } from '../store/useAuthStore';
 import { canManageUser } from '../utils/authUtils';
 import { useCategoryStore } from '../store/useCategoryStore';
-import { Users, ShieldAlert, Loader2, CheckCircle, Edit2, Save, X, Upload, Trash2 } from 'lucide-react';
+import { Users, ShieldAlert, Loader2, CheckCircle, Edit2, Save, X, Upload, Trash2, UserPlus, RefreshCw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
 import { GenericConfirmModal } from '../components/GenericConfirmModal';
+import { AddUserModal } from '../components/AddUserModal';
+import { httpsCallable } from 'firebase/functions';
+import { appFunctions } from '../firebase/config';
 
 export const UsersManagement = () => {
     const { user } = useAuthStore();
@@ -20,6 +23,8 @@ export const UsersManagement = () => {
     const [editFormData, setEditFormData] = useState<any>({});
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [userToDelete, setUserToDelete] = useState<any>(null);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -104,6 +109,24 @@ export const UsersManagement = () => {
         } finally {
             setIsDeleteModalOpen(false);
             setUserToDelete(null);
+        }
+    };
+
+    const handleSyncPasswords = async () => {
+        if (!confirm('Bạn có chắc chắn muốn CHẠY ĐỒNG BỘ MẬT KHẨU?\n\nToàn bộ người dùng chưa liên kết hoặc tài khoản cũ sẽ được ép mật khẩu mặc định là 123456. Chỉ Admin mới thực hiện điều này.')) return;
+
+        setIsSyncing(true);
+        const loadingToast = toast.loading('Đang chạy đồng bộ mật khẩu, vui lòng chờ...');
+        try {
+            const adminSyncAllUsersPassword = httpsCallable(appFunctions, 'adminSyncAllUsersPassword');
+            const result = await adminSyncAllUsersPassword();
+            const data = result.data as any;
+            toast.success(data.message || 'Đồng bộ hoàn tất', { id: loadingToast });
+        } catch (error: any) {
+            console.error('Lỗi đồng bộ:', error);
+            toast.error(error.message || 'Lệnh đồng bộ thất bại', { id: loadingToast });
+        } finally {
+            setIsSyncing(false);
         }
     };
 
@@ -241,6 +264,25 @@ export const UsersManagement = () => {
                             >
                                 {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                                 {isImporting ? 'Đang tải...' : 'Import Danh sách'}
+                            </button>
+
+                            <div className="h-6 w-px bg-gray-200 mx-1"></div>
+
+                            <button
+                                onClick={() => setIsAddModalOpen(true)}
+                                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+                            >
+                                <UserPlus className="w-4 h-4" />
+                                Thêm người dùng
+                            </button>
+
+                            <button
+                                onClick={handleSyncPasswords}
+                                disabled={isSyncing}
+                                className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
+                            >
+                                {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                {isSyncing ? 'Đang xử lý...' : 'Đồng bộ Mật khẩu'}
                             </button>
                         </>
                     )}
@@ -497,6 +539,12 @@ export const UsersManagement = () => {
                 message={`Bạn có chắc chắn muốn xóa người dùng "${userToDelete?.displayName || userToDelete?.hoTen || userToDelete?.email}"?\n\nHành động này không thể hoàn tác.`}
                 type="danger"
                 confirmText="Xóa người dùng"
+            />
+
+            <AddUserModal
+                isOpen={isAddModalOpen}
+                onClose={() => setIsAddModalOpen(false)}
+                categories={categories}
             />
         </div>
     );
