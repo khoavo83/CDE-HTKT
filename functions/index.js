@@ -1918,3 +1918,53 @@ exports.adminSyncAllUsersPassword = onCall(async (request) => {
         throw new HttpsError("internal", error.message);
     }
 });
+
+/**
+ * Format bytes helper Function
+ */
+const formatBytes = (bytes) => {
+    if (bytes === 0 || !bytes) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+/**
+ * Lấy thông tin dung lượng Google Drive
+ */
+exports.getDriveStorageInfo = onCall({ timeoutSeconds: 60, region: 'asia-southeast1' }, async (request) => {
+    try {
+        if (!request.auth) {
+            throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để xem dung lượng.");
+        }
+
+        const oauth2Client = await getOAuth2Client();
+        const drive = google.drive({ version: "v3", auth: oauth2Client });
+
+        const res = await drive.about.get({
+            fields: 'storageQuota'
+        });
+
+        const quota = res.data.storageQuota;
+        if (!quota) {
+            return { success: false, message: "Không lấy được thông tin quota" };
+        }
+
+        const used = quota.usage || 0;
+        const limit = quota.limit || 0;
+
+        return {
+            success: true,
+            data: {
+                used: used.toString(),
+                limit: limit.toString(),
+                usedFormatted: formatBytes(used),
+                limitFormatted: formatBytes(limit)
+            }
+        };
+    } catch (error) {
+        console.error("Lỗi getDriveStorageInfo:", error);
+        throw new HttpsError("internal", error.message);
+    }
+});
