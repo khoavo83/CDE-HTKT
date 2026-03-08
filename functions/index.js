@@ -1939,8 +1939,7 @@ exports.getDriveStorageInfo = onCall({ timeoutSeconds: 60, region: 'asia-southea
             throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để xem dung lượng.");
         }
 
-        const oauth2Client = await getOAuth2Client();
-        const drive = google.drive({ version: "v3", auth: oauth2Client });
+        const drive = await getDriveService();
 
         const res = await drive.about.get({
             fields: 'storageQuota'
