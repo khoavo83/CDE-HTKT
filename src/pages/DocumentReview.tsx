@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db, functions } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
 import { useForm } from 'react-hook-form';
 import { ArrowLeft, Clock, Save, Trash2, FileEdit, Folder, ArrowUpDown, ExternalLink, Sparkles, Loader2, CheckCircle, FileText, Image as ImageIcon, FolderTree } from 'lucide-react';
 import { isoToVN, formatDateTime, formatBytes } from '../utils/formatVN';
@@ -135,6 +136,8 @@ export const DocumentReview = () => {
 
                 const computePaths = (items: any[], prefix = '', rootName = '') => {
                     items.forEach((item, index) => {
+                        // Nếu là con trực tiếp của Dự án gốc (prefix rỗng), đánh số 1., 2., 3.
+                        // Nếu sâu hơn, nối tiếp prefix
                         const currentPrefix = prefix ? `${prefix}${index + 1}.` : `${index + 1}.`;
                         const currentRootName = rootName || item.name;
 
@@ -144,7 +147,10 @@ export const DocumentReview = () => {
                             item.fullPath = `${currentRootName} - ${currentPrefix} ${item.name}`;
                         }
 
-                        computePaths(item.children, currentPrefix, currentRootName);
+                        // Nếu item hiện tại là level 0 (không có prefix truyền vào), 
+                        // con của nó sẽ bắt đầu từ prefix trống để đánh số 1., 2.
+                        const nextPrefix = prefix ? currentPrefix : '';
+                        computePaths(item.children, nextPrefix, currentRootName);
                     });
                 };
                 computePaths(roots);
@@ -175,9 +181,7 @@ export const DocumentReview = () => {
         setIsSavingProjectNodes(true);
         const loadingToast = toast.loading('Đang cập nhật liên kết Dự án...');
         try {
-            const { functions: functionsInstance } = await import('../firebase/config');
-            const { httpsCallable } = await import('firebase/functions');
-            const attachFn = httpsCallable(functionsInstance, 'attachDocumentToNode');
+            const attachFn = httpsCallable(functions, 'attachDocumentToNode');
 
             // Do logic ở Backend attachDocumentToNode có kiểm tra trùng lặp
             // Chúng ta chỉ cần gọi cho các node mới được chọn
@@ -345,9 +349,7 @@ export const DocumentReview = () => {
 
         setIsChecking(true);
         try {
-            const { functions: functionsInstance } = await import('../firebase/config');
-            const { httpsCallable } = await import('firebase/functions');
-            const processOCR = httpsCallable(functionsInstance, 'processDocumentOCR');
+            const processOCR = httpsCallable(functions, 'processDocumentOCR');
 
             const result: any = await processOCR({
                 docId: id,

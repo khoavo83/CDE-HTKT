@@ -41,6 +41,11 @@ const CustomMindmapNode = ({ data, id }: NodeProps) => {
             <div className="text-sm leading-snug break-words whitespace-pre-wrap">
                 {data.label}
             </div>
+            {data.totalDocCount > 0 && (
+                <div className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
+                    {data.totalDocCount}
+                </div>
+            )}
             {hasChildren && (
                 <button
                     onClick={(e) => { e.stopPropagation(); data.onToggleExpand?.(id); }}
@@ -71,6 +76,7 @@ const getNodeStyle = (type: string, isHighlight = false): any => {
         case 'PROJECT': return { ...base, backgroundColor: '#eff6ff', border: '2px solid #3b82f6', color: '#1e3a8a', fontWeight: 600 };
         case 'CATEGORY': return { ...base, backgroundColor: '#fffbeb', border: '1.5px solid #f59e0b', color: '#78350f' };
         case 'PACKAGE': return { ...base, backgroundColor: '#faf5ff', border: '1.5px solid #a855f7', color: '#581c87' };
+        case 'FOLDER': return { ...base, backgroundColor: '#f0fdf4', border: '1.5px solid #10b981', color: '#064e3b' };
         case 'TASK': return { ...base, backgroundColor: '#ecfdf5', border: '1.5px solid #10b981', color: '#064e3b' };
         default: return { ...base, backgroundColor: '#ffffff', border: '1px solid #cbd5e1', color: '#334155' };
     }
@@ -81,6 +87,7 @@ const getNodeEmoji = (type: string) => {
         case 'PROJECT': return '📁';
         case 'CATEGORY': return '📂';
         case 'PACKAGE': return '📦';
+        case 'FOLDER': return '📁';
         case 'TASK': return '📝';
         default: return '📄';
     }
@@ -288,6 +295,7 @@ export const Mindmap = () => {
     const loadedNodesRef = useRef<Map<string, any>>(new Map());
     const loadedDocsRef = useRef<Map<string, any>>(new Map()); // Mới: Lưu Docs
     const loadedDocsNodeIds = useRef<Set<string>>(new Set()); // Track: node nào đã fetch docs rồi
+    const allLinksRef = useRef<Map<string, any[]>>(new Map()); // nodeId -> links[]
 
     // Set các node đã expanded (đã fetch children)
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -300,7 +308,8 @@ export const Mindmap = () => {
     const nodeTypes = useMemo(() => ({ custom: CustomMindmapNode }), []);
 
     // Menu Settings & Preview State
-    const [selectedNode, setSelectedNode] = useState<any>(null);
+    const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+    const [selectedNodeDescendants, setSelectedNodeDescendants] = useState<Set<string>>(new Set());
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [previewDoc, setPreviewDoc] = useState<any | null>(null);
 
@@ -420,25 +429,12 @@ export const Mindmap = () => {
             const isExp = expandedIds.has(dbNode.id);
             const isLoadingKids = loadingChildrenIds.has(dbNode.id);
 
-            const isDoc = dbNode.type === 'DOCUMENT';
+            // DOCUMENT nodes are no longer added to the graph directly
+            // They are now only visible in the sidebar
+            if (dbNode.type === 'DOCUMENT') return;
 
             let label = `${emoji} ${prefix} ${dbNode.name || 'Chưa đặt tên'}`;
             let style = getNodeStyle(dbNode.type, isHighlight);
-
-            if (isDoc) {
-                label = `📄 ${getDocFormattedTitle(dbNode)}`;
-                style = {
-                    backgroundColor: 'transparent',
-                    border: 'none',
-                    color: '#334155',
-                    textDecoration: 'none',
-                    width: nodeWidth,
-                    padding: '4px 8px',
-                    fontSize: 13,
-                    boxShadow: 'none',
-                    fontWeight: 500
-                };
-            }
 
             rfNodes.push({
                 id: dbNode.id,
@@ -450,9 +446,10 @@ export const Mindmap = () => {
                     hasChildren: hasKids,
                     isExpanded: isExp,
                     isLoadingChildren: isLoadingKids,
-                    onToggleExpand: isDoc ? undefined : handleToggleExpand, // Document không thể Mở rộng nhánh con
+                    onToggleExpand: handleToggleExpand,
                     nodeType: dbNode.type,
-                    _rawDoc: isDoc ? dbNode : null, // Lưu trực tiếp payload Văn bản
+                    totalDocCount: dbNode.totalDocCount || 0,
+                    _rawDoc: null,
                 }
             });
 
@@ -473,16 +470,21 @@ export const Mindmap = () => {
                 .filter(n => (n.parentId || null) === parentId)
                 .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-            const docs = Array.from(loadedDocsRef.current.values())
-                .filter(d => (d.parentId || null) === parentId)
-                .sort((a, b) => {
-                    // Sắp xếp theo ngày ban hành: cũ nhất → mới nhất (trên → dưới)
-                    const dateA = a.ngayBanHanh || '';
-                    const dateB = b.ngayBanHanh || '';
-                    return dateA.localeCompare(dateB);
-                });
-
             children.forEach(child => {
+                // Calculate totalDocCount recursively if not already calculated for this build
+                const calculateTotalDocs = (node: any): number => {
+                    const directLinks = allLinksRef.current.get(node.id) || [];
+                    const directCount = directLinks.length;
+
+                    const subNodes = Array.from(loadedNodesRef.current.values()).filter(n => n.parentId === node.id);
+                    const childrenCount = subNodes.reduce((sum, sn) => sum + calculateTotalDocs(sn), 0);
+
+                    node.totalDocCount = directCount + childrenCount;
+                    return node.totalDocCount;
+                };
+
+                calculateTotalDocs(child);
+
                 if (child.type !== 'TASK') {
                     addNodeToGraph(child);
                 }
@@ -490,14 +492,9 @@ export const Mindmap = () => {
                     traverse(child.id);
                 }
             });
-
-            // Render docs as leaf nodes - sorted by date oldest first
-            docs.forEach(doc => {
-                addNodeToGraph(doc);
-            });
         };
 
-        traverse(null); // Start from roots (parentId === null)
+        traverse(null);
 
         // Sử dụng Đệ quy Layout để bóc tách toạ độ và hướng cho từng nhánh
         const direction = nodeLayouts['__global'] || 'LR';
@@ -593,97 +590,59 @@ export const Mindmap = () => {
         const init = async () => {
             setLoading(true);
             try {
-                // 1. Fetch tất cả project_nodes
+                // 1. Fetch tất cả project_nodes (folders, projects, etc.)
                 const allSnap = await getDocs(query(collection(db, 'project_nodes')));
                 const allNodes = allSnap.docs.map(d => ({ id: d.id, ...d.data() as any }));
                 const nonTaskNodes = allNodes.filter(n => n.type !== 'TASK');
-                const parentIdSet = new Set(nonTaskNodes.map(n => n.id));
 
-                // Roots = nodes không có parentId HOẶC parentId không tồn tại
-                const roots = nonTaskNodes.filter(n => !n.parentId || !parentIdSet.has(n.parentId));
-                roots.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-                roots.forEach(r => {
-                    r.parentId = null; // Normalize
-                    loadedNodesRef.current.set(r.id, r);
-                    if (r.mindmapLayout) setNodeLayouts(prev => ({ ...prev, [r.id]: r.mindmapLayout }));
+                // Track everything in Ref
+                nonTaskNodes.forEach(n => {
+                    loadedNodesRef.current.set(n.id, n);
+                    if (n.mindmapLayout) setNodeLayouts(prev => ({ ...prev, [n.id]: n.mindmapLayout }));
                 });
 
-                // 2. Fetch children cấp 1 (Hạng mục lớn) cho mỗi Dự án
-                const rootIds = roots.map(r => r.id);
-                await countChildren(rootIds);
+                // Tìm parentIdSet của các thư mục (để biết cái nào là cha của folder khác)
+                const folderParentIds = new Set(nonTaskNodes.filter(n => n.parentId).map(n => n.parentId));
 
-                // Auto-expand roots và fetch cấp 1
+                // Roots
+                const roots = nonTaskNodes.filter(n => !n.parentId || !loadedNodesRef.current.has(n.parentId));
+                roots.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+                // Expand everything that is a parent of a folder
                 const initialExpanded = new Set<string>();
-                for (const root of roots) {
-                    initialExpanded.add(root.id);
-                    const children = allNodes.filter(n => n.parentId === root.id);
-                    children.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-                    children.forEach(c => {
-                        loadedNodesRef.current.set(c.id, c);
-                        if (c.mindmapLayout) setNodeLayouts(prev => ({ ...prev, [c.id]: c.mindmapLayout }));
-                    });
-                }
-
-                // Count grandchildren (cấp 2)
-                const level1Ids = Array.from(loadedNodesRef.current.values())
-                    .filter(n => n.parentId && rootIds.includes(n.parentId))
-                    .map(n => n.id);
-                await countChildren(level1Ids);
-
-                // ====== FETCH DOCS cho tất cả nodes đã được auto-load ======
-                // Batch fetch vanban_node_links cho roots + level1 nodes + các TASK con của chúng
-                const autoLoadedCategoryIds = [...rootIds, ...level1Ids];
-                const autoLoadedAllIds = [...autoLoadedCategoryIds];
-
-                // Bao gồm cả các TASK con để lấy files
-                allNodes.forEach(n => {
-                    if (n.type === 'TASK' && autoLoadedCategoryIds.includes(n.parentId)) {
-                        autoLoadedAllIds.push(n.id);
+                nonTaskNodes.forEach(n => {
+                    if (folderParentIds.has(n.id)) {
+                        initialExpanded.add(n.id);
                     }
                 });
+                roots.forEach(r => {
+                    r.parentId = null; // Normalize
+                    initialExpanded.add(r.id);
+                });
 
-                const batchSize = 30;
-                for (let i = 0; i < autoLoadedAllIds.length; i += batchSize) {
-                    const batchIds = autoLoadedAllIds.slice(i, i + batchSize);
-                    const snapLinks = await getDocs(
-                        query(collection(db, 'vanban_node_links'), where('nodeId', 'in', batchIds))
-                    );
-                    const linkData = snapLinks.docs.map(d => ({ id: d.id, ...d.data() as any }));
-
-                    // Mark các CAT nodes đã fetch docs (chỉ mark Category, không cần mark Task riêng)
-                    batchIds.forEach(id => {
-                        if (autoLoadedCategoryIds.includes(id)) {
-                            loadedDocsNodeIds.current.add(id);
-                        }
-                    });
-
-                    // Fetch từng văn bản song song
-                    const { getDoc: getDocFn, doc: docRef } = await import('firebase/firestore');
-                    const docPromises = linkData.map(async (link) => {
-                        try {
-                            const vbDoc = await getDocFn(docRef(db, 'vanban', link.vanBanId));
-                            if (vbDoc.exists()) {
-                                // Nếu link là của TASK, thì parentId thực tế trên mindmap là parent của TASK đó
-                                const nodeInfo = allNodes.find(n => n.id === link.nodeId);
-                                const vParentId = (nodeInfo && nodeInfo.type === 'TASK') ? nodeInfo.parentId : link.nodeId;
-
-                                return {
-                                    id: vbDoc.id,
-                                    ...vbDoc.data(),
-                                    _linkId: link.id,
-                                    parentId: vParentId,
-                                    _realNodeId: link.nodeId,
-                                    type: 'DOCUMENT'
-                                };
-                            }
-                        } catch (e) { /* skip */ }
-                        return null;
-                    });
-                    const docResults = await Promise.all(docPromises);
-                    docResults.filter(Boolean).forEach((d: any) => loadedDocsRef.current.set(d.id, d));
-                }
+                // 2. Đếm con (thư mục) từ dữ liệu local để hiển thị nút +/-
+                const localCounts: Record<string, number> = {};
+                nonTaskNodes.forEach(n => {
+                    if (n.parentId) {
+                        localCounts[n.parentId] = (localCounts[n.parentId] || 0) + 1;
+                    }
+                });
+                Object.entries(localCounts).forEach(([pid, count]) => {
+                    childCountRef.current.set(pid, count as number);
+                });
 
                 setExpandedIds(initialExpanded);
+
+                // 3. Tải tất cả links để tính toán doc count (chỉ tải links, không tải file)
+                const linksSnap = await getDocs(collection(db, 'vanban_node_links'));
+                const linksMap = new Map<string, any[]>();
+                linksSnap.docs.forEach(d => {
+                    const data = d.data();
+                    const nodeId = data.nodeId;
+                    if (!linksMap.has(nodeId)) linksMap.set(nodeId, []);
+                    linksMap.get(nodeId)!.push({ id: d.id, ...data });
+                });
+                allLinksRef.current = linksMap;
 
             } catch (error) {
                 console.error('Mindmap init error:', error);
@@ -718,13 +677,55 @@ export const Mindmap = () => {
     const onNodeClick = useCallback(async (_: React.MouseEvent, node: Node) => {
         if (node.id === 'system-root') return;
 
-        if (node.data.nodeType === 'DOCUMENT') {
-            setPreviewDoc(node.data._rawDoc);
-        } else {
-            setSelectedNode(node);
-            setIsSidebarOpen(true);
+        setSelectedNode(node);
+        setIsSidebarOpen(true);
+
+        // Fetch Documents của toàn bộ nhánh (chọn node nào hiện hết file của nhánh đó)
+        if (!loadedDocsNodeIds.current.has(node.id)) {
+            try {
+                // Lấy tất cả node ID thuộc nhánh này (bao gồm node hiện tại và tất cả con cháu)
+                const getAllDescendantIds = (pid: string): string[] => {
+                    const children = Array.from(loadedNodesRef.current.values()).filter(n => n.parentId === pid);
+                    let ids = [pid];
+                    children.forEach(c => {
+                        ids = [...ids, ...getAllDescendantIds(c.id)];
+                    });
+                    return ids;
+                };
+
+                const queryIds = getAllDescendantIds(node.id);
+                setSelectedNodeDescendants(new Set(queryIds));
+
+                for (let i = 0; i < queryIds.length; i += 30) {
+                    const batch = queryIds.slice(i, i + 30);
+                    const snapLinks = await getDocs(query(collection(db, 'vanban_node_links'), where('nodeId', 'in', batch)));
+                    const linkData = snapLinks.docs.map(d => ({ id: d.id, ...d.data() as any }));
+
+                    for (const link of linkData) {
+                        try {
+                            const { getDoc: getDocFn, doc: docRef } = await import('firebase/firestore');
+                            const vbDoc = await getDocFn(docRef(db, 'vanban', link.vanBanId));
+                            if (vbDoc.exists()) {
+                                loadedDocsRef.current.set(vbDoc.id, {
+                                    id: vbDoc.id,
+                                    ...vbDoc.data(),
+                                    _linkId: link.id,
+                                    parentId: node.id, // Gán parentId là node được click để Sidebar dễ filter
+                                    _realNodeId: link.nodeId,
+                                    type: 'DOCUMENT'
+                                });
+                            }
+                        } catch (e) { /* skip */ }
+                    }
+                }
+                setSelectedNodeDescendants(new Set(getAllDescendantIds(node.id)));
+                // Trigger re-render để sidebar cập nhật
+                setSelectedNode({ ...node });
+            } catch (e) {
+                console.error('Fetch docs error on click:', e);
+            }
         }
-    }, []);
+    }, [setSelectedNode]);
 
     const onConnect = useCallback((params: Edge | Connection) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
 
@@ -793,15 +794,13 @@ export const Mindmap = () => {
                                     <button
                                         key={type.id}
                                         onClick={() => handleUpdateLayoutType(type.id)}
-                                        className={`p-2 rounded-lg border text-left transition-all ${(nodeLayouts[selectedNode?.id] || 'LR') === type.id
+                                        className={`p-2 rounded-lg border text-left transition-all ${(nodeLayouts[selectedNode?.id || ''] || 'LR') === type.id
                                             ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
                                             : 'bg-white border-gray-200 text-gray-700 hover:border-blue-400'
                                             }`}
                                     >
-                                        <p className="font-bold text-xs">{type.label}</p>
-                                        <p className={`text-[10px] ${(nodeLayouts[selectedNode?.id] || 'LR') === type.id ? 'text-blue-100' : 'text-gray-400'}`}>
-                                            {type.desc}
-                                        </p>
+                                        <div className="text-xs font-bold uppercase">{type.label}</div>
+                                        <div className={`text-[10px] ${(nodeLayouts[selectedNode?.id || ''] || 'LR') === type.id ? 'text-blue-100' : 'text-gray-400'}`}>{type.desc}</div>
                                     </button>
                                 ))}
                             </div>
@@ -810,7 +809,72 @@ export const Mindmap = () => {
                             </div>
                         </div>
 
-                        {/* Bỏ mục Văn bản do đã đưa lên nhánh cây chung */}
+                        {/* Danh sách Văn bản đính kèm */}
+                        <div className="mb-8">
+                            <h4 className="font-semibold text-gray-800 flex items-center gap-2 mb-3 border-b pb-2">
+                                <FileText className="w-4 h-4" /> Danh sách Văn bản ({
+                                    Array.from(loadedDocsRef.current.values())
+                                        .filter(d => selectedNodeDescendants.has(d._realNodeId))
+                                        .length
+                                })
+                            </h4>
+                            <div className="space-y-3">
+                                {Array.from(loadedDocsRef.current.values())
+                                    .filter(d => selectedNodeDescendants.has(d._realNodeId))
+                                    .sort((a, b) => (a.ngayBanHanh || '').localeCompare(b.ngayBanHanh || ''))
+                                    .map(doc => {
+                                        const { Icon, bg, color } = getDocIconConfig(doc);
+                                        return (
+                                            <div
+                                                key={`${doc.id}-${doc._realNodeId}`}
+                                                className="p-3 bg-white border border-gray-100 rounded-lg hover:border-blue-300 hover:shadow-sm transition-all group flex gap-3 items-start relative"
+                                            >
+                                                <div
+                                                    onClick={() => setPreviewDoc(doc)}
+                                                    className={`p-2 rounded-lg ${bg} ${color} shrink-0 cursor-pointer`}
+                                                >
+                                                    <Icon className="w-4 h-4" />
+                                                </div>
+                                                <div
+                                                    onClick={() => setPreviewDoc(doc)}
+                                                    className="flex-1 min-w-0 cursor-pointer"
+                                                >
+                                                    <div className="text-sm font-medium text-gray-800 leading-snug line-clamp-2 group-hover:text-blue-600 transition-colors">
+                                                        {getDocFormattedTitle(doc)}
+                                                    </div>
+                                                    {doc.ngayBanHanh && (
+                                                        <div className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+                                                            <Clock className="w-3 h-3" /> {doc.ngayBanHanh.split('-').reverse().join('/')}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-col gap-2">
+                                                    <button
+                                                        onClick={() => setPreviewDoc(doc)}
+                                                        className="text-gray-400 hover:text-blue-600" title="Xem nhanh"
+                                                    >
+                                                        <ExternalLink className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            navigate(`/documents/${doc.id}`);
+                                                        }}
+                                                        className="text-gray-400 hover:text-green-600" title="Xem chi tiết"
+                                                    >
+                                                        <Search className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                {Array.from(loadedDocsRef.current.values()).filter(d => selectedNodeDescendants.has(d._realNodeId)).length === 0 && (
+                                    <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                                        <p className="text-sm text-gray-400">Chưa có văn bản đính kèm</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

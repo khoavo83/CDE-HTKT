@@ -516,7 +516,7 @@ export const Documents = () => {
                                         <td className="p-4 border-r border-gray-100">
                                             {vb ? (
                                                 <div className="flex flex-col gap-1">
-                                                    <Link to={`/ documents / ${vb.id} `} className="text-blue-600 font-bold hover:underline line-clamp-1">
+                                                    <Link to={`/documents/${vb.id}`} className="text-blue-600 font-bold hover:underline line-clamp-1">
                                                         {vb.soKyHieu} {vb.ngayBanHanh && `ngày ${isoToVN(vb.ngayBanHanh)} `}
                                                     </Link>
                                                     <span className="text-xs text-gray-500 line-clamp-1">{vb.trichYeu}</span>
@@ -718,7 +718,7 @@ export const Documents = () => {
                                     <div className="flex items-center justify-center gap-1">
 
                                         <Link
-                                            to={`/ documents / ${doc.id} `}
+                                            to={`/documents/${doc.id}`}
                                             className="text-gray-400 hover:text-blue-600 bg-white hover:bg-blue-50 p-2 rounded-lg transition-colors border border-gray-100 shadow-sm"
                                             title="Xem chi tiết"
                                         >

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { collection, query, onSnapshot, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db, functions } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
 import { Link } from 'react-router-dom';
 import { FolderTree, Folder, FileCheck, Layers, Plus, Edit2, Trash2, ChevronRight, ChevronDown, CheckCircle, Clock, ArrowUp, ArrowDown, FileText, FileImage, FileSpreadsheet, X, Link as LinkIcon, Unlink, ExternalLink, HardDrive, Search, Calendar, Loader2, ArrowUpDown, AlertTriangle, Download } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -17,7 +18,7 @@ import { GenericConfirmModal } from '../components/GenericConfirmModal';
 interface ProjectNode {
     id: string;
     name: string;
-    type: 'PROJECT' | 'CATEGORY' | 'PACKAGE'; // Removed 'TASK'
+    type: 'PROJECT' | 'CATEGORY' | 'PACKAGE' | 'FOLDER'; // Added 'FOLDER'
     parentId: string | null;
     description: string;
     status: string;
@@ -141,8 +142,20 @@ export const Projects = () => {
     const nodeLinksWithDocs = useMemo(() => {
         if (!selectedNodeId) return [];
 
-        // Lấy các link của selectedNodeId
-        const relevantLinks = allLinks.filter(l => l.nodeId === selectedNodeId);
+        // Lấy danh sách tất cả node con cháu (đệ quy)
+        const getAllDescendantIds = (parentId: string): string[] => {
+            const children = allNodes.filter(n => n.parentId === parentId);
+            let ids = children.map(c => c.id);
+            children.forEach(c => {
+                ids = [...ids, ...getAllDescendantIds(c.id)];
+            });
+            return ids;
+        };
+
+        const targetNodeIds = [selectedNodeId, ...getAllDescendantIds(selectedNodeId)];
+
+        // Lấy các link của các node trong targetNodeIds
+        const relevantLinks = allLinks.filter(l => targetNodeIds.includes(l.nodeId));
 
         const unsortedDocs = relevantLinks.map(link => {
             const docData = allDocs.find(d => d.id === link.vanBanId);
@@ -179,8 +192,6 @@ export const Projects = () => {
         setIsAttachingId(docId);
         setIsAttachConfirmModalOpen(false);
         try {
-            const { httpsCallable } = await import('firebase/functions');
-            const { functions } = await import('../firebase/config');
             const attachFn = httpsCallable(functions, 'attachDocumentToNode');
 
             const result = await attachFn({
@@ -215,8 +226,6 @@ export const Projects = () => {
         setIsRemovingId(linkToRemove);
         setRemoveModalOpen(false); // Đóng modal ngay
         try {
-            const { httpsCallable } = await import('firebase/functions');
-            const { functions } = await import('../firebase/config');
             const removeFn = httpsCallable(functions, 'removeDocumentLink');
 
             // Xóa qua Cloud Function để xóa trên Drive luôn
@@ -315,7 +324,7 @@ export const Projects = () => {
 
         buildTreeData(roots);
         return roots;
-    }, [nonTaskNodes, allLinks]);
+    }, [nonTaskNodes, allLinks, allDocs]);
 
     const toggleExpand = (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
@@ -332,6 +341,7 @@ export const Projects = () => {
             case 'PROJECT': return <FolderTree className="w-4 h-4 text-blue-600" />;
             case 'CATEGORY': return <Folder className="w-4 h-4 text-amber-500" />;
             case 'PACKAGE': return <Layers className="w-4 h-4 text-purple-500" />;
+            case 'FOLDER': return <Folder className="w-4 h-4 text-emerald-500" />;
             default: return <Folder className="w-4 h-4 text-gray-500" />;
         }
     };
@@ -341,6 +351,7 @@ export const Projects = () => {
             case 'PROJECT': return 'Dự án';
             case 'CATEGORY': return 'Hạng mục';
             case 'PACKAGE': return 'Gói thầu';
+            case 'FOLDER': return 'Thư mục con';
             default: return 'Khác';
         }
     };
@@ -388,6 +399,7 @@ export const Projects = () => {
             const parent = allNodes.find(n => n.id === parentId);
             if (parent?.type === 'PROJECT') defaultType = 'CATEGORY';
             else if (parent?.type === 'CATEGORY') defaultType = 'PACKAGE';
+            else defaultType = 'FOLDER';
 
             // Auto expand parent
             setExpandedKeys(prev => new Set(prev).add(parentId));
@@ -395,6 +407,7 @@ export const Projects = () => {
 
         reset({
             name: '',
+            parentId: parentId,
             type: defaultType as any,
             description: '',
             status: 'ACTIVE',
@@ -410,6 +423,7 @@ export const Projects = () => {
         setEditingNodeId(node.id);
         reset({
             name: node.name,
+            parentId: node.parentId || null,
             type: node.type as any,
             description: node.description || '',
             status: node.status || 'ACTIVE',
@@ -483,6 +497,11 @@ export const Projects = () => {
             const isExpanded = expandedKeys.has(item.id);
             const isSelected = selectedNodeId === item.id;
             const hasChildren = item.children.length > 0;
+            // Nếu là con trực tiếp của Dự án gốc (level 1), đánh số 1., 2., 3.
+            // Nếu là các cấp sâu hơn, nối tiếp prefix (1.1., 1.1.1.)
+            // Lưu ý: Dự án gốc ở level 0 không hiển thị prefix số nếu nó là gốc duy nhất, 
+            // nhưng ở đây ta đánh số cho tất cả các mục hiển thị.
+            // Theo yêu cầu: Dự án gốc -> Hạng mục (1.) -> Mục cha (1.1.)
             const currentPrefix = prefix ? `${prefix}${index + 1}.` : `${index + 1}.`;
             return (
                 <div key={item.id}>
@@ -541,7 +560,8 @@ export const Projects = () => {
 
                     {isExpanded && hasChildren && (
                         <div className="mt-1">
-                            {renderTree(item.children, level + 1, level === 0 ? "" : currentPrefix)}
+                            {/* Nếu đang ở level 0 (Dự án gốc), không truyền prefix xuống con để con bắt đầu từ 1., 2. */}
+                            {renderTree(item.children, level + 1, level === 0 ? '' : currentPrefix)}
                         </div>
                     )}
                 </div>
@@ -833,7 +853,8 @@ export const Projects = () => {
                                         >
                                             <option value="PROJECT">📁 Dự án</option>
                                             <option value="CATEGORY">📂 Hạng mục</option>
-                                            <option value="PACKAGE">📦 Gói thầu</option>
+                                            <option value="PACKAGE">📦 Gói thầu / Nhóm</option>
+                                            <option value="FOLDER">📂 Thư mục con</option>
                                         </select>
                                     </div>
 

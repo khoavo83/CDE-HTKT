@@ -235,6 +235,8 @@ export const ProjectTreeSelectorModal: React.FC<ProjectTreeSelectorModalProps> =
             const isExpanded = expandedKeys.has(item.id);
             const isSelected = selectedNodeIds.has(item.id);
             const hasChildren = item.children.length > 0;
+            // Nếu là con trực tiếp của Dự án gốc (level 1), đánh số 1., 2., 3.
+            // Nếu là các cấp sâu hơn, nối tiếp prefix (1.1., 1.1.1.)
             const currentPrefix = prefix ? `${prefix}${index + 1}.` : `${index + 1}.`;
             return (
                 <div key={item.id}>
@@ -290,8 +292,9 @@ export const ProjectTreeSelectorModal: React.FC<ProjectTreeSelectorModalProps> =
                     </div>
 
                     {isExpanded && hasChildren && (
-                        <div className="">
-                            {renderTree(item.children, level + 1, level === 0 ? "" : currentPrefix)}
+                        <div className="mt-1">
+                            {/* Nếu đang ở level 0 (Dự án gốc), không truyền prefix xuống con để con bắt đầu từ 1., 2. */}
+                            {renderTree(item.children, level + 1, level === 0 ? '' : currentPrefix)}
                         </div>
                     )}
                 </div>
