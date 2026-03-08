@@ -957,7 +957,7 @@ export const Projects = () => {
                                             <div key={d.id} className="bg-white rounded-xl p-4 border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all flex justify-between items-center gap-4 group">
                                                 <div className="flex-1 min-w-0 pr-4">
                                                     <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                                                        <span className={`px - 2 py - 0.5 text - [10px] uppercase font - bold tracking - wider rounded - md ${d.phanLoaiVanBan === 'INCOMING' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-blue-50 text-blue-700 border border-blue-200'} `}>
+                                                        <span className={`px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-md ${d.phanLoaiVanBan === 'INCOMING' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-blue-50 text-blue-700 border border-blue-200'} `}>
                                                             {d.phanLoaiVanBan === 'INCOMING' ? 'Đến' : 'Đi'}
                                                         </span>
                                                         {d.loaiVanBan && (

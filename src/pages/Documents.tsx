@@ -406,7 +406,7 @@ export const Documents = () => {
                 <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg w-fit border border-gray-200 shadow-sm overflow-x-auto scrollbar-hide">
                     <button
                         onClick={() => setActiveTab('ALL')}
-                        className={`px - 4 py - 2 rounded - md text - sm font - medium transition - colors shrink - 0 ${activeTab === 'ALL' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors shrink-0 ${activeTab === 'ALL' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
                     >
                         Tổng hợp
                         <span className="ml-2 inline-flex items-center justify-center bg-gray-200 text-gray-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
@@ -415,7 +415,7 @@ export const Documents = () => {
                     </button>
                     <button
                         onClick={() => setActiveTab('INCOMING')}
-                        className={`px - 4 py - 2 rounded - md text - sm font - medium transition - colors shrink - 0 ${activeTab === 'INCOMING' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors shrink-0 ${activeTab === 'INCOMING' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
                     >
                         Văn bản đến
                         <span className="ml-2 inline-flex items-center justify-center bg-indigo-100 text-indigo-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
@@ -424,7 +424,7 @@ export const Documents = () => {
                     </button>
                     <button
                         onClick={() => setActiveTab('OUTGOING')}
-                        className={`px - 4 py - 2 rounded - md text - sm font - medium transition - colors shrink - 0 ${activeTab === 'OUTGOING' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors shrink-0 ${activeTab === 'OUTGOING' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
                     >
                         Văn bản đi
                         <span className="ml-2 inline-flex items-center justify-center bg-orange-100 text-orange-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
@@ -433,7 +433,7 @@ export const Documents = () => {
                     </button>
                     <button
                         onClick={() => setActiveTab('UNSORTED')}
-                        className={`px - 4 py - 2 rounded - md text - sm font - medium transition - colors shrink - 0 ${activeTab === 'UNSORTED' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors shrink-0 ${activeTab === 'UNSORTED' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
                     >
                         Chưa sắp xếp
                         <span className="ml-2 inline-flex items-center justify-center bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
@@ -442,7 +442,7 @@ export const Documents = () => {
                     </button>
                     <button
                         onClick={() => setActiveTab('SORTED')}
-                        className={`px - 4 py - 2 rounded - md text - sm font - medium transition - colors shrink - 0 ${activeTab === 'SORTED' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors shrink-0 ${activeTab === 'SORTED' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
                     >
                         Đã sắp xếp
                         <span className="ml-2 inline-flex items-center justify-center bg-teal-100 text-teal-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
@@ -451,7 +451,7 @@ export const Documents = () => {
                     </button>
                     <button
                         onClick={() => setActiveTab('PROCESSING')}
-                        className={`px - 4 py - 2 rounded - md text - sm font - medium transition - colors shrink - 0 ${activeTab === 'PROCESSING' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors shrink-0 ${activeTab === 'PROCESSING' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
                     >
                         Xử lý Văn bản
                         <span className="ml-2 inline-flex items-center justify-center bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
@@ -577,7 +577,7 @@ export const Documents = () => {
                                             </div>
                                         </td>
                                         <td className="p-4 border-r border-gray-100 text-center">
-                                            <span className={`px - 2.5 py - 1 rounded - full text - [10px] font - bold uppercase tracking - wider ${task.status === 'COMPLETED' ? 'bg-green-100 text-green-700 border border-green-200' :
+                                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${task.status === 'COMPLETED' ? 'bg-green-100 text-green-700 border border-green-200' :
                                                 task.status === 'PROCESSING' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
                                                     'bg-amber-100 text-amber-700 border border-amber-200'
                                                 } `}>
