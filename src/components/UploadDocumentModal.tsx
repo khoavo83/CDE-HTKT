@@ -315,7 +315,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
             }
 
             onClose();
-            navigate(`/documents/${docId}`);
+            navigate("/documents/" + docId);
         } catch (error: any) {
             console.error('Lỗi lưu cuối cùng:', error);
             toast.error('Không thể lưu thông tin. Vui lòng thử lại.');

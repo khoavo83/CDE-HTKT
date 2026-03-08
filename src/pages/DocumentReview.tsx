@@ -626,7 +626,7 @@ export const DocumentReview = () => {
                                                             <div className="flex items-center gap-2">
                                                                 <span
                                                                     className="cursor-pointer hover:underline text-blue-700 hover:text-blue-900 transition-colors flex items-center gap-2"
-                                                                    onClick={() => navigate(`/mindmap?nodeId=${node.id}&docId=${id}`)}
+                                                                    onClick={() => navigate("/mindmap?nodeId=" + node.id + "&docId=" + id)}
                                                                     title="Tới giao diện Quản lý Phân bổ lưu trữ"
                                                                 >
                                                                     <Folder className="w-4 h-4 text-blue-500 shrink-0" />
