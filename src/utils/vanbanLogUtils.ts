@@ -13,7 +13,9 @@ export type VanBanAction =
     | 'TASK_ACCEPT'
     | 'TASK_UPDATE'
     | 'TASK_COMPLETE'
-    | 'TASK_DELETE';
+    | 'TASK_DELETE'
+    | 'REPORT_COMPLETION'
+    | 'ATTACH_PROJECT_NODE';
 
 interface LogData {
     vanBanId: string;

@@ -101,8 +101,8 @@ export const ReportCompletionModal: React.FC<ReportCompletionModalProps> = ({
 
             // Ghi log
             await logVanBanActivity({
-                docId: taskId,
-                action: 'report_completion',
+                vanBanId: taskId,
+                action: 'REPORT_COMPLETION',
                 userId: user.uid,
                 userName: user.displayName || user.email || 'Unknown',
                 details: `Đã hoàn thành nhiệm vụ: ${taskTitle}. Báo cáo số: ${reportData.soKyHieu}`

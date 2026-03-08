@@ -698,7 +698,7 @@ exports.attachDocumentToNode = onCall({ timeoutSeconds: 60 }, async (request) =>
             try {
                 const res = await drive.files.create({
                     supportsAllDrives: true,
-                    resource: {
+                    requestBody: {
                         name: (vbData.fileNameStandardized || vbData.fileNameOriginal || "Link") + " (Shortcut)",
                         mimeType: 'application/vnd.google-apps.shortcut',
                         shortcutDetails: { targetId: vbData.driveFileId_Original },

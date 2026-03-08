@@ -1056,7 +1056,7 @@ export const Projects = () => {
                                         </a>
                                     ) : previewDoc?.driveFileId_Original ? (
                                         <a
-                                            href={`https://drive.google.com/file/d/${previewDoc.driveFileId_Original}/view`} target="_blank" rel="noopener noreferrer"
+                                            href={"https://drive.google.com/file/d/" + previewDoc.driveFileId_Original + "/view"} target="_blank" rel="noopener noreferrer"
                                             className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 border border-blue-200 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors font-medium"
                                         >
                                             <ExternalLink className="w-3.5 h-3.5" /> Mở gốc
