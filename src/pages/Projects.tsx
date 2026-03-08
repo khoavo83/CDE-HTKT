@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { collection, query, onSnapshot, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { db, functions } from '../firebase/config';
+import { db, appFunctions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { Link } from 'react-router-dom';
 import { FolderTree, Folder, FileCheck, Layers, Plus, Edit2, Trash2, ChevronRight, ChevronDown, CheckCircle, Clock, ArrowUp, ArrowDown, FileText, FileImage, FileSpreadsheet, X, Link as LinkIcon, Unlink, ExternalLink, HardDrive, Search, Calendar, Loader2, ArrowUpDown, AlertTriangle, Download } from 'lucide-react';
@@ -192,7 +192,7 @@ export const Projects = () => {
         setIsAttachingId(docId);
         setIsAttachConfirmModalOpen(false);
         try {
-            const attachFn = httpsCallable(functions, 'attachDocumentToNode');
+            const attachFn = httpsCallable(appFunctions, 'attachDocumentToNode');
 
             const result = await attachFn({
                 nodeId: selectedNodeId,
@@ -226,7 +226,7 @@ export const Projects = () => {
         setIsRemovingId(linkToRemove);
         setRemoveModalOpen(false); // Đóng modal ngay
         try {
-            const removeFn = httpsCallable(functions, 'removeDocumentLink');
+            const removeFn = httpsCallable(appFunctions, 'removeDocumentLink');
 
             // Xóa qua Cloud Function để xóa trên Drive luôn
             await removeFn({ linkId: linkToRemove });
@@ -502,7 +502,7 @@ export const Projects = () => {
             // Lưu ý: Dự án gốc ở level 0 không hiển thị prefix số nếu nó là gốc duy nhất, 
             // nhưng ở đây ta đánh số cho tất cả các mục hiển thị.
             // Theo yêu cầu: Dự án gốc -> Hạng mục (1.) -> Mục cha (1.1.)
-            const currentPrefix = prefix ? `${prefix}${index + 1}.` : `${index + 1}.`;
+            const currentPrefix = level === 0 ? '' : (prefix ? `${prefix}${index + 1}.` : `${index + 1}.`);
             return (
                 <div key={item.id}>
                     <div

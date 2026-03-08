@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { httpsCallable } from 'firebase/functions';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { db, functions } from '../firebase/config';
+import { db, storage, auth, appFunctions } from '../firebase/config';
 import { useAuthStore } from '../store/useAuthStore';
 import { useUserStore } from '../store/useUserStore';
 import { useMeetingStore } from '../store/useMeetingStore';
@@ -97,7 +97,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
             // Bước B: Upload các file đính kèm với tên đã chuẩn hoá dựa trên kết quả Bước A.
 
             setUploadStatus('AI Gemini đang đọc văn bản và lưu hồ sơ gốc...');
-            const processOCR = httpsCallable(functions, 'processDocumentOCR');
+            const processOCR = httpsCallable(appFunctions, 'processDocumentOCR');
 
             const ocrResult: any = await processOCR({
                 base64Data,
@@ -172,9 +172,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
         if (!mainFile || !docId) return;
         setIsChecking(true);
         try {
-            const { functions: functionsInstance } = await import('../firebase/config');
-            const { httpsCallable } = await import('firebase/functions');
-            const processOCR = httpsCallable(functionsInstance, 'processDocumentOCR');
+            const processOCR = httpsCallable(appFunctions, 'processDocumentOCR');
 
             const result: any = await processOCR({
                 base64Data: await fileToBase64(mainFile),
@@ -217,7 +215,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
             if (attachments.length > 0) {
                 const safeSoKyHieu = (ocrData.soKyHieu || "NOSO").replace(/\//g, "-").replace(/\\/g, "-");
                 const ngayBanHanhStr = ocrData.ngayBanHanh || format(new Date(), 'yyyy-MM-dd');
-                const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string }, any>(functions, 'uploadFileToDriveBase64');
+                const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string }, any>(appFunctions, 'uploadFileToDriveBase64');
 
                 for (let i = 0; i < attachments.length; i++) {
                     const file = attachments[i];
@@ -301,9 +299,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
             // Gắn văn bản vào các nhánh Dự án đã chọn
             if (selectedProjectNodes.length > 0) {
                 setUploadStatus('Đang cấu hình liên kết thư mục Dự án...');
-                const { functions: functionsInstance } = await import('../firebase/config');
-                const { httpsCallable } = await import('firebase/functions');
-                const attachFn = httpsCallable(functionsInstance, 'attachDocumentToNode');
+                const attachFn = httpsCallable(appFunctions, 'attachDocumentToNode');
 
                 for (const node of selectedProjectNodes) {
                     try {

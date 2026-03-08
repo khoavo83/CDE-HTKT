@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { collection, query, orderBy, onSnapshot, doc, deleteDoc, where, getDocs, getDoc, updateDoc } from 'firebase/firestore';
-import { db, functions } from '../firebase/config';
+import { db, appFunctions } from '../firebase/config';
 import { Link, useNavigate } from 'react-router-dom';
 import { Settings, Eye, Trash2, Search, Filter, Clock, FileCheck, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, UserCheck, CheckCircle2, AlertCircle, Trash, ArrowUpDown, Send, Download, Upload } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
@@ -731,7 +731,7 @@ export const Documents = () => {
                                                         const isDeep = window.confirm("CẢNH BÁO: Bạn có muốn XÓA VĨNH VIỄN văn bản này và TẤT CẢ TỆP trên Drive (Bao gồm cả tệp đính kèm và link cấu trúc)?\n\nHành động này không thể hoàn tác!");
                                                         if (isDeep) {
                                                             const toastId = toast.loading('Đang dọn dẹp Drive và xóa vĩnh viễn...');
-                                                            const permanentlyDeleteDocument = httpsCallable(functions, 'permanentlyDeleteDocument');
+                                                            const permanentlyDeleteDocument = httpsCallable(appFunctions, 'permanentlyDeleteDocument');
                                                             permanentlyDeleteDocument({ docId: doc.id, sourceCollection: 'vanban' })
                                                                 .then(() => toast.success('Đã dọn dẹp và xóa sạch dữ liệu.', { id: toastId }))
                                                                 .catch(err => toast.error('Lỗi khi xóa: ' + err.message, { id: toastId }));

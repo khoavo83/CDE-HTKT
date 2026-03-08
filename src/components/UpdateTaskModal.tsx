@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '../firebase/config';
+import { db, appFunctions } from '../firebase/config';
 import {
     Loader2, X, CheckSquare, Clock, Save, Upload, FileText,
     Sparkles, CheckCircle, AlertCircle
@@ -103,7 +103,7 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
             const base64Data = await fileToBase64(reportFile);
 
             setOcrStatus('AI Gemini đang đọc văn bản và xử lý tệp...');
-            const processOCR = httpsCallable(functions, 'processDocumentOCR');
+            const processOCR = httpsCallable(appFunctions, 'processDocumentOCR');
 
             const response: any = await processOCR({
                 base64Data,

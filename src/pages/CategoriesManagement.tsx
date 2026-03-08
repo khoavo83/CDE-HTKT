@@ -11,7 +11,7 @@ import {
     ShieldAlert, Loader2, LayoutGrid, Zap, EyeOff, Eye, HardDrive, RefreshCw, Layers, Settings, AlertCircle, Upload, ArrowUpDown
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
-import { functions, db } from '../firebase/config';
+import { db, auth, appFunctions } from '../firebase/config';
 import { doc, onSnapshot } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
@@ -104,7 +104,7 @@ export const CategoriesManagement = () => {
         setIsSyncing(true);
         setSyncDebugLogs([]);
         try {
-            const syncFn = httpsCallable(functions, 'syncDriveStructure', { timeout: 540000 });
+            const syncFn = httpsCallable(appFunctions, 'syncDriveStructure', { timeout: 540000 });
             const result: any = await syncFn();
             console.log('Drive Sync Result:', result.data);
 
@@ -170,12 +170,12 @@ export const CategoriesManagement = () => {
                 setConfirmAction(null);
                 try {
                     // 1. Gọi hàm Reset
-                    const resetFn = httpsCallable(functions, 'resetDriveStructure', { timeout: 540000 });
+                    const resetFn = httpsCallable(appFunctions, 'resetDriveStructure', { timeout: 540000 });
                     const resetResult: any = await resetFn();
                     toast.success(resetResult.data.message || 'Đã làm sạch cấu trúc cũ.');
 
                     // 2. Tự động gọi Đồng bộ lại để xây dựng cấu trúc mới
-                    const syncFn = httpsCallable(functions, 'syncDriveStructure', { timeout: 540000 });
+                    const syncFn = httpsCallable(appFunctions, 'syncDriveStructure', { timeout: 540000 });
                     const syncResult: any = await syncFn();
                     toast.success('Đã xây dựng lại cấu trúc Drive mới thành công!');
 

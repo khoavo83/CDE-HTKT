@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { collection, query, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db, appFunctions } from '../firebase/config';
 import { Trash, RefreshCw, Trash2, Search, Filter, AlertCircle } from 'lucide-react';
 import { isoToVN } from '../utils/formatVN';
 import { restoreFromTrash } from '../utils/trashUtils';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebase/config';
 import toast from 'react-hot-toast';
 
 interface TrashItem {
@@ -78,7 +77,7 @@ export const TrashManagement = () => {
                 try {
                     // Nếu là Văn bản, sử dụng Deep Delete Cloud Function
                     if (item.originalCollection === 'vanban' || item.originalCollection === 'internal_documents') {
-                        const permanentlyDeleteDocument = httpsCallable(functions, 'permanentlyDeleteDocument');
+                        const permanentlyDeleteDocument = httpsCallable(appFunctions, 'permanentlyDeleteDocument');
                         await permanentlyDeleteDocument({ docId: item.id, sourceCollection: 'trash' });
                     } else {
                         // Các loại dữ liệu khác vẫn xóa thông thường

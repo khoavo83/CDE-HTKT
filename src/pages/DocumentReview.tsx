@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { db, functions } from '../firebase/config';
+import { db, appFunctions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { useForm } from 'react-hook-form';
 import { ArrowLeft, Clock, Save, Trash2, FileEdit, Folder, ArrowUpDown, ExternalLink, Sparkles, Loader2, CheckCircle, FileText, Image as ImageIcon, FolderTree } from 'lucide-react';
@@ -181,7 +181,7 @@ export const DocumentReview = () => {
         setIsSavingProjectNodes(true);
         const loadingToast = toast.loading('Đang cập nhật liên kết Dự án...');
         try {
-            const attachFn = httpsCallable(functions, 'attachDocumentToNode');
+            const attachFn = httpsCallable(appFunctions, 'attachDocumentToNode');
 
             // Do logic ở Backend attachDocumentToNode có kiểm tra trùng lặp
             // Chúng ta chỉ cần gọi cho các node mới được chọn
@@ -349,7 +349,7 @@ export const DocumentReview = () => {
 
         setIsChecking(true);
         try {
-            const processOCR = httpsCallable(functions, 'processDocumentOCR');
+            const processOCR = httpsCallable(appFunctions, 'processDocumentOCR');
 
             const result: any = await processOCR({
                 docId: id,
