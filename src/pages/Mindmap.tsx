@@ -89,6 +89,7 @@ const getNodeEmoji = (type: string) => {
         case 'PACKAGE': return '📦';
         case 'FOLDER': return '📁';
         case 'TASK': return '📝';
+        case 'DOCUMENT': return '📄';
         default: return '📄';
     }
 };
@@ -303,6 +304,8 @@ export const Mindmap = () => {
     const [loadingChildrenIds, setLoadingChildrenIds] = useState<Set<string>>(new Set());
     // Map nodeId -> childCount (để biết có con hay không)
     const childCountRef = useRef<Map<string, number>>(new Map());
+    // Tăng counter này mỗi khi load xong Docs mới -> trigger lại buildGraph
+    const [docRevision, setDocRevision] = useState(0);
 
     const [nodeLayouts, setNodeLayouts] = useState<Record<string, string>>({});
     const nodeTypes = useMemo(() => ({ custom: CustomMindmapNode }), []);
@@ -421,6 +424,22 @@ export const Mindmap = () => {
             }
         });
 
+        // Tính toán tổng số văn bản (DOCUMENT) cho TẤT CẢ các Node từ Root xuống
+        // Điều này đảm bảo những node CHƯA EXPAND cũng có tổng số văn bản đúng (KHÔNG tính thư mục)
+        const calculateTotalDocs = (node: any): number => {
+            if (!node || node.type === 'DOCUMENT') return 0;
+            const directLinks = allLinksRef.current.get(node.id) || [];
+            const directCount = directLinks.length;
+
+            const subNodes = Array.from(loadedNodesRef.current.values()).filter(n => n.parentId === node.id);
+            const childrenCount = subNodes.reduce((sum, sn) => sum + calculateTotalDocs(sn), 0);
+
+            node.totalDocCount = directCount + childrenCount;
+            return node.totalDocCount;
+        };
+        const rootsToCount = Array.from(loadedNodesRef.current.values()).filter(n => !n.parentId);
+        rootsToCount.forEach(r => calculateTotalDocs(r));
+
         const addNodeToGraph = (dbNode: any) => {
             const isHighlight = targetNodeId === dbNode.id;
             const prefix = getPrefix(dbNode.id);
@@ -429,12 +448,19 @@ export const Mindmap = () => {
             const isExp = expandedIds.has(dbNode.id);
             const isLoadingKids = loadingChildrenIds.has(dbNode.id);
 
-            // DOCUMENT nodes are no longer added to the graph directly
-            // They are now only visible in the sidebar
-            if (dbNode.type === 'DOCUMENT') return;
+            // Document nodes CAN be added to the graph directly
+            // Removed filter return; for Document
 
-            let label = `${emoji} ${prefix} ${dbNode.name || 'Chưa đặt tên'}`;
+
+            let label = '';
             let style = getNodeStyle(dbNode.type, isHighlight);
+
+            if (dbNode.type === 'DOCUMENT') {
+                label = getDocFormattedTitle(dbNode);
+                style = { ...style, backgroundColor: '#f8fafc', border: '1px dashed #64748b', color: '#334155' };
+            } else {
+                label = `${emoji} ${prefix} ${dbNode.name || 'Chưa đặt tên'}`;
+            }
 
             rfNodes.push({
                 id: dbNode.id,
@@ -448,7 +474,7 @@ export const Mindmap = () => {
                     isLoadingChildren: isLoadingKids,
                     onToggleExpand: handleToggleExpand,
                     nodeType: dbNode.type,
-                    totalDocCount: dbNode.totalDocCount || 0,
+                    totalDocCount: dbNode.type === 'DOCUMENT' ? 0 : (dbNode.totalDocCount || 0),
                     _rawDoc: null,
                 }
             });
@@ -471,37 +497,36 @@ export const Mindmap = () => {
                 .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
             children.forEach(child => {
-                // Calculate totalDocCount recursively if not already calculated for this build
-                const calculateTotalDocs = (node: any): number => {
-                    const directLinks = allLinksRef.current.get(node.id) || [];
-                    const directCount = directLinks.length;
+                addNodeToGraph(child);
 
-                    const subNodes = Array.from(loadedNodesRef.current.values()).filter(n => n.parentId === node.id);
-                    const childrenCount = subNodes.reduce((sum, sn) => sum + calculateTotalDocs(sn), 0);
-
-                    node.totalDocCount = directCount + childrenCount;
-                    return node.totalDocCount;
-                };
-
-                calculateTotalDocs(child);
-
-                if (child.type !== 'TASK') {
-                    addNodeToGraph(child);
-                }
                 if (expandedIds.has(child.id)) {
                     traverse(child.id);
+
+                    // Thêm Document nodes thuộc nhánh child này
+                    const docs = Array.from(loadedDocsRef.current.values()).filter(d => d.parentId === child.id);
+                    docs.forEach(doc => {
+                        addNodeToGraph(doc);
+                    });
                 }
             });
         };
 
         traverse(null);
 
+        // Thêm Document nodes thuộc nhánh system-root (nếu có)
+        if (expandedIds.has('system-root')) {
+            const rootDocs = Array.from(loadedDocsRef.current.values()).filter(d => d.parentId === 'system-root' || !d.parentId);
+            rootDocs.forEach(doc => {
+                addNodeToGraph(doc);
+            });
+        }
+
         // Sử dụng Đệ quy Layout để bóc tách toạ độ và hướng cho từng nhánh
         const direction = nodeLayouts['__global'] || 'LR';
         const { nodes: laidNodes, edges: laidEdges } = computeRecursiveLayout(rfNodes, rfEdges, nodeLayouts, direction);
         setNodes(laidNodes);
         setEdges(laidEdges);
-    }, [expandedIds, loadingChildrenIds, nodeLayouts, targetNodeId, setNodes, setEdges, getPrefix, settings.appName]);
+    }, [expandedIds, loadingChildrenIds, nodeLayouts, targetNodeId, setNodes, setEdges, getPrefix, settings.appName, docRevision]);
 
     // ===== Toggle Expand =====
     const handleToggleExpand = useCallback(async (nodeId: string) => {
@@ -572,6 +597,8 @@ export const Mindmap = () => {
                             }
                         }
                         dl.forEach(d => loadedDocsRef.current.set(d.id, d));
+                        // Trigger buildGraph rebuild vì Ref không tự re-render
+                        setDocRevision(prev => prev + 1);
                     }
                 } finally {
                     setLoadingChildrenIds(prev => {
@@ -643,6 +670,22 @@ export const Mindmap = () => {
                     linksMap.get(nodeId)!.push({ id: d.id, ...data });
                 });
                 allLinksRef.current = linksMap;
+
+                // 4. Cộng thêm số links vào childCountRef để nút + xuất hiện đúng trên node lá có văn bản
+                // Phải lấy ALL nodes bao gồm cả TASK để biết link gắn vào TASK sẽ quy về node cha nào
+                const allTaskNodes = allNodes.filter(n => n.type === 'TASK');
+                const taskParentMap = new Map<string, string>(); // taskId -> parentId
+                allTaskNodes.forEach(t => { if (t.parentId) taskParentMap.set(t.id, t.parentId); });
+
+                linksSnap.docs.forEach(d => {
+                    const data = d.data();
+                    const linkNodeId: string = data.nodeId;
+                    // Nếu link gắn vào TASK, quy về node cha của TASK
+                    const targetNodeId = taskParentMap.has(linkNodeId) ? taskParentMap.get(linkNodeId)! : linkNodeId;
+                    const currentCount = childCountRef.current.get(targetNodeId) || 0;
+                    // Chỉ tăng nếu node này chưa được tính văn bản rồi (tránh cộng 2 lần)
+                    childCountRef.current.set(targetNodeId, currentCount + 1);
+                });
 
             } catch (error) {
                 console.error('Mindmap init error:', error);
