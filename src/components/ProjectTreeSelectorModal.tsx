@@ -237,7 +237,7 @@ export const ProjectTreeSelectorModal: React.FC<ProjectTreeSelectorModalProps> =
             const hasChildren = item.children.length > 0;
             // Nếu là con trực tiếp của Dự án gốc (level 1), đánh số 1., 2., 3.
             // Nếu là các cấp sâu hơn, nối tiếp prefix (1.1., 1.1.1.)
-            const currentPrefix = prefix ? `${prefix}${index + 1}.` : `${index + 1}.`;
+            const currentPrefix = level === 0 ? '' : (prefix ? `${prefix}${index + 1}.` : `${index + 1}.`);
             return (
                 <div key={item.id}>
                     <div

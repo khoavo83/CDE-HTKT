@@ -134,14 +134,14 @@ export const DocumentReview = () => {
                 };
                 sortNodes(roots);
 
-                const computePaths = (items: any[], prefix = '', rootName = '') => {
+                const computePaths = (items: any[], level: number = 0, prefix = '', rootName = '') => {
                     items.forEach((item, index) => {
                         // Nếu là con trực tiếp của Dự án gốc (prefix rỗng), đánh số 1., 2., 3.
                         // Nếu sâu hơn, nối tiếp prefix
-                        const currentPrefix = prefix ? `${prefix}${index + 1}.` : `${index + 1}.`;
+                        const currentPrefix = level === 0 ? '' : (prefix ? `${prefix}${index + 1}.` : `${index + 1}.`);
                         const currentRootName = rootName || item.name;
 
-                        if (!prefix) {
+                        if (level === 0) {
                             item.fullPath = item.name;
                         } else {
                             item.fullPath = `${currentRootName} - ${currentPrefix} ${item.name}`;
@@ -149,8 +149,7 @@ export const DocumentReview = () => {
 
                         // Nếu item hiện tại là level 0 (không có prefix truyền vào), 
                         // con của nó sẽ bắt đầu từ prefix trống để đánh số 1., 2.
-                        const nextPrefix = prefix ? currentPrefix : '';
-                        computePaths(item.children, nextPrefix, currentRootName);
+                        computePaths(item.children, level + 1, currentPrefix, currentRootName);
                     });
                 };
                 computePaths(roots);
