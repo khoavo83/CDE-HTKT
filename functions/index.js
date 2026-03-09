@@ -259,30 +259,15 @@ exports.processDocumentOCR = onCall({ region: 'asia-southeast1', timeoutSeconds:
         console.log(`[DEBUG] Diagnostics: Key Prefix=${apiKey.substring(0, 7)}, Mime=${fileMimeType}`);
 
         // 4. Gọi Gemini để OCR (Retry thông minh: Models & Configs)
-        const retryModels = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash"];
+        const retryModels = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
         let ocrResult = {};
         let textResult = "";
         let lastError = "";
 
-        // Tối ưu Payload bằng cách cắt PDF (chỉ lấy max 3 trang đầu)
+        // Tối ưu Payload bằng cách cắt PDF (hiện tại người dùng muốn đọc TOÀN BỘ SỐ TRANG)
         let geminiBase64Content = base64Content;
-        if (fileMimeType === 'application/pdf') {
-            try {
-                const { PDFDocument } = require('pdf-lib');
-                const pdfDoc = await PDFDocument.load(Buffer.from(base64Content, 'base64'));
-                const pageCount = pdfDoc.getPageCount();
-                if (pageCount > 3) {
-                    const newPdf = await PDFDocument.create();
-                    const copiedPages = await newPdf.copyPages(pdfDoc, [0, 1, 2]); // 3 trang đầu
-                    copiedPages.forEach((page) => newPdf.addPage(page));
-                    const pdfBytes = await newPdf.save();
-                    geminiBase64Content = Buffer.from(pdfBytes).toString('base64');
-                    console.log(`[DEBUG] Cắt ngắn PDF từ ${pageCount} trang xuống 3 trang cho Gemini OCR để tối ưu Token.`);
-                }
-            } catch (e) {
-                console.error("[ERROR] Không thể cắt ngắn PDF (Fallback sang full PDF):", e.message);
-            }
-        }
+        // Không cắt trang nữa để AI có thể đọc toàn bộ tài liệu và đếm số trang chuẩn xác hơn.
+        // Tuy nhiên có rủi ro nếu file quá lớn gây quá tải Token của Gemini.
 
         for (const modelName of retryModels) {
             try {

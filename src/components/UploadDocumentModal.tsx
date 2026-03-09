@@ -396,16 +396,30 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium text-sm resize-none"
                                     />
                                 </div>
-                                <div className="space-y-1 col-span-2">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Người ký</label>
-                                    <input
-                                        type="text"
-                                        value={ocrData.nguoiKy || ''}
-                                        onChange={(e) => setOcrData({ ...ocrData, nguoiKy: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium text-sm"
-                                    />
+                                <div className="grid grid-cols-2 gap-4 col-span-2">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Người ký</label>
+                                        <input
+                                            type="text"
+                                            value={ocrData.nguoiKy || ''}
+                                            onChange={(e) => setOcrData({ ...ocrData, nguoiKy: e.target.value })}
+                                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium text-sm"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider text-purple-600 flex items-center gap-1">
+                                            <Sparkles className="w-3 h-3" /> Loại Văn bản (AI phân loại)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={ocrData.loaiVanBan || ''}
+                                            onChange={(e) => setOcrData({ ...ocrData, loaiVanBan: e.target.value })}
+                                            className="w-full px-3 py-2 border border-purple-200 bg-purple-50 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none font-medium text-sm text-purple-900 placeholder:text-purple-300"
+                                            placeholder="Giấy mời, Quyết định..."
+                                        />
+                                    </div>
                                 </div>
-                                <div className="space-y-1 col-span-2 bg-blue-50/50 p-3 rounded-lg border border-blue-100">
+                                <div className="space-y-1 col-span-2 bg-blue-50/50 p-3 rounded-lg border border-blue-100 mt-2">
                                     <label className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Tên file chuẩn hóa trên Drive (Có thể chỉnh sửa)</label>
                                     <input
                                         type="text"
@@ -417,16 +431,42 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                                     <p className="text-[10px] text-blue-500 mt-1">* Hệ thống sẽ tự động thêm đuôi .pdf khi lưu</p>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 col-span-2 mt-2">
-                                    <div className="bg-gray-50 p-2 rounded border border-gray-100">
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase">Dung lượng</p>
-                                        <p className="text-sm font-medium text-gray-600">{(ocrData.fileSize / 1024 / 1024).toFixed(2)} MB</p>
+                                    <div className="space-y-1 bg-gray-50/50 p-2.5 rounded-lg border border-gray-200">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase flex justify-between">
+                                            <span>Dung lượng (MB)</span>
+                                            <span className="text-gray-400 font-normal">{(ocrData.fileSize / 1024 / 1024).toFixed(3)} gốc</span>
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={ocrData.fileSize ? (ocrData.fileSize / 1024 / 1024).toFixed(2) : 0}
+                                                onChange={(e) => {
+                                                    const valInMB = parseFloat(e.target.value) || 0;
+                                                    setOcrData({ ...ocrData, fileSize: Math.floor(valInMB * 1024 * 1024) });
+                                                }}
+                                                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold text-sm bg-white text-gray-800"
+                                            />
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">MB</span>
+                                        </div>
                                     </div>
-                                    <div className="bg-gray-50 p-2 rounded border border-gray-100">
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase">Số trang</p>
-                                        <p className="text-sm font-medium text-gray-600">{ocrData.soTrang} trang</p>
+                                    <div className="space-y-1 bg-gray-50/50 p-2.5 rounded-lg border border-gray-200">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase">Số trang</label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={ocrData.soTrang || 1}
+                                                onChange={(e) => setOcrData({ ...ocrData, soTrang: parseInt(e.target.value) || 1 })}
+                                                className="w-full px-3 py-2 pr-12 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-bold text-sm bg-white text-gray-800"
+                                            />
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">trang</span>
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4 col-span-2 mt-1 pt-3 border-t border-gray-100">
+                                <div className="grid grid-cols-2 gap-4 col-span-2 mt-2 pt-3 border-t border-gray-100">
+
                                     <div className="space-y-1">
                                         <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Luồng Văn bản <span className="text-red-500">*</span></label>
                                         <select

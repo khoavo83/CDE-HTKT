@@ -475,7 +475,7 @@ export const Mindmap = () => {
                     onToggleExpand: handleToggleExpand,
                     nodeType: dbNode.type,
                     totalDocCount: dbNode.type === 'DOCUMENT' ? 0 : (dbNode.totalDocCount || 0),
-                    _rawDoc: null,
+                    _rawDoc: dbNode.type === 'DOCUMENT' ? dbNode : null,
                 }
             });
 
@@ -635,16 +635,13 @@ export const Mindmap = () => {
                 const roots = nonTaskNodes.filter(n => !n.parentId || !loadedNodesRef.current.has(n.parentId));
                 roots.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-                // Expand everything that is a parent of a folder
+                // Expand everything by default as requested
                 const initialExpanded = new Set<string>();
                 nonTaskNodes.forEach(n => {
-                    if (folderParentIds.has(n.id)) {
-                        initialExpanded.add(n.id);
-                    }
+                    initialExpanded.add(n.id);
                 });
                 roots.forEach(r => {
                     r.parentId = null; // Normalize
-                    initialExpanded.add(r.id);
                 });
 
                 // 2. Đếm con (thư mục) từ dữ liệu local để hiển thị nút +/-
@@ -660,30 +657,47 @@ export const Mindmap = () => {
 
                 setExpandedIds(initialExpanded);
 
-                // 3. Tải tất cả links để tính toán doc count (chỉ tải links, không tải file)
-                const linksSnap = await getDocs(collection(db, 'vanban_node_links'));
+                // 3. Fetch vanban and links to filter out folders from count
+                const [linksSnap, docsSnap] = await Promise.all([
+                    getDocs(collection(db, 'vanban_node_links')),
+                    getDocs(collection(db, 'vanban'))
+                ]);
+
+                const allDocsMap = new Map<string, any>();
+                docsSnap.docs.forEach(d => {
+                    allDocsMap.set(d.id, { id: d.id, ...d.data() });
+                });
+
                 const linksMap = new Map<string, any[]>();
+                const validLinkDocs = new Set<string>();
+
                 linksSnap.docs.forEach(d => {
                     const data = d.data();
                     const nodeId = data.nodeId;
-                    if (!linksMap.has(nodeId)) linksMap.set(nodeId, []);
-                    linksMap.get(nodeId)!.push({ id: d.id, ...data });
+                    const docData = allDocsMap.get(data.vanBanId);
+
+                    // Bỏ qua nếu là thư mục
+                    const isFolder = docData && (docData.fileMimeType?.toLowerCase().includes('folder') || docData.loaiVanBan?.toLowerCase().includes('thư mục'));
+
+                    if (!isFolder) {
+                        validLinkDocs.add(d.id);
+                        if (!linksMap.has(nodeId)) linksMap.set(nodeId, []);
+                        linksMap.get(nodeId)!.push({ id: d.id, ...data });
+                    }
                 });
                 allLinksRef.current = linksMap;
 
                 // 4. Cộng thêm số links vào childCountRef để nút + xuất hiện đúng trên node lá có văn bản
-                // Phải lấy ALL nodes bao gồm cả TASK để biết link gắn vào TASK sẽ quy về node cha nào
                 const allTaskNodes = allNodes.filter(n => n.type === 'TASK');
-                const taskParentMap = new Map<string, string>(); // taskId -> parentId
+                const taskParentMap = new Map<string, string>();
                 allTaskNodes.forEach(t => { if (t.parentId) taskParentMap.set(t.id, t.parentId); });
 
                 linksSnap.docs.forEach(d => {
+                    if (!validLinkDocs.has(d.id)) return; // Bỏ qua link folder
                     const data = d.data();
                     const linkNodeId: string = data.nodeId;
-                    // Nếu link gắn vào TASK, quy về node cha của TASK
                     const targetNodeId = taskParentMap.has(linkNodeId) ? taskParentMap.get(linkNodeId)! : linkNodeId;
                     const currentCount = childCountRef.current.get(targetNodeId) || 0;
-                    // Chỉ tăng nếu node này chưa được tính văn bản rồi (tránh cộng 2 lần)
                     childCountRef.current.set(targetNodeId, currentCount + 1);
                 });
 
@@ -719,6 +733,11 @@ export const Mindmap = () => {
     // ===== Node Click → Document Preview hoặc Settings =====
     const onNodeClick = useCallback(async (_: React.MouseEvent, node: Node) => {
         if (node.id === 'system-root') return;
+
+        if (node.data?.nodeType === 'DOCUMENT' && node.data._rawDoc) {
+            setPreviewDoc(node.data._rawDoc);
+            return;
+        }
 
         setSelectedNode(node);
         setIsSidebarOpen(true);
@@ -864,7 +883,11 @@ export const Mindmap = () => {
                             <div className="space-y-3">
                                 {Array.from(loadedDocsRef.current.values())
                                     .filter(d => selectedNodeDescendants.has(d._realNodeId))
-                                    .sort((a, b) => (a.ngayBanHanh || '').localeCompare(b.ngayBanHanh || ''))
+                                    .sort((a, b) => {
+                                        const dateA = a.ngayBanHanh ? new Date(a.ngayBanHanh).getTime() : 0;
+                                        const dateB = b.ngayBanHanh ? new Date(b.ngayBanHanh).getTime() : 0;
+                                        return dateA - dateB;
+                                    })
                                     .map(doc => {
                                         const { Icon, bg, color } = getDocIconConfig(doc);
                                         return (
@@ -874,20 +897,46 @@ export const Mindmap = () => {
                                             >
                                                 <div
                                                     onClick={() => setPreviewDoc(doc)}
-                                                    className={`p-2 rounded-lg ${bg} ${color} shrink-0 cursor-pointer`}
+                                                    className={`p-2 rounded-lg ${bg} ${color} shrink-0 cursor-pointer mt-1`}
                                                 >
                                                     <Icon className="w-4 h-4" />
                                                 </div>
-                                                <div
-                                                    onClick={() => setPreviewDoc(doc)}
-                                                    className="flex-1 min-w-0 cursor-pointer"
-                                                >
-                                                    <div className="text-sm font-medium text-gray-800 leading-snug line-clamp-2 group-hover:text-blue-600 transition-colors">
-                                                        {getDocFormattedTitle(doc)}
+                                                <div className="flex-1 min-w-0">
+                                                    <div onClick={() => setPreviewDoc(doc)} className="cursor-pointer">
+                                                        <div className="text-sm font-medium text-gray-800 leading-snug line-clamp-2 group-hover:text-blue-600 transition-colors">
+                                                            {getDocFormattedTitle(doc)}
+                                                        </div>
+                                                        {doc.ngayBanHanh && (
+                                                            <div className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+                                                                <Clock className="w-3 h-3" /> {doc.ngayBanHanh.split('-').reverse().join('/')}
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    {doc.ngayBanHanh && (
-                                                        <div className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
-                                                            <Clock className="w-3 h-3" /> {doc.ngayBanHanh.split('-').reverse().join('/')}
+
+                                                    {/* Danh sách file đính kèm */}
+                                                    {(doc.attachments?.length > 0 || doc.dinhKem?.length > 0) && (
+                                                        <div className="mt-2 space-y-1.5 border-t border-gray-100 pt-2">
+                                                            {doc.attachments?.map((att: any, idx: number) => (
+                                                                <a
+                                                                    key={`att-${idx}`}
+                                                                    href={att.webViewLink}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="flex items-center gap-1.5 text-xs text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
+                                                                >
+                                                                    <FileText className="w-3.5 h-3.5 shrink-0" />
+                                                                    <span className="truncate">{att.fileName || att.originalName}</span>
+                                                                </a>
+                                                            ))}
+                                                            {doc.dinhKem?.map((att: any, idx: number) => (
+                                                                <div
+                                                                    key={`dk-${idx}`}
+                                                                    className="flex items-center gap-1.5 text-xs text-gray-600 hover:bg-gray-50 px-2 py-1 rounded transition-colors cursor-pointer"
+                                                                >
+                                                                    <FileText className="w-3.5 h-3.5 shrink-0" />
+                                                                    <span className="truncate">{att.fileName || att.name}</span>
+                                                                </div>
+                                                            ))}
                                                         </div>
                                                     )}
                                                 </div>
