@@ -23,7 +23,7 @@ export const DEFAULT_MENU_ITEMS: Omit<MenuConfigItem, 'id'>[] = [
     { key: 'mindmap', name: 'Sơ đồ Mindmap', path: '/mindmap', icon: 'Share2', order: 3, status: 'active', adminOnly: false },
     { key: 'documents', name: 'Văn bản & Hồ sơ', path: '/documents', icon: 'FileText', order: 4, status: 'active', adminOnly: false },
     { key: 'internal_docs', name: 'Sổ Công văn Nội bộ', path: '/internal-docs', icon: 'BookOpen', order: 5, status: 'active', adminOnly: false },
-    { key: 'meetings', name: 'Lịch họp & Điều hành', path: '/meetings', icon: 'Calendar', order: 6, status: 'active', adminOnly: false },
+    { key: 'meetings', name: 'Lịch họp & Điều hành', path: '/meetings', icon: 'Calendar', order: 6, status: 'active', adminOnly: true },
     { key: 'bim', name: 'Mô hình BIM 3D', path: '/bim', icon: 'Box', order: 7, status: 'coming_soon', adminOnly: false },
     { key: 'map', name: 'Bản đồ Số (GIS)', path: '/map', icon: 'Map', order: 8, status: 'active', adminOnly: false },
     { key: 'users', name: 'Quản lý Người dùng', path: '/users', icon: 'Users', order: 9, status: 'active', adminOnly: true },

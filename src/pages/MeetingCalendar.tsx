@@ -13,7 +13,9 @@ import {
 } from 'lucide-react';
 import { useMeetingStore } from '../store/useMeetingStore';
 import { useUserStore } from '../store/useUserStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { MeetingModal } from '../components/MeetingModal';
+import { useNavigate } from 'react-router-dom';
 import {
     format,
     startOfMonth,
@@ -44,19 +46,27 @@ type ViewType = 'week' | 'month' | 'quarter' | 'year';
 export const MeetingCalendar = () => {
     const { meetings, fetchMeetings } = useMeetingStore();
     const { users, fetchUsers } = useUserStore();
+    const { user } = useUserStore((state: any) => ({ user: state.user || useAuthStore.getState().user }));
+    const navigate = useNavigate();
+    
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
     const [currentDate, setCurrentDate] = useState(new Date());
     const [viewType, setViewType] = useState<ViewType>('month');
 
     useEffect(() => {
+        if (!user || user.role !== 'admin') {
+            navigate('/', { replace: true });
+            return;
+        }
+
         const unsubMeetings = fetchMeetings();
         const unsubUsers = fetchUsers();
         return () => {
             unsubMeetings();
             unsubUsers();
         };
-    }, [fetchMeetings, fetchUsers]);
+    }, [fetchMeetings, fetchUsers, user, navigate]);
 
     const handleNext = () => {
         if (viewType === 'week') setCurrentDate(addWeeks(currentDate, 1));
