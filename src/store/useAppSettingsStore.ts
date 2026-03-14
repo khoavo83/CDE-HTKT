@@ -6,6 +6,7 @@ interface AppSettings {
     appName: string;
     agencyName: string;
     systemTitle: string;
+    loginBgUrl?: string;
 }
 
 interface AppSettingsState {
@@ -13,13 +14,14 @@ interface AppSettingsState {
     isLoading: boolean;
     error: string | null;
     fetchSettings: () => Promise<void>;
-    updateSettings: (newSettings: AppSettings) => Promise<void>;
+    updateSettings: (newSettings: Partial<AppSettings>) => Promise<void>;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
     appName: 'CDE-HTKT',
     agencyName: 'Ban Hạ tầng kỹ thuật',
     systemTitle: 'HỆ THỐNG DỮ LIỆU DÙNG CHUNG',
+    loginBgUrl: '',
 };
 
 const DOC_ID = 'general_config';
@@ -66,7 +68,7 @@ export const useAppSettingsStore = create<AppSettingsState>((set) => ({
         }
     },
 
-    updateSettings: async (newSettings: AppSettings) => {
+    updateSettings: async (newSettings: Partial<AppSettings>) => {
         set({ isLoading: true, error: null });
         try {
             const docRef = doc(db, 'app_settings', DOC_ID);
@@ -74,7 +76,7 @@ export const useAppSettingsStore = create<AppSettingsState>((set) => ({
 
             // Update local state after successful remote update
             set((state) => ({
-                settings: { ...state.settings, ...newSettings },
+                settings: { ...state.settings, ...newSettings } as AppSettings,
                 isLoading: false
             }));
         } catch (error: any) {

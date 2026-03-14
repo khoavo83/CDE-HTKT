@@ -15,8 +15,9 @@ import { auth, db, googleProvider } from '../firebase/config';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
 import { useThemeStore } from '../store/useThemeStore';
+import { useAppSettingsStore } from '../store/useAppSettingsStore';
 import logoUrl from '../assets/hcmc-metro-logo.jpg';
-import loginBgUrl from '../assets/login-bg.png';
+import defaultLoginBgUrl from '../assets/login-bg.png';
 import {
     Mail,
     Lock,
@@ -34,6 +35,11 @@ export const Login = () => {
     const navigate = useNavigate();
     const { setUser } = useAuthStore();
     const { initTheme } = useThemeStore();
+    const { settings, fetchSettings } = useAppSettingsStore();
+
+    useEffect(() => {
+        fetchSettings();
+    }, [fetchSettings]);
 
     // [MỚI] Hàm tự động kiểm tra và liên kết theo Email
     const checkAndAutoLink = async (userAuth: any) => {
@@ -347,7 +353,7 @@ export const Login = () => {
         <div
             className="min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-300 relative bg-gray-900"
             style={{
-                backgroundImage: `url(${loginBgUrl})`,
+                backgroundImage: `url(${settings?.loginBgUrl || defaultLoginBgUrl})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
                 backgroundAttachment: 'fixed',
@@ -359,15 +365,15 @@ export const Login = () => {
             <div className="relative w-full max-w-[400px] bg-white/85 backdrop-blur-xl rounded-3xl shadow-[0_8px_32px_0_rgba(31,38,135,0.37)] border border-white/40 p-8 z-10 animate-in fade-in zoom-in-95 duration-500">
 
                 <div className="text-center mb-8 flex flex-col items-center">
-                    <h1 className="text-[22px] font-black text-gray-900 mb-4 leading-tight uppercase drop-shadow-sm">Hệ thống <br /> dữ liệu dùng chung</h1>
+                    <h1 className="text-[22px] font-black text-gray-900 mb-4 leading-tight uppercase drop-shadow-sm whitespace-pre-wrap">{settings?.systemTitle || 'Hệ thống \n dữ liệu dùng chung'}</h1>
 
                     <div className="bg-white/90 p-3 rounded-2xl shadow-md mb-4 backdrop-blur-sm border border-white/50">
-                        <img src={logoUrl} alt="HCMC Metro Logo" className="h-[52px] w-auto object-contain" />
+                        <img src={logoUrl} alt="Logo" className="h-[52px] w-auto object-contain" />
                     </div>
 
                     <div className="flex flex-col items-center gap-1">
-                        <p className="text-sm font-black text-gray-800 uppercase tracking-widest">Ban Quản lý Đường sắt đô thị</p>
-                        <p className="text-[11px] font-black text-primary-700 uppercase tracking-widest bg-primary-50/80 px-4 py-1.5 rounded-full mt-1.5 border border-primary-100/50 shadow-sm">Ban Hạ tầng Kỹ thuật</p>
+                        <p className="text-sm font-black text-gray-800 uppercase tracking-widest">{settings?.appName || 'Ban Quản lý Đường sắt đô thị'}</p>
+                        <p className="text-[11px] font-black text-primary-700 uppercase tracking-widest bg-primary-50/80 px-4 py-1.5 rounded-full mt-1.5 border border-primary-100/50 shadow-sm">{settings?.agencyName || 'Ban Hạ tầng Kỹ thuật'}</p>
                     </div>
                 </div>
 

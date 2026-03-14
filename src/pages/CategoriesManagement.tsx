@@ -11,8 +11,9 @@ import {
     ShieldAlert, Loader2, LayoutGrid, Zap, EyeOff, Eye, HardDrive, RefreshCw, Layers, Settings, AlertCircle, Upload, ArrowUpDown
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
-import { db, auth, appFunctions } from '../firebase/config';
+import { db, auth, appFunctions, storage } from '../firebase/config';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
 import { DeleteConfirmModal } from '../components/DeleteConfirmModal';
@@ -1259,6 +1260,46 @@ const AppSettingsTab = () => {
     const [localSettings, setLocalSettings] = useState(settings);
     const [isSaving, setIsSaving] = useState(false);
     const [successMsg, setSuccessMsg] = useState('');
+    const [uploadingBg, setUploadingBg] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+
+    const handleUploadBg = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error('Kích thước ảnh không được vượt quá 5MB');
+            return;
+        }
+
+        const bgRef = ref(storage, `public_assets/login_bg_${Date.now()}_${file.name}`);
+        const uploadTask = uploadBytesResumable(bgRef, file);
+
+        setUploadingBg(true);
+        setUploadProgress(0);
+
+        uploadTask.on('state_changed',
+            (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                setUploadProgress(Math.round(progress));
+            },
+            (error) => {
+                console.error('Lỗi upload ảnh nền:', error);
+                toast.error('Lỗi upload ảnh nền');
+                setUploadingBg(false);
+            },
+            async () => {
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                setLocalSettings(prev => ({ ...prev, loginBgUrl: downloadURL }));
+                setUploadingBg(false);
+                toast.success('Đã tải lên ảnh nền thành công. Hãy bấm Lưu Thay Đổi để áp dụng.');
+            }
+        );
+    };
+
+    const handleRemoveBg = () => {
+        setLocalSettings(prev => ({ ...prev, loginBgUrl: '' }));
+    };
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -1334,6 +1375,43 @@ const AppSettingsTab = () => {
                         placeholder="VD: HỆ THỐNG DỮ LIỆU DÙNG CHUNG..."
                     />
                     <p className="text-xs text-gray-500 mt-1">Xuất hiện ở vị trí trung tâm, chữ in hoa, màu xanh gradient nổi bật.</p>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Hình nền màn hình Đăng nhập
+                    </label>
+                    <div className="flex items-start gap-4">
+                        {localSettings.loginBgUrl ? (
+                            <div className="relative w-48 h-28 rounded-lg overflow-hidden border border-gray-200 shadow-sm bg-gray-100 flex-shrink-0">
+                                <img src={localSettings.loginBgUrl} alt="Login Background" className="w-full h-full object-cover" />
+                                <button
+                                    onClick={handleRemoveBg}
+                                    className="absolute top-1.5 right-1.5 p-1 bg-red-600/90 hover:bg-red-700 text-white rounded-full transition shadow-sm backdrop-blur-sm"
+                                    title="Xoá hình nền này"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="w-48 h-28 flex-shrink-0 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center text-gray-400">
+                                <Upload size={24} className="mb-2 opacity-50" />
+                                <span className="text-xs">Chưa có nền tùy chỉnh</span>
+                            </div>
+                        )}
+                        <div className="flex-1">
+                            <label className={`inline-flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg transition-colors cursor-pointer ${uploadingBg ? 'bg-gray-50 cursor-not-allowed' : 'bg-white hover:bg-gray-50'}`}>
+                                {uploadingBg ? <Loader2 size={16} className="animate-spin text-blue-600" /> : <Upload size={16} />}
+                                <span className="text-sm font-medium">{uploadingBg ? `Đang tải... ${uploadProgress}%` : 'Chọn ảnh mới'}</span>
+                                <input type="file" accept="image/png, image/jpeg, image/webp" className="hidden" onChange={handleUploadBg} disabled={uploadingBg} />
+                            </label>
+                            <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+                                Hỗ trợ: JPG, PNG, WEBP.<br/>
+                                Dung lượng tối đa: 5MB.<br/>
+                                Kích thước khuyến nghị: 1920x1080px (Tỷ lệ 16:9).
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="pt-4 border-t border-gray-100">
