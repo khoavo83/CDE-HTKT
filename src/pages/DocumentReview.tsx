@@ -893,7 +893,7 @@ export const DocumentReview = () => {
                                     title="Sắp xếp/Đính kèm vào cây thư mục Dự án"
                                 >
                                     {isSavingProjectNodes ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderTree className="w-4 h-4" />}
-                                    Sắp xếp Dự án
+                                    Sắp xếp
                                 </button>
                             )}
 
@@ -1021,7 +1021,7 @@ export const DocumentReview = () => {
             </div>
 
             {/* Popup Xác nhận */}
-            {confirmModal.isOpen && (
+            {confirmModal.isOpen && !isUploading && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center fade-in">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden transform transition-all scale-100">
                         <div className={`px-6 py-4 border-b ${confirmModal.type === 'delete' ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'}`}>
@@ -1037,12 +1037,6 @@ export const DocumentReview = () => {
                                     : 'Bạn có chắc chắn những thông tin chỉnh sửa đã chính xác và muốn lưu vào hệ thống?'
                                 }
                             </p>
-                            {isUploading && (
-                                <div className="flex items-center justify-center gap-3 text-blue-600 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                                    <Loader2 className="w-5 h-5 animate-spin shrink-0" />
-                                    <span className="font-medium text-sm">{uploadStatus || 'Đang xử lý...'}</span>
-                                </div>
-                            )}
                         </div>
                         <div className="px-6 py-4 bg-gray-50 border-t flex justify-end gap-3">
                             <button
@@ -1059,10 +1053,19 @@ export const DocumentReview = () => {
                                     : 'bg-green-600 hover:bg-green-700'
                                     }`}
                             >
-                                {confirmModal.type === 'delete' ? 'Chắc chắn Xóa' : (isUploading ? 'Đang lưu...' : 'Xác nhận Lưu')}
+                                {confirmModal.type === 'delete' ? 'Chắc chắn Xóa' : 'Xác nhận Lưu'}
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Loading Overlay */}
+            {isUploading && (
+                <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[60] flex flex-col items-center justify-center fade-in">
+                    <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
+                    <h3 className="text-xl font-bold text-gray-800 mb-2">Đang lưu dữ liệu...</h3>
+                    <p className="text-gray-600 font-medium">{uploadStatus}</p>
                 </div>
             )}
 
