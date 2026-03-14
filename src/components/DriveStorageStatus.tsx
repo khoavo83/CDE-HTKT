@@ -79,40 +79,31 @@ export const DriveStorageStatus = () => {
     }
 
     return (
-        <div className={`p-6 rounded-xl shadow-sm border transition-all ${bgColor} ${borderColor}`}>
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${percent > 90 ? 'bg-red-100' : 'bg-blue-100'}`}>
-                        <HardDrive className={`w-5 h-5 ${percent > 90 ? 'text-red-600' : 'text-blue-600'}`} />
-                    </div>
-                    <div>
-                        <h3 className={`font-bold ${textColor}`}>Dung lượng Google Drive</h3>
-                        <p className="text-xs opacity-75">Tài khoản Google Cloud lưu trữ Hệ thống</p>
-                    </div>
-                </div>
-                <button
-                    onClick={() => { setRefreshing(true); fetchStorageInfo(); }}
-                    disabled={refreshing}
-                    className={`p-2 hover:bg-white/50 rounded-lg transition-colors ${textColor}`}
-                >
-                    <RefreshCcw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                </button>
-            </div>
-
+        <div className={`p-4 rounded-xl shadow-sm border transition-all ${bgColor} ${borderColor}`}>
             <div className="space-y-3">
-                <div className="flex justify-between text-sm font-medium">
-                    <span className={textColor}>Đã dùng {storageInfo.usedFormatted}</span>
-                    <span className="text-gray-500">Tổng {storageInfo.limitFormatted}</span>
+                <div className="flex justify-between items-center text-sm font-medium">
+                    <div>
+                        <span className={textColor}>Đã dùng {storageInfo.usedFormatted}</span>
+                        <span className="text-gray-500 ml-2">Tổng {storageInfo.limitFormatted}</span>
+                    </div>
+                    <button
+                        onClick={() => { setRefreshing(true); fetchStorageInfo(); }}
+                        disabled={refreshing}
+                        className={`p-1 hover:bg-white/50 rounded transition-colors ${textColor}`}
+                        title="Làm mới thông tin dung lượng"
+                    >
+                        <RefreshCcw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                    </button>
                 </div>
 
-                <div className="h-3 w-full bg-black/5 rounded-full overflow-hidden">
+                <div className="h-2 w-full bg-black/5 rounded-full overflow-hidden">
                     <div
                         className={`h-full transition-all duration-1000 ${statusColor}`}
                         style={{ width: `${percent}%` }}
                     />
                 </div>
 
-                <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                         {percent > 90 ? (
                             <AlertTriangle className="w-4 h-4 text-red-600" />
