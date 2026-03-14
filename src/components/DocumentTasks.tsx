@@ -71,6 +71,7 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
 
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     const [selectedTaskToUpdate, setSelectedTaskToUpdate] = useState<any | null>(null);
+    const [updateTaskInitialStatus, setUpdateTaskInitialStatus] = useState<'PENDING' | 'PROCESSING' | 'COMPLETED' | undefined>(undefined);
     const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
     // Delete confirm
@@ -279,12 +280,12 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                             <td className="px-4 py-4 text-sm text-center text-gray-600 font-medium">
                                                 {task.createdAt ? formatDateTime(task.createdAt) : ''}
                                             </td>
-                                            <td className="px-4 py-4 text-sm text-gray-900 break-words">
-                                                <div>{task.content}</div>
-                                                <div className="text-gray-400 text-xs font-normal mt-1 flex justify-between items-center gap-2">
-                                                    <span>Giao bởi: {task.assignerName}</span>
+                                            <td className="px-4 py-4 text-sm text-gray-900 break-words border-l border-gray-100">
+                                                <div>
+                                                    <div className="line-clamp-2 font-medium">{task.content}</div>
+                                                    <div className="text-gray-500 text-xs mt-1">Giao bởi: {task.assignerName || 'PGĐ Bình'}</div>
                                                 </div>
-                                                {task.result && (
+                                                {(task.result || (task.reportFiles && task.reportFiles.length > 0)) && (
                                                     <button
                                                         type="button"
                                                         onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
@@ -295,7 +296,7 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                                     </button>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-4 text-sm">
+                                            <td className="px-4 py-4 text-sm border-l border-gray-100">
                                                 <span className="text-blue-700 font-medium bg-blue-50 px-2 py-0.5 rounded-full inline-block w-fit break-words">{task.assigneeName}</span>
                                             </td>
                                             <td className="px-4 py-4 text-sm">
@@ -311,7 +312,7 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                                     <span className="text-gray-400 text-xs italic">—</span>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-4 text-center">
+                                            <td className="px-4 py-4 text-center border-l border-gray-100">
                                                 <StatusBadge status={task.status} />
                                             </td>
                                             <td className="px-4 py-4 text-right text-sm font-medium space-x-2 whitespace-nowrap">
@@ -327,19 +328,38 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                                         </button>
                                                     )}
                                                     {canEdit && task.status === 'IN_PROGRESS' && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setSelectedTaskToUpdate(task)}
-                                                            className="text-blue-600 hover:text-blue-900 bg-blue-50 p-1.5 rounded-md hover:bg-blue-100 transition-colors"
-                                                            title="Báo cáo thay đổi tiến độ"
-                                                        >
-                                                            <Send className="w-4 h-4" />
-                                                        </button>
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setUpdateTaskInitialStatus(undefined);
+                                                                    setSelectedTaskToUpdate(task);
+                                                                }}
+                                                                className="text-blue-600 hover:text-blue-900 bg-blue-50 p-1.5 rounded-md hover:bg-blue-100 transition-colors"
+                                                                title="Báo cáo tiến độ"
+                                                            >
+                                                                <Send className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setUpdateTaskInitialStatus('COMPLETED');
+                                                                    setSelectedTaskToUpdate(task);
+                                                                }}
+                                                                className="text-green-600 hover:text-green-900 bg-green-50 p-1.5 rounded-md hover:bg-green-100 transition-colors"
+                                                                title="Báo cáo hoàn thành"
+                                                            >
+                                                                <CheckCircle2 className="w-4 h-4" />
+                                                            </button>
+                                                        </>
                                                     )}
                                                     {canEdit && task.status === 'COMPLETED' && (
                                                         <button
                                                             type="button"
-                                                            onClick={() => setSelectedTaskToUpdate(task)}
+                                                            onClick={() => {
+                                                                setUpdateTaskInitialStatus(task.status); // Set initial status to current task status
+                                                                setSelectedTaskToUpdate(task);
+                                                            }}
                                                             className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 p-1.5 rounded-md hover:bg-indigo-100 transition-colors"
                                                             title="Sửa báo cáo"
                                                         >
@@ -365,7 +385,7 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                             </td>
                                         </tr>
                                         {/* Row showing result if expanded */}
-                                        {isExpanded && task.result && (
+                                        {isExpanded && (task.result || (task.reportFiles && task.reportFiles.length > 0)) && (
                                             <tr className="bg-indigo-50/40">
                                                 <td colSpan={7} className="px-6 py-4 text-sm">
                                                     <div className="pl-4 border-l-4 border-indigo-400 rounded-r-md py-2 flex flex-col gap-3">
@@ -373,7 +393,28 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                                             <p className="font-semibold text-indigo-900 text-[10px] uppercase tracking-wide">
                                                                 Kết quả xử lý (Hoàn thành lúc: {task.completedAt ? formatDateTime(task.completedAt) : 'Chưa rõ'})
                                                             </p>
-                                                            <div className="text-gray-800 whitespace-pre-wrap leading-relaxed bg-white border border-indigo-100 p-3 rounded text-sm">{task.result}</div>
+                                                            {task.result && (
+                                                                <div className="text-gray-800 whitespace-pre-wrap leading-relaxed bg-white border border-indigo-100 p-3 rounded text-sm">{task.result}</div>
+                                                            )}
+                                                            {task.reportFiles && task.reportFiles.length > 0 && (
+                                                                <div className="mt-2">
+                                                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">File đính kèm:</p>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {task.reportFiles.map((f: any, idx: number) => (
+                                                                            <a
+                                                                                key={idx}
+                                                                                href={f.url}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-blue-700 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                                                                            >
+                                                                                <FileText className="w-3.5 h-3.5" />
+                                                                                <span className="max-w-[200px] truncate">{f.name}</span>
+                                                                            </a>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         {task.bcDocId && (
                                                             <div className="mt-1">
@@ -404,14 +445,19 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                 />
             )}
 
-            {selectedTaskToUpdate && (
-                <UpdateTaskModal
-                    isOpen={!!selectedTaskToUpdate}
-                    task={selectedTaskToUpdate}
-                    onClose={() => setSelectedTaskToUpdate(null)}
-                    onSuccess={fetchTasks}
-                />
-            )}
+            {/* Update Task Status Modal */}
+            <UpdateTaskModal
+                isOpen={!!selectedTaskToUpdate}
+                onClose={() => {
+                    setSelectedTaskToUpdate(null);
+                    setUpdateTaskInitialStatus(undefined);
+                }}
+                task={selectedTaskToUpdate}
+                initialStatus={updateTaskInitialStatus}
+                onSuccess={() => {
+                    fetchTasks();
+                }}
+            />
 
             <GenericConfirmModal
                 isOpen={deleteModal.isOpen}

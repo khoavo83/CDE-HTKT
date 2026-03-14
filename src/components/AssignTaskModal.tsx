@@ -29,6 +29,7 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
     const [loadingUsers, setLoadingUsers] = useState(false);
 
     // Form State
+    const [selectedAssigner, setSelectedAssigner] = useState('');
     const [selectedAssignee, setSelectedAssignee] = useState('');
     const [selectedCollaborators, setSelectedCollaborators] = useState<string[]>([]);
     const [content, setContent] = useState('');
@@ -50,6 +51,13 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
                 });
                 fetchedUsers.sort((a, b) => (a.displayName || a.email || '').localeCompare(b.displayName || b.email || ''));
                 setUsers(fetchedUsers);
+
+                const defaultAssignerUser = fetchedUsers.find(u =>
+                    u.email === 'hoduongbinh32@gmail.com' ||
+                    (u.displayName && u.displayName.toLowerCase().includes('bình'))
+                );
+                const defaultId = defaultAssignerUser ? defaultAssignerUser.id : (user?.uid || '');
+                setSelectedAssigner(defaultId);
             } catch (error) {
                 console.error('Lỗi khi fetch users:', error);
                 toast.error('Không thể lấy danh sách người dùng.');
@@ -90,9 +98,11 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
 
     const executeSubmit = async () => {
         const assigneeUser = users.find(u => u.id === selectedAssignee);
+        const assignerUser = users.find(u => u.id === selectedAssigner);
+
         const firestoreUser = auth.currentUser;
-        const currentUserId = firestoreUser?.uid || user?.uid;
-        const currentUserName = firestoreUser?.displayName || user?.displayName || user?.email || firestoreUser?.email || 'Người dùng ẩn danh';
+        const currentUserId = assignerUser?.id || firestoreUser?.uid || user?.uid;
+        const currentUserName = assignerUser?.displayName || assignerUser?.email || firestoreUser?.displayName || user?.displayName || user?.email || firestoreUser?.email || 'Người dùng ẩn danh';
 
         if (!assigneeUser) {
             toast.error('Lỗi dữ liệu hệ thống: Không xác định được người phụ trách.');
@@ -177,6 +187,39 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
                 </div>
 
                 <div className="p-6 overflow-y-auto space-y-5">
+                    {/* Người Giao Việc */}
+                    <div>
+                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                            <UserCheck className="w-4 h-4 text-indigo-600" />
+                            Người giao việc <span className="text-red-500">*</span>
+                        </label>
+                        {loadingUsers ? (
+                            <div className="flex items-center gap-2 text-sm text-gray-500 p-2 border rounded-md bg-gray-50">
+                                <Loader2 className="w-4 h-4 animate-spin" /> Đang tải danh sách...
+                            </div>
+                        ) : (
+                            <select
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                                value={selectedAssigner}
+                                onChange={(e) => setSelectedAssigner(e.target.value)}
+                                disabled={isSubmitting || (user?.role !== 'admin' && user?.role !== 'manager')}
+                                required
+                            >
+                                <option value="">-- Chọn người giao việc --</option>
+                                {users.map(u => (
+                                    <option key={`assigner-${u.id}`} value={u.id}>
+                                        {u.displayName || u.email} {u.department ? `(${u.department})` : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
+                        {(!user || (user.role !== 'admin' && user.role !== 'manager')) && (
+                            <p className="text-xs text-gray-500 mt-1.5 italic">
+                                Chỉ Admin hoặc Ban Giám Đốc mới có quyền thay đổi người giao việc.
+                            </p>
+                        )}
+                    </div>
+
                     {/* Người phụ trách chính */}
                     <div>
                         <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">

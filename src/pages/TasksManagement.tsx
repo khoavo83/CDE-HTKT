@@ -37,6 +37,7 @@ export const TasksManagement = () => {
     const [loading, setLoading] = useState(true);
     const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
     const [selectedTaskToUpdate, setSelectedTaskToUpdate] = useState<any | null>(null);
+    const [updateTaskInitialStatus, setUpdateTaskInitialStatus] = useState<'PENDING' | 'PROCESSING' | 'COMPLETED' | undefined>(undefined);
     const [deleteModal, setDeleteModal] = useState({ isOpen: false, taskId: '' });
     const [adminEditTask, setAdminEditTask] = useState<any | null>(null);
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -173,6 +174,20 @@ export const TasksManagement = () => {
         const vb = vanBanCache[vanBanId];
         if (!vb) return vanBanId;
         return `${vb.loaiVanBan || ''} ${vb.soKyHieu || ''}`.trim() || vb.fileNameOriginal || vanBanId;
+    };
+
+    const getVanBanShortLabel = (vanBanId: string) => {
+        const vb = vanBanCache[vanBanId];
+        if (!vb) return vanBanId;
+        const dateStr = vb.ngayBanHanh ? new Date(vb.ngayBanHanh).toLocaleDateString('vi-VN') : '';
+        const soKyHieu = vb.soKyHieu || '';
+        return soKyHieu ? `${soKyHieu}${dateStr ? ` (${dateStr})` : ''}` : (vb.fileNameOriginal || vanBanId);
+    };
+
+    const getVanBanTrichYeu = (vanBanId: string) => {
+        const vb = vanBanCache[vanBanId];
+        if (!vb) return '';
+        return vb.trichYeu || '';
     };
 
     const tabs: { key: TabType; label: string; icon: React.ElementType }[] = [
@@ -349,11 +364,9 @@ export const TasksManagement = () => {
                                     <tr>
                                         <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12">STT</th>
                                         <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Ngày giao</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nội dung chỉ đạo</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Văn bản</th>
-                                        {activeTab === 'all_tasks' && (
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phụ trách</th>
-                                        )}
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[20%]">Nội dung chỉ đạo</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[15%]">Văn bản</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[20%]">Trích yếu nội dung</th>
                                         {activeTab === 'assigned_by_me' && (
                                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P. Trách</th>
                                         )}
@@ -405,26 +418,29 @@ export const TasksManagement = () => {
                                                                     <td className="px-4 py-4 text-sm text-center text-gray-600 font-medium whitespace-nowrap">
                                                                         {task.createdAt ? new Date(task.createdAt).toLocaleDateString('vi-VN') : ''}
                                                                     </td>
-                                                                    <td className="px-4 py-4 text-sm text-gray-900">
+                                                                    <td className="px-4 py-4 text-sm text-gray-900 border-l border-gray-100">
                                                                         <div className="flex items-start gap-2">
                                                                             <button onClick={() => setExpandedTaskId(isExpanded ? null : task.id)} className="shrink-0 mt-0.5 text-gray-400 hover:text-indigo-600">
                                                                                 {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                                                                             </button>
-                                                                            <span className="line-clamp-2">
-                                                                                <span className="text-gray-500 font-medium">Người giao: {task.assignerName}</span> — {task.content}
-                                                                            </span>
+                                                                            <div>
+                                                                                <div className="line-clamp-2 font-medium">{task.content}</div>
+                                                                                <div className="text-gray-500 text-xs mt-1">Giao bởi: {task.assignerName || 'PGĐ Bình'}</div>
+                                                                            </div>
                                                                         </div>
                                                                     </td>
-                                                                    <td className="px-4 py-4 text-sm">
+                                                                    <td className="px-4 py-4 text-sm border-l border-gray-100">
                                                                         {task.vanBanId ? (
                                                                             <button onClick={() => navigate("/documents/" + task.vanBanId)} className="inline-flex items-center gap-1.5 text-blue-700 hover:text-blue-900 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 text-xs font-medium transition-colors">
                                                                                 <FileText className="w-3.5 h-3.5" />
-                                                                                {getVanBanLabel(task.vanBanId)}
+                                                                                {getVanBanShortLabel(task.vanBanId)}
                                                                             </button>
                                                                         ) : <span className="text-gray-400 text-xs">—</span>}
                                                                     </td>
-                                                                    <td className="px-4 py-4 text-sm">
-                                                                        <span className="font-medium text-gray-800">{task.assigneeName || '—'}</span>
+                                                                    <td className="px-4 py-4 text-sm text-gray-700 border-l border-gray-100">
+                                                                        {task.vanBanId ? (
+                                                                            <span className="line-clamp-2" title={getVanBanTrichYeu(task.vanBanId)}>{getVanBanTrichYeu(task.vanBanId)}</span>
+                                                                        ) : <span className="text-gray-400 text-xs">—</span>}
                                                                     </td>
                                                                     <td className="px-4 py-4 text-sm">
                                                                         {task.collaborators && task.collaborators.length > 0 ? (
@@ -469,7 +485,7 @@ export const TasksManagement = () => {
                                                                 </tr>
                                                                 {isExpanded && (
                                                                     <tr>
-                                                                        <td colSpan={10} className="px-6 py-4 bg-slate-50 border-t">
+                                                                        <td colSpan={9} className="px-6 py-4 bg-slate-50 border-t">
                                                                             {task.result && (
                                                                                 <div className="mb-3">
                                                                                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Kết quả báo cáo:</p>
@@ -559,9 +575,10 @@ export const TasksManagement = () => {
                                                         <td className="px-4 py-4 text-sm text-center text-gray-600 font-medium whitespace-nowrap">
                                                             {task.createdAt ? new Date(task.createdAt).toLocaleDateString('vi-VN') : ''}
                                                         </td>
-                                                        <td className="px-4 py-4 text-sm text-gray-900">
-                                                            <div className="line-clamp-2">
-                                                                <span className="text-gray-500 font-medium">Người giao: {task.assignerName}</span> — {task.content}
+                                                        <td className="px-4 py-4 text-sm text-gray-900 border-l border-gray-100">
+                                                            <div>
+                                                                <div className="line-clamp-2 font-medium">{task.content}</div>
+                                                                <div className="text-gray-500 text-xs mt-1">Giao bởi: {task.assignerName || 'PGĐ Bình'}</div>
                                                             </div>
                                                             {(task.result || (task.reportFiles && task.reportFiles.length > 0)) && (
                                                                 <button
@@ -573,18 +590,24 @@ export const TasksManagement = () => {
                                                                 </button>
                                                             )}
                                                         </td>
-                                                        <td className="px-4 py-4 text-sm">
-                                                            <button
-                                                                onClick={() => task.vanBanId && navigate("/documents/" + task.vanBanId)}
-                                                                className="text-blue-600 hover:text-blue-800 hover:underline text-xs font-medium flex items-center gap-1"
-                                                                title="Mở văn bản"
-                                                            >
-                                                                <FileText className="w-3.5 h-3.5 flex-shrink-0" />
-                                                                <span className="line-clamp-1">{getVanBanLabel(task.vanBanId)}</span>
-                                                            </button>
+                                                        <td className="px-4 py-4 text-sm border-l border-gray-100">
+                                                            {task.vanBanId ? (
+                                                                <button
+                                                                    onClick={() => task.vanBanId && navigate("/documents/" + task.vanBanId)}
+                                                                    className="inline-flex items-center gap-1.5 text-blue-700 hover:text-blue-900 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 text-xs font-medium transition-colors"
+                                                                >
+                                                                    <FileText className="w-3.5 h-3.5" />
+                                                                    {getVanBanShortLabel(task.vanBanId)}
+                                                                </button>
+                                                            ) : <span className="text-gray-400 text-xs">—</span>}
+                                                        </td>
+                                                        <td className="px-4 py-4 text-sm text-gray-700 border-l border-gray-100">
+                                                            {task.vanBanId ? (
+                                                                <span className="line-clamp-2" title={getVanBanTrichYeu(task.vanBanId)}>{getVanBanTrichYeu(task.vanBanId)}</span>
+                                                            ) : <span className="text-gray-400 text-xs">—</span>}
                                                         </td>
                                                         {activeTab === 'assigned_by_me' && (
-                                                            <td className="px-4 py-4 text-sm">
+                                                            <td className="px-4 py-4 text-sm border-l border-gray-100">
                                                                 <span className="text-blue-700 font-medium bg-blue-50 px-2 py-0.5 rounded-full text-xs">{task.assigneeName}</span>
                                                             </td>
                                                         )}
@@ -610,10 +633,29 @@ export const TasksManagement = () => {
                                                                     </button>
                                                                 )}
                                                                 {canEdit && task.status === 'IN_PROGRESS' && (
-                                                                    <button onClick={() => setSelectedTaskToUpdate(task)} className="text-blue-600 hover:text-blue-900 bg-blue-50 p-1.5 rounded-md hover:bg-blue-100 transition-colors" title="Báo cáo tiến độ">
-                                                                        <Send className="w-4 h-4" />
-                                                                    </button>
-                                                                )}
+                                                                                <>
+                                                                                    <button 
+                                                                                        onClick={() => {
+                                                                                            setUpdateTaskInitialStatus(undefined);
+                                                                                            setSelectedTaskToUpdate(task);
+                                                                                        }} 
+                                                                                        className="text-blue-600 hover:text-blue-900 bg-blue-50 p-1.5 rounded-md hover:bg-blue-100 transition-colors" 
+                                                                                        title="Báo cáo tiến độ"
+                                                                                    >
+                                                                                        <Send className="w-4 h-4" />
+                                                                                    </button>
+                                                                                    <button 
+                                                                                        onClick={() => {
+                                                                                            setUpdateTaskInitialStatus('COMPLETED');
+                                                                                            setSelectedTaskToUpdate(task);
+                                                                                        }} 
+                                                                                        className="text-green-600 hover:text-green-900 bg-green-50 p-1.5 rounded-md hover:bg-green-100 transition-colors" 
+                                                                                        title="Báo cáo hoàn thành"
+                                                                                    >
+                                                                                        <CheckCircle2 className="w-4 h-4" />
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
                                                                 {canEdit && task.status === 'IN_PROGRESS' && (
                                                                     <label className="text-orange-600 hover:text-orange-900 bg-orange-50 p-1.5 rounded-md hover:bg-orange-100 transition-colors cursor-pointer" title="Upload file báo cáo">
                                                                         {uploadingTaskId === task.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
@@ -631,7 +673,7 @@ export const TasksManagement = () => {
                                                                     </button>
                                                                 )}
                                                                 {user?.role === 'admin' && (
-                                                                    <button onClick={() => setAdminEditTask(task)} className="text-amber-600 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 p-1.5 rounded-md transition-colors" title="Chỉnh sửa (Admin)">
+                                                                    <button onClick={() => setAdminEditTask(task)} className="text-amber-600 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 p-1.5 rounded-md hover:bg-amber-100 transition-colors" title="Chỉnh sửa (Admin)">
                                                                         <Settings className="w-4 h-4" />
                                                                     </button>
                                                                 )}
@@ -719,14 +761,17 @@ export const TasksManagement = () => {
             </div>
 
             {/* Modals */}
-            {selectedTaskToUpdate && (
-                <UpdateTaskModal
-                    isOpen={!!selectedTaskToUpdate}
-                    onClose={() => setSelectedTaskToUpdate(null)}
-                    task={selectedTaskToUpdate}
-                    onSuccess={fetchTasks}
-                />
-            )}
+            {/* Update user task progress */}
+            <UpdateTaskModal
+                isOpen={!!selectedTaskToUpdate}
+                onClose={() => {
+                    setSelectedTaskToUpdate(null);
+                    setUpdateTaskInitialStatus(undefined);
+                }}
+                task={selectedTaskToUpdate}
+                initialStatus={updateTaskInitialStatus}
+                onSuccess={fetchTasks}
+            />
 
             {adminEditTask && (
                 <AdminEditTaskModal

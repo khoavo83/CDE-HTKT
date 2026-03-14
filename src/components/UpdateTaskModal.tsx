@@ -1,20 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, appFunctions } from '../firebase/config';
 import {
     Loader2, X, CheckSquare, Clock, Save, Upload, FileText,
-    Sparkles, CheckCircle, AlertCircle
+    Sparkles, CheckCircle, AlertCircle, Plus, Trash2
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { logVanBanActivity } from '../utils/vanbanLogUtils';
 import toast from 'react-hot-toast';
+
+interface ChecklistItem {
+    id: string;
+    text: string;
+    isCompleted: boolean;
+}
 
 interface UpdateTaskModalProps {
     isOpen: boolean;
     onClose: () => void;
     task: any;
     onSuccess: () => void;
+    initialStatus?: 'PENDING' | 'PROCESSING' | 'COMPLETED';
 }
 
 // Convert File to Base64
@@ -26,11 +33,15 @@ const fileToBase64 = (file: File): Promise<string> =>
         reader.onerror = reject;
     });
 
-export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClose, task, onSuccess }) => {
+export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClose, task, onSuccess, initialStatus }) => {
     const { user } = useAuthStore();
     const [status, setStatus] = useState(task?.status || 'PENDING');
     const [result, setResult] = useState(task?.result || '');
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Checklist states
+    const [checklist, setChecklist] = useState<ChecklistItem[]>(task?.checklist || []);
+    const [newChecklistItem, setNewChecklistItem] = useState('');
 
     // Report completion states
     const [reportFile, setReportFile] = useState<File | null>(null);
@@ -40,7 +51,54 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
     const [ocrData, setOcrData] = useState<any>(null);
     const [docId, setDocId] = useState<string>('');
 
+    useEffect(() => {
+        if (isOpen && task) {
+            setStatus(initialStatus || task.status || 'PENDING');
+            setResult(task.result || '');
+            setChecklist(task.checklist || []);
+            setReportFile(null);
+            setShowReview(false);
+            setDocId('');
+            setOcrData(null);
+            setNewChecklistItem('');
+        }
+    }, [isOpen, task]);
+
     if (!isOpen || !task) return null;
+
+    // Checklist actions
+    const handleAddChecklistItem = () => {
+        if (!newChecklistItem.trim()) return;
+        const newItem: ChecklistItem = {
+            id: Date.now().toString(),
+            text: newChecklistItem.trim(),
+            isCompleted: false
+        };
+        setChecklist([...checklist, newItem]);
+        setNewChecklistItem('');
+        // Auto-switch to processing if we are pending and adding tasks
+        if (status === 'PENDING') setStatus('PROCESSING');
+    };
+
+    const handleToggleChecklist = (id: string) => {
+        setChecklist(checklist.map(item => 
+            item.id === id ? { ...item, isCompleted: !item.isCompleted } : item
+        ));
+        if (status === 'PENDING') setStatus('PROCESSING');
+    };
+
+    const handleDeleteChecklist = (id: string) => {
+        setChecklist(checklist.filter(item => item.id !== id));
+    };
+
+    // Calculate progress based on checklist
+    const calculateProgress = (currentChecklist: ChecklistItem[]) => {
+        if (!currentChecklist || currentChecklist.length === 0) {
+            return status === 'COMPLETED' ? 100 : (status === 'PROCESSING' ? 50 : 0);
+        }
+        const completedCount = currentChecklist.filter(item => item.isCompleted).length;
+        return Math.round((completedCount / currentChecklist.length) * 100);
+    };
 
     // Handles normal save (without file upload)
     const handleSubmit = async (e: React.FormEvent) => {
@@ -54,7 +112,17 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
         setIsSubmitting(true);
         try {
             const taskRef = doc(db, 'vanban_tasks', task.id);
-            const updates: any = { status, result: result.trim() };
+            const progress = calculateProgress(checklist);
+            
+            // Auto complete if all checklist items are done and user selects processing, suggest completion?
+            // Actually, just save the status user selected.
+            
+            const updates: any = { 
+                status, 
+                result: result.trim(),
+                checklist,
+                progress: status === 'COMPLETED' ? 100 : progress
+            };
 
             if (status === 'COMPLETED' && task.status !== 'COMPLETED') {
                 updates.completedAt = new Date().toISOString();
@@ -72,7 +140,7 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
                     action: status === 'COMPLETED' ? 'TASK_COMPLETE' : 'TASK_UPDATE',
                     details: status === 'COMPLETED'
                         ? `Hoàn thành công việc. Kết quả: ${result.trim().substring(0, 100)}${result.length > 100 ? '...' : ''}`
-                        : `Cập nhật tiến độ: ${status}. Ghi chú: ${result.trim().substring(0, 100)}${result.length > 100 ? '...' : ''}`,
+                        : `Cập nhật tiến độ: ${status} (${progress}%). Ghi chú: ${result.trim().substring(0, 100)}${result.length > 100 ? '...' : ''}`,
                     userId: user.uid,
                     userName: user.hoTen || user.displayName || user.email || 'Người dùng'
                 });
@@ -155,7 +223,9 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
                 status: 'COMPLETED',
                 completedAt: new Date().toISOString(),
                 result: result.trim() || ocrData.trichYeu || '',
-                bcDocId: docId
+                bcDocId: docId,
+                checklist: checklist,
+                progress: 100
             });
 
             // Log activity
@@ -169,7 +239,7 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
                 });
             }
 
-            toast.success('Đã báo cáo hoàn thành và lưu Văn bản đi thành công! \ud83c\udf89');
+            toast.success('Đã báo cáo hoàn thành và lưu Văn bản đi thành công! 🎉');
             onSuccess();
             setTimeout(() => onClose(), 500);
         } catch (error: any) {
@@ -179,6 +249,9 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
             setIsSubmitting(false);
         }
     };
+
+    // Progress bar calculations
+    const progressValue = calculateProgress(checklist);
 
     return (
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 fade-in">
@@ -286,7 +359,74 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
                                 <p className="text-sm italic">{task.content}</p>
                             </div>
 
-                            <div className="space-y-4">
+                            <div className="space-y-6">
+                                {/* Checklist Section */}
+                                <div className="bg-white border rounded-lg p-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                                            <CheckSquare className="w-4 h-4 text-indigo-500" />
+                                            Checklist công việc ({checklist.filter(i => i.isCompleted).length}/{checklist.length})
+                                        </h4>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-medium text-gray-500">Tiến độ:</span>
+                                            <span className="text-sm font-bold text-indigo-600">{progressValue}%</span>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Progress bar visual */}
+                                    <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
+                                        <div className="bg-indigo-600 h-2 rounded-full transition-all duration-500" style={{ width: `${progressValue}%` }}></div>
+                                    </div>
+
+                                    <div className="space-y-2 mb-3 max-h-40 overflow-y-auto">
+                                        {checklist.length === 0 ? (
+                                            <p className="text-xs text-gray-400 italic text-center py-2">Chưa có đầu mục công việc nào. Thêm checklist bên dưới để theo dõi tiến độ dễ dàng hơn.</p>
+                                        ) : (
+                                            checklist.map((item) => (
+                                                <div key={item.id} className="flex items-center justify-between gap-2 p-2 hover:bg-gray-50 rounded-md group">
+                                                    <label className="flex items-center gap-3 cursor-pointer select-none flex-1">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={item.isCompleted} 
+                                                            onChange={() => handleToggleChecklist(item.id)}
+                                                            className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                                                        />
+                                                        <span className={`text-sm ${item.isCompleted ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                                                            {item.text}
+                                                        </span>
+                                                    </label>
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => handleDeleteChecklist(item.id)}
+                                                        className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <input
+                                            type="text"
+                                            value={newChecklistItem}
+                                            onChange={(e) => setNewChecklistItem(e.target.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddChecklistItem())}
+                                            placeholder="Thêm mục công việc con..."
+                                            className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        />
+                                        <button 
+                                            type="button" 
+                                            onClick={handleAddChecklistItem}
+                                            disabled={!newChecklistItem.trim()}
+                                            className="p-1.5 bg-indigo-50 text-indigo-600 rounded-md hover:bg-indigo-100 transition-colors disabled:opacity-50"
+                                        >
+                                            <Plus className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Trạng thái xử lý <span className="text-red-500">*</span>
@@ -306,6 +446,22 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
                                         </label>
                                     </div>
                                 </div>
+
+                                {/* General update field */}
+                                {status !== 'COMPLETED' && (
+                                    <div className="animate-in slide-in-from-top-2 duration-300">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Cập nhật nội dung tiến độ (Tùy chọn)
+                                        </label>
+                                        <textarea
+                                            className="w-full px-3 py-2 border border-blue-200 bg-blue-50/30 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow min-h-[80px] resize-y text-sm"
+                                            placeholder="Bạn đang làm gì với văn bản này? Nhập thông tin để báo cáo nhanh cho quản lý..."
+                                            value={result}
+                                            onChange={(e) => setResult(e.target.value)}
+                                            disabled={isSubmitting}
+                                        />
+                                    </div>
+                                )}
 
                                 {status === 'COMPLETED' && (
                                     <div className="animate-in slide-in-from-top-2 duration-300 space-y-4">
@@ -380,21 +536,6 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
                                                 </div>
                                             )}
                                         </div>
-                                    </div>
-                                )}
-
-                                {status === 'PROCESSING' && (
-                                    <div className="animate-in slide-in-from-top-2 duration-300">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Cập nhật tiến độ (Tùy chọn)
-                                        </label>
-                                        <textarea
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow min-h-[80px] resize-y"
-                                            placeholder="Bạn đang làm gì với văn bản này? (Có thể để trống nếu chưa có kết quả)"
-                                            value={result}
-                                            onChange={(e) => setResult(e.target.value)}
-                                            disabled={isSubmitting}
-                                        />
                                     </div>
                                 )}
                             </div>

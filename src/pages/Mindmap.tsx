@@ -200,9 +200,9 @@ const computeRecursiveLayout = (
             const g = new dagre.graphlib.Graph();
             g.setGraph({
                 rankdir: effectiveLayout,
-                nodesep: 60,
-                ranksep: 140,
-                edgesep: 20,
+                nodesep: 20,
+                ranksep: 120,
+                edgesep: 14,
             });
             g.setDefaultEdgeLabel(() => ({}));
 
@@ -503,7 +503,13 @@ export const Mindmap = () => {
                     traverse(child.id);
 
                     // Thêm Document nodes thuộc nhánh child này
-                    const docs = Array.from(loadedDocsRef.current.values()).filter(d => d.parentId === child.id);
+                    const docs = Array.from(loadedDocsRef.current.values())
+                        .filter(d => d.parentId === child.id)
+                        .sort((a, b) => {
+                            const dateA = a.ngayBanHanh ? new Date(a.ngayBanHanh).getTime() : 0;
+                            const dateB = b.ngayBanHanh ? new Date(b.ngayBanHanh).getTime() : 0;
+                            return dateA - dateB;
+                        });
                     docs.forEach(doc => {
                         addNodeToGraph(doc);
                     });
@@ -515,7 +521,13 @@ export const Mindmap = () => {
 
         // Thêm Document nodes thuộc nhánh system-root (nếu có)
         if (expandedIds.has('system-root')) {
-            const rootDocs = Array.from(loadedDocsRef.current.values()).filter(d => d.parentId === 'system-root' || !d.parentId);
+            const rootDocs = Array.from(loadedDocsRef.current.values())
+                .filter(d => d.parentId === 'system-root' || !d.parentId)
+                .sort((a, b) => {
+                    const dateA = a.ngayBanHanh ? new Date(a.ngayBanHanh).getTime() : 0;
+                    const dateB = b.ngayBanHanh ? new Date(b.ngayBanHanh).getTime() : 0;
+                    return dateA - dateB;
+                });
             rootDocs.forEach(doc => {
                 addNodeToGraph(doc);
             });
@@ -668,38 +680,39 @@ export const Mindmap = () => {
                     allDocsMap.set(d.id, { id: d.id, ...d.data() });
                 });
 
+                // 4. Lọc và group Links (bao gồm việc map TASK về parent node và bỏ qua broken links)
+                const allTaskNodes = allNodes.filter(n => n.type === 'TASK');
+                const taskParentMap = new Map<string, string>();
+                allTaskNodes.forEach(t => { if (t.parentId) taskParentMap.set(t.id, t.parentId); });
+
                 const linksMap = new Map<string, any[]>();
                 const validLinkDocs = new Set<string>();
 
                 linksSnap.docs.forEach(d => {
                     const data = d.data();
-                    const nodeId = data.nodeId;
+                    const linkNodeId: string = data.nodeId;
                     const docData = allDocsMap.get(data.vanBanId);
 
                     // Bỏ qua nếu là thư mục
                     const isFolder = docData && (docData.fileMimeType?.toLowerCase().includes('folder') || docData.loaiVanBan?.toLowerCase().includes('thư mục'));
 
-                    if (!isFolder) {
+                    // Phải có docData (không phải broken link) và không phải thư mục
+                    if (docData && !isFolder) {
                         validLinkDocs.add(d.id);
-                        if (!linksMap.has(nodeId)) linksMap.set(nodeId, []);
-                        linksMap.get(nodeId)!.push({ id: d.id, ...data });
+
+                        // Nếu link gắn vào TASK, tính cho Parent Hạng Mục của TASK đó
+                        const targetNodeId = taskParentMap.has(linkNodeId) ? taskParentMap.get(linkNodeId)! : linkNodeId;
+
+                        if (!linksMap.has(targetNodeId)) linksMap.set(targetNodeId, []);
+                        linksMap.get(targetNodeId)!.push({ id: d.id, ...data });
+
+                        // Tăng số đếm childCountRef cho targetNodeId để hiển thị nút +
+                        const currentCount = childCountRef.current.get(targetNodeId) || 0;
+                        childCountRef.current.set(targetNodeId, currentCount + 1);
                     }
                 });
+
                 allLinksRef.current = linksMap;
-
-                // 4. Cộng thêm số links vào childCountRef để nút + xuất hiện đúng trên node lá có văn bản
-                const allTaskNodes = allNodes.filter(n => n.type === 'TASK');
-                const taskParentMap = new Map<string, string>();
-                allTaskNodes.forEach(t => { if (t.parentId) taskParentMap.set(t.id, t.parentId); });
-
-                linksSnap.docs.forEach(d => {
-                    if (!validLinkDocs.has(d.id)) return; // Bỏ qua link folder
-                    const data = d.data();
-                    const linkNodeId: string = data.nodeId;
-                    const targetNodeId = taskParentMap.has(linkNodeId) ? taskParentMap.get(linkNodeId)! : linkNodeId;
-                    const currentCount = childCountRef.current.get(targetNodeId) || 0;
-                    childCountRef.current.set(targetNodeId, currentCount + 1);
-                });
 
             } catch (error) {
                 console.error('Mindmap init error:', error);
@@ -819,6 +832,8 @@ export const Mindmap = () => {
                     onEdgesChange={onEdgesChange}
                     onConnect={onConnect}
                     onNodeClick={onNodeClick}
+                    nodesDraggable={false}
+                    nodesConnectable={false}
                     fitView
                     attributionPosition="bottom-right"
                     onInit={setRfInstance}
