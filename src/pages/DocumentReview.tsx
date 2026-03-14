@@ -4,7 +4,7 @@ import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs } 
 import { db, appFunctions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { useForm } from 'react-hook-form';
-import { ArrowLeft, Clock, Save, Trash2, FileEdit, Folder, ArrowUpDown, ExternalLink, Sparkles, Loader2, CheckCircle, FileText, Image as ImageIcon, FolderTree } from 'lucide-react';
+import { ArrowLeft, Clock, Save, Trash2, FileEdit, Folder, ArrowUpDown, ExternalLink, Sparkles, Loader2, CheckCircle, FileText, Image as ImageIcon, FolderTree, Upload, Paperclip, X } from 'lucide-react';
 import { isoToVN, formatDateTime, formatBytes } from '../utils/formatVN';
 import { useAuthStore } from '../store/useAuthStore';
 import { useCategoryStore } from '../store/useCategoryStore';
@@ -14,6 +14,15 @@ import { DocumentTasks } from '../components/DocumentTasks';
 import { DocumentActivityLog } from '../components/DocumentActivityLog';
 import { logVanBanActivity } from '../utils/vanbanLogUtils';
 import toast from 'react-hot-toast';
+
+// Chuyển File sang Base64 string
+const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = reject;
+    });
 
 interface DocumentForm {
     soKyHieu: string;
@@ -41,6 +50,13 @@ export const DocumentReview = () => {
     const [linkedNodes, setLinkedNodes] = useState<{ id: string, name: string }[]>([]);
     const [isProjectTreeOpen, setIsProjectTreeOpen] = useState(false);
     const [isSavingProjectNodes, setIsSavingProjectNodes] = useState(false);
+
+    // States for attachments editing
+    const [newAttachments, setNewAttachments] = useState<File[]>([]);
+    const [deletedAttachIds, setDeletedAttachIds] = useState<string[]>([]);
+    const [deletedDinhKemNames, setDeletedDinhKemNames] = useState<string[]>([]);
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadStatus, setUploadStatus] = useState<string>('');
 
     const { categories, addCategory, fetchCategories } = useCategoryStore();
     const { tabs, fetchTabs } = useCategoryTabStore();
@@ -266,6 +282,8 @@ export const DocumentReview = () => {
     const confirmSave = async () => {
         if (!id || confirmModal.type !== 'save' || !confirmModal.data) return;
         try {
+            setIsUploading(true);
+            setUploadStatus('Đang chuẩn bị lưu trữ...');
             const formData = confirmModal.data;
             const docRef = doc(db, 'vanban', id);
 
@@ -297,9 +315,51 @@ export const DocumentReview = () => {
                 }
             }
 
-            await updateDoc(docRef, {
-                ...formData
-            });
+            // Xử lý upload và delete Attachments
+            let finalAttachments = [...(docData.attachments || [])].filter((att: any) => !deletedAttachIds.includes(att.id));
+            let finalDinhKem = [...(docData.dinhKem || [])].filter((att: any) => !deletedDinhKemNames.includes(att.name || att.fileName));
+            
+            if (newAttachments.length > 0) {
+                const safeSoKyHieu = (formData.soKyHieu || "NOSO").replace(/\//g, "-").replace(/\\/g, "-");
+                const ngayBanHanhStr = formData.ngayBanHanh || formatDateTime(new Date()).split(' ')[0].split('/').reverse().join('-');
+                const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string }, any>(appFunctions, 'uploadFileToDriveBase64');
+
+                for (let i = 0; i < newAttachments.length; i++) {
+                    const file = newAttachments[i];
+                    setUploadStatus(`Đang tải tệp đính kèm mới ${i + 1}/${newAttachments.length}: ${file.name}...`);
+
+                    const stt = (finalAttachments.length + 1).toString().padStart(2, '0');
+                    const safeOriginalName = file.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
+                    const standardizedAttachName = `${ngayBanHanhStr}_${safeSoKyHieu}_DinhKem_${stt}_${safeOriginalName}`;
+
+                    const base64 = await fileToBase64(file);
+                    const uploaded = await uploadFn({
+                        fileName: standardizedAttachName,
+                        mimeType: file.type,
+                        base64Data: base64
+                    });
+
+                    finalAttachments.push({
+                        id: crypto.randomUUID(),
+                        fileName: standardizedAttachName,
+                        originalName: file.name,
+                        fileSize: file.size,
+                        mimeType: file.type,
+                        driveFileId: uploaded.data.file.id,
+                        webViewLink: uploaded.data.file.webViewLink,
+                        uploadedAt: new Date().toISOString()
+                    });
+                }
+            }
+
+            const updatedData = {
+                ...formData,
+                attachments: finalAttachments,
+                dinhKem: finalDinhKem
+            };
+
+            setUploadStatus('Đang cập nhật dữ liệu...');
+            await updateDoc(docRef, updatedData);
 
             // LOG HOẠT ĐỘNG
             await logVanBanActivity({
@@ -310,12 +370,23 @@ export const DocumentReview = () => {
                 userName: user?.hoTen || user?.displayName || 'User'
             });
 
+            // Reset states
+            setNewAttachments([]);
+            setDeletedAttachIds([]);
+            setDeletedDinhKemNames([]);
+            
+            // Cập nhật docData cục bộ để đồng bộ UI
+            setDocData((prev: any) => ({ ...prev, ...updatedData }));
+
             setConfirmModal({ isOpen: false, type: null });
             setIsEditing(false); // Đóng form về chế độ xem
-            // Optional: Hiển thị toast notice thay vì alert
+            toast.success('Lưu dữ liệu thành công!');
         } catch (error) {
             console.error(error);
             toast.error('Lỗi lưu dữ liệu');
+        } finally {
+            setIsUploading(false);
+            setUploadStatus('');
         }
     };
 
@@ -644,18 +715,23 @@ export const DocumentReview = () => {
                         </fieldset>
 
                         {/* Tệp hồ sơ đính kèm */}
-                        {((docData.attachments && docData.attachments.length > 0) || (docData.dinhKem && docData.dinhKem.length > 0)) && (
-                            <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center gap-2">
-                                    <span className="text-blue-600">📎</span>
-                                    <h3 className="text-sm font-bold text-gray-700">
-                                        Tệp hồ sơ đính kèm ({(docData.attachments?.length || 0) + (docData.dinhKem?.length || 0)} tệp)
-                                    </h3>
+                        {((docData.attachments && docData.attachments.length > 0) || (docData.dinhKem && docData.dinhKem.length > 0) || isEditing) && (
+                            <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden mt-6">
+                                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Paperclip className="w-4 h-4 text-blue-600" />
+                                        <h3 className="text-sm font-bold text-gray-700">
+                                            Tệp hồ sơ đính kèm (
+                                                {((docData.attachments?.length || 0) - deletedAttachIds.length) + 
+                                                 ((docData.dinhKem?.length || 0) - deletedDinhKemNames.length) + 
+                                                 newAttachments.length} tệp)
+                                        </h3>
+                                    </div>
                                 </div>
-                                <div className="divide-y divide-gray-100">
+                                <div className="divide-y divide-gray-100 pb-1">
                                     {/* Hiển thị attachments mới (có link Drive) */}
-                                    {docData.attachments?.map((att: any, idx: number) => (
-                                        <div key={`att-${idx}`} className="px-4 py-3 flex items-center justify-between hover:bg-blue-50/50 transition-colors">
+                                    {docData.attachments?.filter((a: any) => !deletedAttachIds.includes(a.id)).map((att: any, idx: number) => (
+                                        <div key={`att-${idx}`} className="px-4 py-3 flex items-center justify-between hover:bg-blue-50/50 transition-colors group">
                                             <div className="flex items-center gap-3 min-w-0 flex-1">
                                                 <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
                                                     <FileText className="w-4 h-4 text-blue-600" />
@@ -671,35 +747,118 @@ export const DocumentReview = () => {
                                                         {att.fileSize && (
                                                             <span className="text-[10px] text-gray-400">{(att.fileSize / 1024).toFixed(0)} KB</span>
                                                         )}
+                                                        {isEditing && <span className="text-[10px] text-gray-400 italic">(Đã lưu)</span>}
                                                     </div>
                                                 </div>
                                             </div>
-                                            {att.webViewLink && (
-                                                <a
-                                                    href={att.webViewLink}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors shrink-0 ml-3"
-                                                >
-                                                    <ExternalLink className="w-3 h-3" /> Xem
-                                                </a>
-                                            )}
+                                            <div className="flex items-center gap-2 pl-3">
+                                                {att.webViewLink && (
+                                                    <a
+                                                        href={att.webViewLink}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors shrink-0"
+                                                    >
+                                                        <ExternalLink className="w-3 h-3" /> Xem
+                                                    </a>
+                                                )}
+                                                {isEditing && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDeletedAttachIds(prev => [...prev, att.id])}
+                                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                                        title="Xóa tệp đính kèm này"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
 
                                     {/* Hiển thị dinhKem legacy (không có link Drive) */}
-                                    {docData.dinhKem?.map((att: any, idx: number) => (
-                                        <div key={`dk-${idx}`} className="px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                                    {docData.dinhKem?.filter((a: any) => !deletedDinhKemNames.includes(a.name || a.fileName)).map((att: any, idx: number) => (
+                                        <div key={`dk-${idx}`} className="px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors group">
                                             <div className="flex items-center gap-3 min-w-0 flex-1">
                                                 <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
                                                     <FileText className="w-4 h-4 text-gray-500" />
                                                 </div>
-                                                <p className="text-sm text-gray-600 truncate" title={att.fileName || att.name}>
-                                                    {att.fileName || att.name}
-                                                </p>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm text-gray-600 truncate" title={att.fileName || att.name}>
+                                                        {att.fileName || att.name}
+                                                    </p>
+                                                    {isEditing && <p className="text-[10px] text-gray-400 italic mt-0.5">(Đã lưu)</p>}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 pl-3">
+                                                {isEditing && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDeletedDinhKemNames(prev => [...prev, att.name || att.fileName])}
+                                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                                        title="Xóa tệp đính kèm này"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     ))}
+
+                                    {/* Hiển thị file mới vừa chọn (đang chờ upload) */}
+                                    {isEditing && newAttachments.map((file, idx) => (
+                                        <div key={`new-${idx}`} className="px-4 py-3 flex items-center justify-between bg-amber-50/50 hover:bg-amber-50 transition-colors group">
+                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                                                    <FileText className="w-4 h-4 text-amber-600" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm font-medium text-amber-800 truncate" title={file.name}>
+                                                        {file.name}
+                                                    </p>
+                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                        <span className="text-[10px] text-gray-500">{(file.size / 1024).toFixed(0)} KB</span>
+                                                        <span className="text-[10px] text-amber-600 font-bold italic">(Thêm mới)</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 pl-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setNewAttachments(prev => prev.filter((_, i) => i !== idx))}
+                                                    className="p-1.5 text-amber-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                                    title="Hủy tệp này"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    
+                                    {/* Nút Upload mới khi đang isEditing */}
+                                    {isEditing && (
+                                        <div className="px-4 pt-3 pb-2 relative group-upload">
+                                            <div className="relative border-2 border-dashed border-gray-300 rounded-lg py-4 text-center hover:bg-gray-50 hover:border-blue-400 transition-colors cursor-pointer group-upload-hover">
+                                                <input
+                                                    type="file"
+                                                    multiple
+                                                    onChange={(e) => {
+                                                        if (e.target.files) {
+                                                            setNewAttachments(prev => [...prev, ...Array.from(e.target.files!)]);
+                                                        }
+                                                    }}
+                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
+                                                    disabled={isUploading || confirmModal.isOpen}
+                                                />
+                                                <div className="flex flex-col items-center gap-2 relative z-0">
+                                                    <div className="p-2 bg-gray-100 rounded-full group-upload-hover:bg-blue-50 transition-colors">
+                                                        <Upload className="w-5 h-5 text-gray-500 group-upload-hover:text-blue-500" />
+                                                    </div>
+                                                    <p className="text-sm text-gray-600 font-medium group-upload-hover:text-blue-600 transition-colors">Bấm hoặc kéo thả tệp vào đây để upload</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -782,11 +941,12 @@ export const DocumentReview = () => {
                             {isEditing && (
                                 <button
                                     type="submit"
-                                    className="flex items-center gap-2 bg-green-100 text-green-700 px-4 py-2 rounded-md hover:bg-green-200 transition font-medium"
+                                    disabled={isUploading || isChecking || confirmModal.isOpen}
+                                    className="flex items-center gap-2 bg-green-100 text-green-700 px-4 py-2 rounded-md hover:bg-green-200 transition font-medium disabled:opacity-50"
                                     title="Kiểm tra và Lưu cập nhật hệ thống"
                                 >
-                                    <Save className="w-4 h-4" />
-                                    Lưu
+                                    {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                    {isUploading ? 'Đang lưu...' : 'Lưu'}
                                 </button>
                             )}
                         </div>
@@ -870,11 +1030,19 @@ export const DocumentReview = () => {
                                 {confirmModal.type === 'delete' ? 'Xác nhận xóa tài liệu' : 'Xác nhận cập nhật dữ liệu'}
                             </h3>
                         </div>
-                        <div className="px-6 py-6 text-gray-600">
-                            {confirmModal.type === 'delete'
-                                ? 'Bạn có thật sự muốn xóa vĩnh viễn văn bản này khỏi hệ thống? Hành động này không thể hoàn tác.'
-                                : 'Bạn có chắc chắn những thông tin chỉnh sửa đã chính xác và muốn lưu vào hệ thống?'
-                            }
+                        <div className="px-6 py-6 text-gray-600 flex flex-col gap-4">
+                            <p>
+                                {confirmModal.type === 'delete'
+                                    ? 'Bạn có thật sự muốn xóa vĩnh viễn văn bản này khỏi hệ thống? Hành động này không thể hoàn tác.'
+                                    : 'Bạn có chắc chắn những thông tin chỉnh sửa đã chính xác và muốn lưu vào hệ thống?'
+                                }
+                            </p>
+                            {isUploading && (
+                                <div className="flex items-center justify-center gap-3 text-blue-600 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                    <Loader2 className="w-5 h-5 animate-spin shrink-0" />
+                                    <span className="font-medium text-sm">{uploadStatus || 'Đang xử lý...'}</span>
+                                </div>
+                            )}
                         </div>
                         <div className="px-6 py-4 bg-gray-50 border-t flex justify-end gap-3">
                             <button
@@ -885,12 +1053,13 @@ export const DocumentReview = () => {
                             </button>
                             <button
                                 onClick={confirmModal.type === 'delete' ? confirmDelete : confirmSave}
-                                className={`px-6 py-2 text-white rounded-lg transition-colors font-medium ${confirmModal.type === 'delete'
+                                disabled={isUploading}
+                                className={`px-6 py-2 text-white rounded-lg transition-colors font-medium disabled:opacity-50 ${confirmModal.type === 'delete'
                                     ? 'bg-red-600 hover:bg-red-700'
                                     : 'bg-green-600 hover:bg-green-700'
                                     }`}
                             >
-                                {confirmModal.type === 'delete' ? 'Chắc chắn Xóa' : 'Xác nhận Lưu'}
+                                {confirmModal.type === 'delete' ? 'Chắc chắn Xóa' : (isUploading ? 'Đang lưu...' : 'Xác nhận Lưu')}
                             </button>
                         </div>
                     </div>
