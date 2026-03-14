@@ -171,6 +171,7 @@ export const Dashboard = () => {
     const [users, setUsers] = useState<User[]>([]);
     const [allDocs, setAllDocs] = useState<VanBan[]>([]);
     const [internalDocs, setInternalDocs] = useState<any[]>([]);
+    const [vanbanTasks, setVanbanTasks] = useState<any[]>([]);
     const [timeFilter, setTimeFilter] = useState<'WEEK' | 'MONTH' | 'QUARTER' | 'YEAR'>('MONTH');
 
     useEffect(() => {
@@ -195,12 +196,17 @@ export const Dashboard = () => {
             setProjects(list.filter(n => (n.type === 'PROJECT' || !n.parentId) && n.name.includes('Dự án')));
         });
 
+        const unsubVanbanTasks = onSnapshot(collection(db, 'vanban_tasks'), (snap) => {
+            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            setVanbanTasks(list);
+        });
+
         const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
             const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as User));
             setUsers(list);
         });
 
-        return () => { unsubVanban(); unsubInternalDocs(); unsubNodes(); unsubUsers(); };
+        return () => { unsubVanban(); unsubInternalDocs(); unsubNodes(); unsubVanbanTasks(); unsubUsers(); };
     }, []);
 
     // Lọc công việc của người dùng hiện tại
@@ -247,30 +253,32 @@ export const Dashboard = () => {
     const nodeStats = useMemo(() => {
         const categories = allNodes.filter(n => n.type === 'CATEGORY');
         const packages = allNodes.filter(n => n.type === 'PACKAGE');
-        const tasks = allNodes.filter(n => n.type === 'TASK');
+        const projectTasks = allNodes.filter(n => n.type === 'TASK'); // For totalPct & treHan
         const all = allNodes;
 
         const completedAll = all.filter(n => n.status === 'COMPLETED' || n.status === 'DONE').length;
         const totalPct = all.length > 0 ? Math.round((completedAll / all.length) * 100) : 72;
 
-        const treHan = tasks.filter(n => {
+        const treHan = projectTasks.filter(n => {
             if (!n.endDate || n.status === 'COMPLETED') return false;
             return new Date(n.endDate) < new Date();
         }).length;
 
+        const tasks = vanbanTasks;
+
         return {
-            categories: categories.length || 12,
-            categoriesDone: categories.filter(n => n.status === 'COMPLETED').length || 7,
-            packages: packages.length || 18,
-            packageActive: packages.filter(n => n.status === 'ACTIVE' || n.status === 'IN_PROGRESS').length || 11,
-            tasks: tasks.length || 86,
-            tasksDone: tasks.filter(n => n.status === 'COMPLETED').length || 54,
-            tasksInProgress: tasks.filter(n => n.status === 'IN_PROGRESS' || n.status === 'ACTIVE').length || 22,
-            tasksPending: tasks.filter(n => n.status === 'PENDING').length || 8,
-            treHan: treHan || 2,
+            categories: categories.length,
+            categoriesDone: categories.filter(n => n.status === 'COMPLETED').length,
+            packages: packages.length,
+            packageActive: packages.filter(n => n.status === 'ACTIVE' || n.status === 'IN_PROGRESS').length,
+            tasks: tasks.length,
+            tasksDone: tasks.filter(n => n.status === 'COMPLETED').length,
+            tasksInProgress: tasks.filter(n => n.status === 'IN_PROGRESS' || n.status === 'ACTIVE').length,
+            tasksPending: tasks.filter(n => n.status === 'PENDING').length,
+            treHan: treHan,
             totalPct,
         };
-    }, [allNodes]);
+    }, [allNodes, vanbanTasks]);
 
     // Dữ liệu Pie chart trạng thái công việc
     const pieData = [

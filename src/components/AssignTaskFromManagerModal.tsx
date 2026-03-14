@@ -50,6 +50,7 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
     const [selectedVanBan, setSelectedVanBan] = useState<VanBanItem | null>(null);
 
     // Form State
+    const [selectedAssigner, setSelectedAssigner] = useState('');
     const [selectedAssignee, setSelectedAssignee] = useState(initialAssigneeId);
     const [selectedCollaborators, setSelectedCollaborators] = useState<string[]>([]);
     const [content, setContent] = useState('');
@@ -58,12 +59,26 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
 
     useEffect(() => {
         if (isOpen) {
+            setSelectedAssigner('');
             setSelectedAssignee(initialAssigneeId || (isSelfAssign && user?.uid ? user.uid : ''));
             setSelectedCollaborators([]);
             setContent('');
             setSelectedVanBan(null);
         }
     }, [isOpen, initialAssigneeId, isSelfAssign, user?.uid]);
+
+    useEffect(() => {
+        if (users.length > 0 && isOpen) {
+            const defaultAssignerUser = users.find(u =>
+                u.email === 'hoduongbinh32@gmail.com' ||
+                (u.displayName && u.displayName.toLowerCase().includes('bình'))
+            );
+            const defaultId = defaultAssignerUser ? defaultAssignerUser.id : (user?.uid || '');
+            if (!selectedAssigner) {
+                setSelectedAssigner(defaultId);
+            }
+        }
+    }, [users, isOpen, user?.uid, selectedAssigner]);
 
 
     useEffect(() => {
@@ -121,9 +136,11 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
 
     const executeSubmit = async () => {
         const assigneeUser = users.find(u => u.id === selectedAssignee);
+        const assignerUser = users.find(u => u.id === selectedAssigner);
+
         const firestoreUser = auth.currentUser;
-        const currentUserId = firestoreUser?.uid || user?.uid;
-        const currentUserName = firestoreUser?.displayName || user?.displayName || user?.email || firestoreUser?.email || 'Người dùng ẩn danh';
+        const currentUserId = assignerUser?.id || firestoreUser?.uid || user?.uid;
+        const currentUserName = assignerUser?.displayName || assignerUser?.email || firestoreUser?.displayName || user?.displayName || user?.email || firestoreUser?.email || 'Người dùng ẩn danh';
 
         if (!assigneeUser) {
             toast.error('Lỗi dữ liệu hệ thống: Không xác định được người phụ trách.');
@@ -286,84 +303,119 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
 
                         {/* 3. Phân công người dùng */}
                         {!isSelfAssign && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* Phụ trách chính */}
+                            <div className="space-y-6">
+                                {/* Người Giao Việc */}
                                 <div className="space-y-2">
-                                    <label className="flex items-center gap-2 text-sm font-semibold text-indigo-700">
+                                    <label className="flex items-center gap-2 text-sm font-semibold text-teal-700">
                                         <UserCheck className="w-4 h-4" />
-                                        Người phụ trách <span className="text-red-500">*</span>
+                                        Người giao việc <span className="text-red-500">*</span>
                                     </label>
                                     {loadingUsers ? (
-                                        <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-500 bg-gray-50 rounded-lg border border-gray-100 animate-pulse">
-                                            <Loader2 className="w-4 h-4 animate-spin" /> Đang tải...
+                                        <div className="flex items-center gap-2 text-sm text-gray-500 p-2 border rounded-md bg-gray-50">
+                                            <Loader2 className="w-4 h-4 animate-spin" /> Đang tải danh sách...
                                         </div>
                                     ) : (
-                                        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm max-h-48 overflow-y-auto">
+                                        <select
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-shadow disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                                            value={selectedAssigner}
+                                            onChange={(e) => setSelectedAssigner(e.target.value)}
+                                            disabled={isSubmitting || (user?.role !== 'admin' && user?.role !== 'manager')}
+                                            required
+                                        >
+                                            <option value="">-- Chọn người giao việc --</option>
                                             {users.map(u => (
-                                                <label
-                                                    key={`assignee-${u.id}`}
-                                                    className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer border-b border-gray-100 last:border-0 transition-colors ${selectedAssignee === u.id ? 'bg-indigo-50' : 'hover:bg-gray-50'
-                                                        }`}
-                                                >
-                                                    <input
-                                                        type="radio"
-                                                        name="assignee_manager"
-                                                        value={u.id}
-                                                        checked={selectedAssignee === u.id}
-                                                        onChange={() => handleAssigneeChange(u.id)}
-                                                        className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-                                                    />
-                                                    <div className="flex flex-col">
-                                                        <span className={`text-sm ${selectedAssignee === u.id ? 'font-semibold text-indigo-900' : 'font-medium text-gray-700'}`}>
-                                                            {u.displayName || u.email}
-                                                        </span>
-                                                        {u.role && u.role !== 'user' && (
-                                                            <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">{u.role}</span>
-                                                        )}
-                                                    </div>
-                                                </label>
+                                                <option key={`assigner-${u.id}`} value={u.id}>
+                                                    {u.displayName || u.email} {u.department ? `(${u.department})` : ''}
+                                                </option>
                                             ))}
-                                        </div>
+                                        </select>
+                                    )}
+                                    {(!user || (user.role !== 'admin' && user.role !== 'manager')) && (
+                                        <p className="text-xs text-gray-500 px-1 pt-1 italic">
+                                            Chỉ Admin hoặc Ban Giám Đốc mới có quyền thay đổi người giao việc.
+                                        </p>
                                     )}
                                 </div>
 
-                                {/* Người phối hợp */}
-                                <div className="space-y-2">
-                                    <label className="flex items-center gap-2 text-sm font-semibold text-purple-700">
-                                        <Users className="w-4 h-4" />
-                                        Người phối hợp
-                                    </label>
-                                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm max-h-48 overflow-y-auto">
-                                        {collaboratorCandidates.length === 0 ? (
-                                            <div className="p-3 text-sm text-gray-500 text-center italic">
-                                                Không có người dùng nào khác
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* Phụ trách chính */}
+                                    <div className="space-y-2">
+                                        <label className="flex items-center gap-2 text-sm font-semibold text-indigo-700">
+                                            <UserCheck className="w-4 h-4" />
+                                            Người phụ trách <span className="text-red-500">*</span>
+                                        </label>
+                                        {loadingUsers ? (
+                                            <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-500 bg-gray-50 rounded-lg border border-gray-100 animate-pulse">
+                                                <Loader2 className="w-4 h-4 animate-spin" /> Đang tải...
                                             </div>
                                         ) : (
-                                            collaboratorCandidates.map(u => (
-                                                <label
-                                                    key={`collab-${u.id}`}
-                                                    className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer border-b border-gray-100 last:border-0 transition-colors ${selectedCollaborators.includes(u.id) ? 'bg-purple-50' : 'hover:bg-gray-50'
-                                                        }`}
-                                                >
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedCollaborators.includes(u.id)}
-                                                        onChange={() => toggleCollaborator(u.id)}
-                                                        className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
-                                                    />
-                                                    <div className="flex flex-col">
-                                                        <span className={`text-sm ${selectedCollaborators.includes(u.id) ? 'font-semibold text-purple-900' : 'font-medium text-gray-700'}`}>
-                                                            {u.displayName || u.email}
-                                                        </span>
-                                                        {u.role && u.role !== 'user' && (
-                                                            <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">{u.role}</span>
-                                                        )}
-                                                    </div>
-                                                </label>
-                                            ))
+                                            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm max-h-48 overflow-y-auto">
+                                                {users.map(u => (
+                                                    <label
+                                                        key={`assignee-${u.id}`}
+                                                        className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer border-b border-gray-100 last:border-0 transition-colors ${selectedAssignee === u.id ? 'bg-indigo-50' : 'hover:bg-gray-50'
+                                                            }`}
+                                                    >
+                                                        <input
+                                                            type="radio"
+                                                            name="assignee_manager"
+                                                            value={u.id}
+                                                            checked={selectedAssignee === u.id}
+                                                            onChange={() => handleAssigneeChange(u.id)}
+                                                            className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                                                        />
+                                                        <div className="flex flex-col">
+                                                            <span className={`text-sm ${selectedAssignee === u.id ? 'font-semibold text-indigo-900' : 'font-medium text-gray-700'}`}>
+                                                                {u.displayName || u.email}
+                                                            </span>
+                                                            {u.role && u.role !== 'user' && (
+                                                                <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">{u.role}</span>
+                                                            )}
+                                                        </div>
+                                                    </label>
+                                                ))}
+                                            </div>
                                         )}
                                     </div>
-                                    <p className="text-xs text-gray-500 italic px-1 pt-1">(Có thể chọn nhiều)</p>
+
+                                    {/* Người phối hợp */}
+                                    <div className="space-y-2">
+                                        <label className="flex items-center gap-2 text-sm font-semibold text-purple-700">
+                                            <Users className="w-4 h-4" />
+                                            Người phối hợp
+                                        </label>
+                                        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm max-h-48 overflow-y-auto">
+                                            {collaboratorCandidates.length === 0 ? (
+                                                <div className="p-3 text-sm text-gray-500 text-center italic">
+                                                    Không có người dùng nào khác
+                                                </div>
+                                            ) : (
+                                                collaboratorCandidates.map(u => (
+                                                    <label
+                                                        key={`collab-${u.id}`}
+                                                        className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer border-b border-gray-100 last:border-0 transition-colors ${selectedCollaborators.includes(u.id) ? 'bg-purple-50' : 'hover:bg-gray-50'
+                                                            }`}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedCollaborators.includes(u.id)}
+                                                            onChange={() => toggleCollaborator(u.id)}
+                                                            className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
+                                                        />
+                                                        <div className="flex flex-col">
+                                                            <span className={`text-sm ${selectedCollaborators.includes(u.id) ? 'font-semibold text-purple-900' : 'font-medium text-gray-700'}`}>
+                                                                {u.displayName || u.email}
+                                                            </span>
+                                                            {u.role && u.role !== 'user' && (
+                                                                <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">{u.role}</span>
+                                                            )}
+                                                        </div>
+                                                    </label>
+                                                ))
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-gray-500 italic px-1 pt-1">(Có thể chọn nhiều)</p>
+                                    </div>
                                 </div>
                             </div>
                         )}
