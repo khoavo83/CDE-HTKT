@@ -11,9 +11,8 @@ import {
     ShieldAlert, Loader2, LayoutGrid, Zap, EyeOff, Eye, HardDrive, RefreshCw, Layers, Settings, AlertCircle, Upload, ArrowUpDown
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
-import { db, auth, appFunctions, storage } from '../firebase/config';
+import { db, auth, appFunctions } from '../firebase/config';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
 import { DeleteConfirmModal } from '../components/DeleteConfirmModal';
@@ -1268,6 +1267,8 @@ const AppSettingsTab = () => {
     useEffect(() => {
         setLocalSettings(settings);
     }, [settings]);
+
+    console.log(">>> [AppSettingsTab] Components Rendering - Logic Cloud Function active");
     const [uploadingBg, setUploadingBg] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -1280,18 +1281,40 @@ const AppSettingsTab = () => {
             return;
         }
 
-        const bgRef = ref(storage, `public_assets/login_bg_${Date.now()}_${file.name}`);
         setUploadingBg(true);
-        setUploadProgress(10); // fake initial progress to show it's working
+        setUploadProgress(10);
         try {
-            await uploadBytes(bgRef, file);
-            setUploadProgress(100);
-            const downloadURL = await getDownloadURL(bgRef);
-            setLocalSettings(prev => ({ ...prev, loginBgUrl: downloadURL }));
-            toast.success('Đã tải lên ảnh nền thành công. Hãy bấm Lưu Thay Đổi để áp dụng.');
-        } catch (error) {
+            // Đọc file sang Base64
+            const reader = new FileReader();
+            const base64Promise = new Promise<string>((resolve, reject) => {
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+
+            const base64Data = await base64Promise;
+            setUploadProgress(40);
+
+            // Gọi Cloud Function
+            const uploadFn = httpsCallable(appFunctions, 'uploadToStorageBase64');
+            const result = await uploadFn({
+                base64Data,
+                fileName: file.name,
+                contentType: file.type,
+                folderPath: 'public_assets'
+            });
+
+            const data = result.data as any;
+            if (data.success) {
+                setUploadProgress(100);
+                setLocalSettings(prev => ({ ...prev, loginBgUrl: data.downloadURL }));
+                toast.success('Đã tải lên ảnh nền thành công. Hãy bấm Lưu Thay Đổi để áp dụng.');
+            } else {
+                throw new Error(data.message || 'Upload thất bại');
+            }
+        } catch (error: any) {
             console.error('Lỗi upload ảnh nền:', error);
-            toast.error('Lỗi upload ảnh nền. Vui lòng thử lại.');
+            toast.error(`Lỗi upload ảnh nền: ${error.message || 'Vui lòng thử lại.'}`);
         } finally {
             setUploadingBg(false);
             e.target.value = ''; // Reset input
@@ -1309,8 +1332,9 @@ const AppSettingsTab = () => {
             await updateSettings(localSettings);
             setSuccessMsg('Đã lưu cấu hình chung thành công!');
             setTimeout(() => setSuccessMsg(''), 3000);
-        } catch (err) {
-            console.error(err);
+        } catch (err: any) {
+            console.error('Lỗi khi lưu cấu hình:', err);
+            toast.error(`Không thể lưu cấu hình: ${err.message || 'Lỗi không xác định'}`);
         } finally {
             setIsSaving(false);
         }

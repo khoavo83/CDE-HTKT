@@ -1952,3 +1952,55 @@ exports.getDriveStorageInfo = onCall({ timeoutSeconds: 60, region: 'asia-southea
         throw new HttpsError("internal", error.message);
     }
 });
+// ==========================================
+// API UPLOAD TỆP LÊN FIREBASE STORAGE (Bypass CORS)
+// ==========================================
+exports.uploadToStorageBase64 = onCall({ region: 'asia-southeast1', timeoutSeconds: 120, memory: '512MiB' }, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để thực hiện thao tác này.");
+    }
+    
+    // Chỉ Admin mới được phép upload cấu hình hệ thống
+    const userDoc = await db.collection("users").doc(request.auth.uid).get();
+    const userData = userDoc.data();
+    if (!userData || userData.role !== 'admin') {
+        throw new HttpsError("permission-denied", "Chỉ Admin mới có quyền thực hiện thao tác này.");
+    }
+
+    try {
+        const { base64Data, fileName, contentType, folderPath } = request.data;
+        if (!base64Data || !fileName) {
+            throw new Error("Dữ liệu không hợp lệ (thiếu base64Data hoặc fileName).");
+        }
+
+        // Loại bỏ header base64 nếu có
+        const base64Content = base64Data.split(',').pop() || base64Data;
+        const buffer = Buffer.from(base64Content, 'base64');
+
+        const bucket = admin.storage().bucket();
+        const destPath = `${folderPath || 'public_assets'}/${Date.now()}_${fileName}`;
+        const file = bucket.file(destPath);
+
+        await file.save(buffer, {
+            metadata: {
+                contentType: contentType || 'image/jpeg',
+            },
+            public: true, // Làm cho file công khai để Login screen có thể đọc được
+        });
+
+        // Tạo Signed URL hoặc Public URL
+        // Ở đây ta dùng Public URL vì public: true
+        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${destPath}`;
+
+        console.log(`[DEBUG] Đã upload file lên Storage: ${destPath}, URL: ${publicUrl}`);
+
+        return {
+            success: true,
+            downloadURL: publicUrl,
+            fileName: fileName
+        };
+    } catch (error) {
+        console.error("uploadToStorageBase64 Error:", error);
+        throw new HttpsError("internal", error.message);
+    }
+});
