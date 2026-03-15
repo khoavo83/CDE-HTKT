@@ -22,6 +22,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 import { useAppSettingsStore } from '../store/useAppSettingsStore';
 import { DocumentPreviewModal } from '../components/DocumentPreviewModal';
+import { MobileWarning } from '../components/MobileWarning';
 import { getDocIconConfig, getDocFormattedTitle } from '../utils/docUtils';
 
 const nodeWidth = 280;
@@ -277,6 +278,16 @@ const computeRecursiveLayout = (
 // ===== MAIN COMPONENT =====
 // ========================================
 export const Mindmap = () => {
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    if (isMobile) return <MobileWarning />;
+
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const { settings } = useAppSettingsStore();

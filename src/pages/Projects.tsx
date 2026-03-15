@@ -3,7 +3,7 @@ import { collection, query, onSnapshot, doc, setDoc, deleteDoc, updateDoc } from
 import { db, appFunctions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { Link } from 'react-router-dom';
-import { FolderTree, Folder, FileCheck, Layers, Plus, Edit2, Trash2, ChevronRight, ChevronDown, CheckCircle, Clock, ArrowUp, ArrowDown, FileText, FileImage, FileSpreadsheet, X, Link as LinkIcon, Unlink, ExternalLink, HardDrive, Search, Calendar, Loader2, ArrowUpDown, AlertTriangle, Download } from 'lucide-react';
+import { FolderTree, Folder, FileCheck, Layers, Plus, Edit2, Trash2, ChevronRight, ChevronDown, CheckCircle, Clock, ArrowUp, ArrowDown, FileText, FileImage, FileSpreadsheet, X, Link as LinkIcon, Unlink, ExternalLink, HardDrive, Search, Calendar, Loader2, ArrowUpDown, AlertTriangle, Download, BarChart3, ArrowLeft } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useAuthStore } from '../store/useAuthStore';
 import { canEditOrDeleteData } from '../utils/authUtils';
@@ -572,26 +572,26 @@ export const Projects = () => {
     const selectedNode = selectedNodeId ? allNodes.find(n => n.id === selectedNodeId) : null;
 
     return (
-        <div className="h-full flex flex-col p-6 bg-gray-50 uppercase-fix">
-            <div className="flex justify-between items-center mb-6 shrink-0">
+        <div className="h-full flex flex-col p-3 md:p-6 bg-gray-50 uppercase-fix">
+            <div className="flex justify-between items-center mb-3 md:mb-6 shrink-0">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Quản lý Cấu trúc Dự án</h1>
-                    <p className="text-sm text-gray-500 mt-1">Cấu hình cây phân cấp Dự án, Hạng mục, Gói thầu</p>
+                    <h1 className="text-lg md:text-2xl font-bold text-gray-900">Quản lý Cấu trúc Dự án</h1>
+                    <p className="hidden md:block text-sm text-gray-500 mt-1">Cấu hình cây phân cấp Dự án, Hạng mục, Gói thầu</p>
                 </div>
                 {isAdminOrManager && (
                     <button
                         onClick={(e) => handleAddNode(e, null)}
-                        className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-md hover:bg-primary-700 shadow-sm"
+                        className="flex items-center gap-2 bg-primary-600 text-white px-3 py-2 rounded-md hover:bg-primary-700 shadow-sm text-sm"
                     >
                         <Plus className="w-4 h-4" />
-                        Thêm Dự án gốc
+                        <span className="hidden md:inline">Thêm Dự án gốc</span>
                     </button>
                 )}
             </div>
 
-            <div className="flex-1 flex gap-6 min-h-0">
-                {/* Left Pane: Tree View */}
-                <div className="w-1/3 min-w-[300px] bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+            <div className="flex-1 flex flex-col md:flex-row gap-3 md:gap-6 min-h-0">
+                {/* Left Pane: Tree View - full width on mobile, 1/3 on desktop */}
+                <div className={`${selectedNodeId ? 'hidden md:flex' : 'flex'} md:w-1/3 md:min-w-[300px] bg-white rounded-xl shadow-sm border border-gray-200 flex-col overflow-hidden`}>
                     <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between shrink-0">
                         <h2 className="font-semibold text-gray-800">Cây Thư mục</h2>
                     </div>
@@ -606,56 +606,74 @@ export const Projects = () => {
                     </div>
                 </div>
 
-                {/* Right Pane: Details View */}
-                <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-y-auto">
+                {/* Right Pane: Details View - hidden on mobile when no node selected */}
+                <div className={`${selectedNodeId ? 'flex' : 'hidden md:flex'} flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-y-auto flex-col`}>
                     {selectedNode ? (
-                        <div className="p-8">
-                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-3 bg-blue-50 rounded-lg shrink-0">
+                        <div className="p-4 md:p-8">
+                            {/* Mobile back button */}
+                            <button
+                                onClick={() => setSelectedNodeId(null)}
+                                className="md:hidden flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-3 -mt-1"
+                            >
+                                <ArrowLeft className="w-4 h-4" />
+                                Quay lại cây thư mục
+                            </button>
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 md:gap-4 mb-4 md:mb-6">
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <div className="p-2 md:p-3 bg-blue-50 rounded-lg shrink-0">
                                         {getTypeIcon(selectedNode.type)}
                                     </div>
-                                    <div>
-                                        <h2 className="text-2xl font-bold text-gray-900">{selectedNode.name}</h2>
+                                    <div className="min-w-0">
+                                        <h2 className="text-lg md:text-2xl font-bold text-gray-900 truncate">{selectedNode.name}</h2>
                                         <div className="flex items-center gap-2 mt-1 flex-wrap">
                                             <span className="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
                                                 {getTypeName(selectedNode.type)}
                                             </span>
                                             {selectedNode.status === 'ACTIVE' ? (
                                                 <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600">
-                                                    <CheckCircle className="w-3.5 h-3.5" /> Đang hoạt động
+                                                    <CheckCircle className="w-3.5 h-3.5" /> <span className="hidden md:inline">Đang hoạt động</span>
                                                 </span>
                                             ) : (
                                                 <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500">
-                                                    <Clock className="w-3.5 h-3.5" /> {selectedNode.status === 'COMPLETED' ? 'Đã hoàn thành' : 'Tạm dừng'}
+                                                    <Clock className="w-3.5 h-3.5" /> <span className="hidden md:inline">{selectedNode.status === 'COMPLETED' ? 'Đã hoàn thành' : 'Tạm dừng'}</span>
                                                 </span>
                                             )}
-                                            <span className="text-gray-300 mx-0.5">|</span>
-                                            <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                                            <span className="hidden md:inline text-gray-300 mx-0.5">|</span>
+                                            <span className="hidden md:inline-flex items-center gap-1 text-xs text-gray-500">
                                                 <Calendar className="w-3 h-3" /> {selectedNode.startDate ? selectedNode.startDate.split('-').reverse().join('/') : '--'} → {selectedNode.endDate ? selectedNode.endDate.split('-').reverse().join('/') : '--'}
                                             </span>
                                         </div>
                                     </div>
                                 </div>
                                 <div className="flex flex-wrap gap-2 shrink-0">
+                                    <Link
+                                        to={`/gantt/${selectedNode.id}`}
+                                        className="flex items-center gap-2 bg-indigo-50 text-indigo-700 font-medium px-3 md:px-4 py-2 rounded-md hover:bg-indigo-100 transition-colors text-sm"
+                                        title="Sơ đồ Gantt"
+                                    >
+                                        <BarChart3 className="w-4 h-4" />
+                                        <span className="hidden md:inline">Sơ đồ Gantt</span>
+                                    </Link>
                                     {selectedNode.driveFolderLink && (
                                         <a
                                             href={selectedNode.driveFolderLink}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="flex items-center gap-2 bg-emerald-50 text-emerald-700 font-medium px-4 py-2 rounded-md hover:bg-emerald-100 transition-colors"
+                                            className="flex items-center gap-2 bg-emerald-50 text-emerald-700 font-medium px-3 md:px-4 py-2 rounded-md hover:bg-emerald-100 transition-colors text-sm"
+                                            title="Mở trên Drive"
                                         >
                                             <HardDrive className="w-4 h-4" />
-                                            Mở trên Drive
+                                            <span className="hidden md:inline">Mở trên Drive</span>
                                         </a>
                                     )}
                                     {isAdminOrManager && (
                                         <button
                                             onClick={(e) => handleAddNode(e, selectedNode.id)}
-                                            className="flex items-center gap-2 bg-blue-50 text-blue-700 font-medium px-4 py-2 rounded-md hover:bg-blue-100 transition-colors"
+                                            className="flex items-center gap-2 bg-blue-50 text-blue-700 font-medium px-3 md:px-4 py-2 rounded-md hover:bg-blue-100 transition-colors text-sm"
+                                            title="Tạo mục con"
                                         >
                                             <Plus className="w-4 h-4" />
-                                            Tạo mục con
+                                            <span className="hidden md:inline">Tạo mục con</span>
                                         </button>
                                     )}
                                 </div>
@@ -1023,7 +1041,7 @@ export const Projects = () => {
                         className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/70 backdrop-blur-sm"
                         onClick={(e) => { if (e.target === e.currentTarget) setPreviewDocId(null); }}
                     >
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[92vh] mx-4 flex flex-col overflow-hidden">
+                        <div className="bg-white rounded-none md:rounded-2xl shadow-2xl w-full md:max-w-6xl h-full md:h-[92vh] md:mx-4 flex flex-col overflow-hidden">
 
                             {/* Header */}
                             <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 bg-gray-50 shrink-0">
@@ -1075,8 +1093,8 @@ export const Projects = () => {
                             {/* Body: Meta Left + Preview Right */}
                             <div className="flex flex-1 overflow-hidden">
 
-                                {/* Left: Metadata */}
-                                <div className="w-72 shrink-0 border-r border-gray-200 overflow-y-auto p-5 space-y-4 bg-white">
+                                {/* Left: Metadata - hidden on mobile */}
+                                <div className="hidden md:block w-72 shrink-0 border-r border-gray-200 overflow-y-auto p-5 space-y-4 bg-white">
                                     {[
                                         { label: 'Loại Văn bản', value: previewDoc?.loaiVanBan },
                                         { label: 'Số Ký hiệu', value: previewDoc?.soKyHieu },

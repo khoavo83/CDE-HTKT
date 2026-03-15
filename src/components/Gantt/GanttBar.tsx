@@ -1,0 +1,232 @@
+import React, { useState, useEffect } from 'react';
+import { GanttTask } from './types';
+import { addDays, differenceInDays, isAfter, isBefore } from 'date-fns';
+import { Paperclip } from 'lucide-react';
+
+interface GanttBarProps {
+    task: GanttTask;
+    timelineStartDate: Date;
+    totalDaysInTimeline: number;
+    pixelsPerDay: number;
+    onUpdateTask?: (task: GanttTask) => void;
+    onDocumentClick?: (task: GanttTask) => void;
+}
+
+type DragType = 'planned-move' | 'planned-left' | 'planned-right' | 'actual-move' | 'actual-left' | 'actual-right' | null;
+
+export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, totalDaysInTimeline, pixelsPerDay, onUpdateTask, onDocumentClick }) => {
+    // 1. Calculate Planned Bar Position
+    const plannedStartFromTimelineStart = Math.max(0, differenceInDays(task.plannedStartDate, timelineStartDate));
+    const plannedDuration = differenceInDays(task.plannedEndDate, task.plannedStartDate) + 1;
+    
+    // Convert to percentages relative to total timeline width
+    const plannedLeftPct = (plannedStartFromTimelineStart / totalDaysInTimeline) * 100;
+    const plannedWidthPct = (plannedDuration / totalDaysInTimeline) * 100;
+
+    // 2. Calculate Actual Bar Position (if data exists)
+    let actualLeftPct = 0;
+    let actualWidthPct = 0;
+    let isDelayed = false;
+
+    if (task.actualStartDate) {
+        const actualStartFromTimelineStart = Math.max(0, differenceInDays(task.actualStartDate, timelineStartDate));
+        actualLeftPct = (actualStartFromTimelineStart / totalDaysInTimeline) * 100;
+        
+        // If no end date yet, draw until today or something similar. For now, just draw a point if no end.
+        const effectiveEndDate = task.actualEndDate || new Date(); 
+        const actualDuration = differenceInDays(effectiveEndDate, task.actualStartDate) + 1;
+        actualWidthPct = (actualDuration / totalDaysInTimeline) * 100;
+
+        // Simple delay logic: if actual end > planned end, it's delayed
+        if (task.actualEndDate && isAfter(task.actualEndDate, task.plannedEndDate)) {
+            isDelayed = true;
+        } else if (!task.actualEndDate && isAfter(new Date(), task.plannedEndDate)) {
+             isDelayed = true;
+        }
+    }
+
+    // Dragging State
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragType, setDragType] = useState<DragType>(null);
+    const [dragStartX, setDragStartX] = useState(0);
+    const [dragDeltaDays, setDragDeltaDays] = useState(0);
+
+    const handleMouseDown = (e: React.MouseEvent, type: DragType) => {
+        if (!onUpdateTask) return; // Only allow drag if we have update handler
+        e.stopPropagation();
+        e.preventDefault();
+        setIsDragging(true);
+        setDragType(type);
+        setDragStartX(e.clientX);
+    };
+
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isDragging) return;
+            const deltaX = e.clientX - dragStartX;
+            const deltaDays = Math.round(deltaX / pixelsPerDay);
+            setDragDeltaDays(deltaDays);
+        };
+
+        const handleMouseUp = () => {
+            if (!isDragging) return;
+            
+            setIsDragging(false);
+
+            if (dragDeltaDays !== 0 && dragType && onUpdateTask) {
+                const updatedTask = { ...task };
+                
+                if (dragType === 'planned-move') {
+                    updatedTask.plannedStartDate = addDays(updatedTask.plannedStartDate, dragDeltaDays);
+                    updatedTask.plannedEndDate = addDays(updatedTask.plannedEndDate, dragDeltaDays);
+                } else if (dragType === 'planned-left') {
+                    updatedTask.plannedStartDate = addDays(updatedTask.plannedStartDate, dragDeltaDays);
+                    // Ensure start is not after end
+                    if (isAfter(updatedTask.plannedStartDate, updatedTask.plannedEndDate)) {
+                        updatedTask.plannedStartDate = updatedTask.plannedEndDate;
+                    }
+                } else if (dragType === 'planned-right') {
+                    updatedTask.plannedEndDate = addDays(updatedTask.plannedEndDate, dragDeltaDays);
+                    // Ensure end is not before start
+                    if (isBefore(updatedTask.plannedEndDate, updatedTask.plannedStartDate)) {
+                        updatedTask.plannedEndDate = updatedTask.plannedStartDate;
+                    }
+                } else if (dragType === 'actual-move' && updatedTask.actualStartDate) {
+                    updatedTask.actualStartDate = addDays(updatedTask.actualStartDate, dragDeltaDays);
+                    if (updatedTask.actualEndDate) {
+                        updatedTask.actualEndDate = addDays(updatedTask.actualEndDate, dragDeltaDays);
+                    }
+                } else if (dragType === 'actual-left' && updatedTask.actualStartDate) {
+                    updatedTask.actualStartDate = addDays(updatedTask.actualStartDate, dragDeltaDays);
+                    if (updatedTask.actualEndDate && isAfter(updatedTask.actualStartDate, updatedTask.actualEndDate)) {
+                        updatedTask.actualStartDate = updatedTask.actualEndDate;
+                    }
+                } else if (dragType === 'actual-right' && updatedTask.actualEndDate) {
+                    updatedTask.actualEndDate = addDays(updatedTask.actualEndDate, dragDeltaDays);
+                    if (updatedTask.actualStartDate && isBefore(updatedTask.actualEndDate, updatedTask.actualStartDate)) {
+                        updatedTask.actualEndDate = updatedTask.actualStartDate;
+                    }
+                }
+
+                onUpdateTask(updatedTask);
+            }
+
+            setDragType(null);
+            setDragDeltaDays(0);
+        };
+
+        if (isDragging) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+        }
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging, dragStartX, pixelsPerDay, dragDeltaDays, dragType, task, onUpdateTask]);
+
+    // Apply temporary drag styles
+    let displayPlannedLeftPct = plannedLeftPct;
+    let displayPlannedWidthPct = plannedWidthPct;
+    let displayActualLeftPct = actualLeftPct;
+    let displayActualWidthPct = actualWidthPct;
+
+    if (isDragging && dragDeltaDays !== 0) {
+        const deltaPct = (dragDeltaDays / totalDaysInTimeline) * 100;
+        
+        if (dragType === 'planned-move') {
+            displayPlannedLeftPct += deltaPct;
+        } else if (dragType === 'planned-left') {
+            displayPlannedLeftPct += deltaPct;
+            displayPlannedWidthPct -= deltaPct; 
+            // Avoid negative width
+            if (displayPlannedWidthPct < 0.1) {
+                displayPlannedLeftPct -= (0.1 - displayPlannedWidthPct);
+                displayPlannedWidthPct = 0.1;
+            }
+        } else if (dragType === 'planned-right') {
+            displayPlannedWidthPct += deltaPct;
+            if (displayPlannedWidthPct < 0.1) displayPlannedWidthPct = 0.1;
+        } else if (dragType === 'actual-move') {
+            displayActualLeftPct += deltaPct;
+        } else if (dragType === 'actual-left') {
+             displayActualLeftPct += deltaPct;
+             displayActualWidthPct -= deltaPct;
+             if (displayActualWidthPct < 0.1) {
+                 displayActualLeftPct -= (0.1 - displayActualWidthPct);
+                 displayActualWidthPct = 0.1;
+             }
+        } else if (dragType === 'actual-right') {
+             displayActualWidthPct += deltaPct;
+             if (displayActualWidthPct < 0.1) displayActualWidthPct = 0.1;
+        }
+    }
+
+    const hasDocuments = task.linkedDocumentIds && task.linkedDocumentIds.length > 0;
+
+    return (
+        <div className="absolute top-1/2 -translate-y-1/2 w-full h-[32px] pointer-events-none group-hover:block z-10">
+            {/* Planned Bar (Background/Top) */}
+            <div 
+                className={`absolute h-[10px] rounded-full bg-blue-200 border border-blue-300 shadow-sm top-0 z-10 pointer-events-auto cursor-grab active:cursor-grabbing ${isDragging && dragType?.includes('planned') ? 'opacity-70 bg-blue-300' : ''}`}
+                style={{ 
+                    left: `${displayPlannedLeftPct}%`, 
+                    width: `${displayPlannedWidthPct}%`,
+                    transition: isDragging ? 'none' : 'all 0.2s',
+                }}
+                title={`Kế hoạch: ${task.plannedStartDate.toLocaleDateString()} - ${task.plannedEndDate.toLocaleDateString()}`}
+                onMouseDown={(e) => handleMouseDown(e, 'planned-move')}
+            >
+                {/* Drag Handles for Planned */}
+                {onUpdateTask && (
+                    <>
+                        <div className="absolute left-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-black/10 rounded-l-full" onMouseDown={(e) => handleMouseDown(e, 'planned-left')} />
+                        <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-black/10 rounded-r-full" onMouseDown={(e) => handleMouseDown(e, 'planned-right')} />
+                    </>
+                )}
+            </div>
+
+            {/* Actual Bar (Foreground/Bottom) */}
+            {task.actualStartDate && (
+                <div 
+                    className={`absolute h-[10px] rounded-full shadow-sm top-[16px] border z-20 pointer-events-auto cursor-grab active:cursor-grabbing ${
+                        isDelayed ? 'bg-red-400 border-red-500' : 'bg-green-400 border-green-500'
+                    } ${isDragging && dragType?.includes('actual') ? 'opacity-70 brightness-90' : ''}`}
+                    style={{ 
+                        left: `${displayActualLeftPct}%`, 
+                        width: `${displayActualWidthPct}%`,
+                        transition: isDragging ? 'none' : 'all 0.2s',
+                    }}
+                    title={`Thực tế: ${task.actualStartDate.toLocaleDateString()} - ${task.actualEndDate ? task.actualEndDate.toLocaleDateString() : 'Đang xử lý'}`}
+                    onMouseDown={(e) => handleMouseDown(e, 'actual-move')}
+                >
+                    {/* Drag Handles for Actual */}
+                    {onUpdateTask && task.actualEndDate && (
+                        <>
+                            <div className="absolute left-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-black/10 rounded-l-full" onMouseDown={(e) => handleMouseDown(e, 'actual-left')} />
+                            <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-black/10 rounded-r-full" onMouseDown={(e) => handleMouseDown(e, 'actual-right')} />
+                        </>
+                    )}
+                </div>
+            )}
+
+            {/* Document Indicator Icon */}
+            {hasDocuments && (
+                <div 
+                    className="absolute pointer-events-auto bg-white border border-gray-200 shadow-sm rounded-full w-5 h-5 flex items-center justify-center top-[4px] z-30 opacity-80 hover:opacity-100 transition-opacity cursor-pointer"
+                    style={{ 
+                        left: `calc(max(${displayPlannedLeftPct + displayPlannedWidthPct}%, ${task.actualStartDate ? displayActualLeftPct + displayActualWidthPct : 0}%) + 8px)`
+                    }}
+                    title={`Có ${task.linkedDocumentIds!.length} văn bản đính kèm`}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onDocumentClick?.(task);
+                    }}
+                >
+                    <Paperclip className="w-3 h-3 text-indigo-500" />
+                </div>
+            )}
+        </div>
+    );
+};

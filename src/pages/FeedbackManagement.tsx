@@ -119,7 +119,8 @@ export const FeedbackManagement: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="overflow-x-auto min-h-[400px]">
+                {/* Desktop View Table */}
+                <div className="hidden md:block overflow-x-auto min-h-[400px]">
                     <table className="w-full text-left text-sm whitespace-nowrap">
                         <thead className="bg-gray-50 text-gray-600 font-semibold border-b border-gray-200">
                             <tr>
@@ -214,6 +215,99 @@ export const FeedbackManagement: React.FC = () => {
                             )}
                         </tbody>
                     </table>
+                </div>
+
+                {/* Mobile View Card List */}
+                <div className="md:hidden divide-y divide-gray-100">
+                    {loading && feedbacks.length === 0 ? (
+                        <div className="py-12 text-center">
+                            <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto" />
+                            <p className="text-gray-500 mt-2">Đang tải dữ liệu...</p>
+                        </div>
+                    ) : filteredFeedbacks.length === 0 ? (
+                        <div className="py-12 text-center text-gray-500">
+                            Không tìm thấy góp ý nào phù hợp.
+                        </div>
+                    ) : (
+                        filteredFeedbacks.map((fb) => (
+                            <div key={fb.id} className="p-4 space-y-3 bg-white hover:bg-gray-50 transition-colors">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <div className="font-bold text-gray-900">{fb.userName}</div>
+                                        <div className="text-xs text-gray-500">{fb.userEmail}</div>
+                                        <div className="text-[10px] text-gray-400 mt-0.5">
+                                            {format(new Date(fb.createdAt.seconds * 1000), 'HH:mm dd/MM/y', { locale: vi })}
+                                        </div>
+                                    </div>
+                                    <StatusBadge status={fb.status} />
+                                </div>
+                                
+                                <div className="bg-gray-50 p-3 rounded-lg text-sm text-gray-700 border border-gray-100">
+                                    {fb.content}
+                                </div>
+
+                                <div className="flex flex-col gap-3 pt-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-semibold text-gray-500 shrink-0 w-20">Trạng thái:</span>
+                                        <select
+                                            value={fb.status}
+                                            onChange={(e) => handleStatusChange(fb.id, e.target.value as FeedbackStatus)}
+                                            disabled={updatingId === fb.id}
+                                            className="flex-1 px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                        >
+                                            <option value="PENDING">🔄 Chờ xử lý</option>
+                                            <option value="IN_PROGRESS">⚙️ Đang xử lý</option>
+                                            <option value="RESOLVED">✅ Hoàn thành</option>
+                                            <option value="REJECTED">❌ Từ chối</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="flex flex-col gap-1.5">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-semibold text-gray-500">Phản hồi Admin:</span>
+                                            {editNoteId !== fb.id && (
+                                                <button 
+                                                    onClick={() => {
+                                                        setEditNoteId(fb.id);
+                                                        setTempNote(fb.adminNote || '');
+                                                    }}
+                                                    className="text-[10px] text-blue-600 font-medium"
+                                                >
+                                                    {fb.adminNote ? 'Sửa' : 'Thêm'}
+                                                </button>
+                                            )}
+                                        </div>
+                                        
+                                        {editNoteId === fb.id ? (
+                                            <div className="flex flex-col gap-2">
+                                                <textarea
+                                                    value={tempNote}
+                                                    onChange={(e) => setTempNote(e.target.value)}
+                                                    placeholder="Nhập ghi chú phản hồi..."
+                                                    className="w-full text-xs p-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-blue-50/50 resize-none h-20"
+                                                />
+                                                <div className="flex gap-2 justify-end">
+                                                    <button
+                                                        onClick={() => setEditNoteId(null)}
+                                                        className="text-xs px-3 py-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                                                    >Hủy</button>
+                                                    <button
+                                                        onClick={() => handleSaveNote(fb.id, fb.status)}
+                                                        disabled={updatingId === fb.id}
+                                                        className="text-xs px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                                                    >Lưu phản hồi</button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className={`p-3 rounded-lg border text-xs min-h-[40px] ${fb.adminNote ? 'bg-blue-50 border-blue-100 text-blue-800' : 'bg-gray-50 border-gray-100 text-gray-400 italic'}`}>
+                                                {fb.adminNote || 'Chưa có ghi chú phản hồi'}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
                 </div>
             </div>
         </div>

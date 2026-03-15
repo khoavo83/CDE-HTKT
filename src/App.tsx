@@ -26,6 +26,9 @@ import { MeetingCalendar } from './pages/MeetingCalendar';
 import { FeedbackManagement } from './pages/FeedbackManagement';
 import { TrashManagement } from './pages/TrashManagement';
 import { TasksManagement } from './pages/TasksManagement';
+import { GanttTestPage } from './pages/GanttTestPage';
+import { GanttPage } from './pages/GanttPage';
+
 
 function App() {
     const { setUser, setLoading, isLoading } = useAuthStore();
@@ -73,10 +76,14 @@ function App() {
                 <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route path="/pending-approval" element={<PendingApproval />} />
+                    
+                    {/* Development Route - No Auth Required */}
+                    <Route path="/gantt-test" element={<GanttTestPage />} />
 
                     <Route element={<MainLayout />}>
                         <Route path="/" element={<Dashboard />} />
                         <Route path="/projects" element={<Projects />} />
+                        <Route path="/gantt/:projectId" element={<GanttPage />} />
                         <Route path="/tasks" element={<TasksManagement />} />
                         <Route path="/mindmap" element={<Mindmap />} />
                         <Route path="/documents" element={<Documents />} />

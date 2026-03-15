@@ -53,11 +53,11 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ onMenuClick }) => {
                         className="h-9 md:h-12 w-auto object-contain hover:scale-105 transition-transform duration-300"
                     />
                 </div>
-                <div className="flex flex-col border-l border-gray-200 pl-2 md:pl-4 py-0.5 max-w-[110px] md:max-w-none">
+                <div className="flex flex-col border-l border-gray-200 pl-2 md:pl-4 py-0.5 max-w-[80px] md:max-w-none">
                     <h2 className="text-[9px] md:text-[11px] font-bold text-gray-500 uppercase tracking-tight leading-tight opacity-80 truncate">
                         {settings.appName}
                     </h2>
-                    <h2 className="text-[9px] md:text-[11px] font-black text-blue-800 uppercase tracking-tight leading-tight truncate">
+                    <h2 className="hidden md:block text-[11px] font-black text-blue-800 uppercase tracking-tight leading-tight truncate">
                         {settings.agencyName}
                     </h2>
                 </div>

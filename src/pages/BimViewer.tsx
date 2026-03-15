@@ -2,11 +2,22 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as OBC from 'openbim-components';
 import * as THREE from 'three';
 import { Box, Loader2, UploadCloud, Scissors, Trash2 } from 'lucide-react';
+import { MobileWarning } from '../components/MobileWarning';
 
 import toast from 'react-hot-toast';
 
 export const BimViewer = () => {
     const containerRef = useRef<HTMLDivElement>(null);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    if (isMobile) return <MobileWarning />;
+
     const [isLoading, setIsLoading] = useState(false);
     const [viewerRef, setViewerRef] = useState<OBC.Components | null>(null);
     const [clipperRef, setClipperRef] = useState<any>(null);

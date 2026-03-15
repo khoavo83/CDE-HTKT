@@ -367,35 +367,38 @@ export const Documents = () => {
 
     return (
         <div className="p-4 md:p-6 lg:p-8">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Quản lý Văn bản</h1>
-                    <p className="text-sm text-gray-500 mt-1">Hệ thống xử lý văn bản AI OCR tự động + Đính kèm</p>
+                    <h1 className="text-xl md:text-2xl font-bold text-gray-900">Quản lý Văn bản</h1>
+                    <p className="text-sm text-gray-500 mt-1 hidden md:block">Hệ thống xử lý văn bản AI OCR tự động + Đính kèm</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 md:gap-3">
                     {activeTab === 'PROCESSING' && user?.role !== 'viewer' && (
                         <button
                             onClick={() => setIsAssignModalOpen(true)}
-                            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-bold shadow-sm shadow-blue-200"
+                            className="flex items-center gap-2 bg-blue-600 text-white px-3 md:px-4 py-2 rounded-lg hover:bg-blue-700 transition font-bold shadow-sm shadow-blue-200"
+                            title="Giao việc mới"
                         >
                             <Send className="w-4 h-4" />
-                            Giao việc mới
+                            <span className="hidden md:inline">Giao việc mới</span>
                         </button>
                     )}
                     <button
                         onClick={exportToExcel}
-                        className="flex items-center gap-2 bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-lg hover:bg-emerald-100 transition font-bold shadow-sm"
+                        className="flex items-center gap-2 bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 md:px-4 py-2 rounded-lg hover:bg-emerald-100 transition font-bold shadow-sm"
+                        title="Xuất Excel"
                     >
                         <Download className="w-4 h-4" />
-                        Xuất Excel
+                        <span className="hidden md:inline">Xuất Excel</span>
                     </button>
                     {activeTab !== 'PROCESSING' && user?.role !== 'viewer' && (
                         <button
                             onClick={() => setIsUploadModalOpen(true)}
-                            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-bold shadow-sm shadow-blue-200"
+                            className="flex items-center gap-2 bg-blue-600 text-white px-3 md:px-4 py-2 rounded-lg hover:bg-blue-700 transition font-bold shadow-sm shadow-blue-200"
+                            title="Tải Văn bản mới"
                         >
                             <Upload className="w-5 h-5" />
-                            Tải Văn bản mới
+                            <span className="hidden md:inline">Tải Văn bản mới</span>
                         </button>
                     )}
                 </div>
@@ -481,7 +484,61 @@ export const Documents = () => {
             />
 
             {activeTab === 'PROCESSING' ? (
-                <table className="w-full text-left border-collapse min-w-max">
+                <>
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-3">
+                    {loadingTasks ? (
+                        <div className="p-8 text-center text-gray-500">Đang tải dữ liệu...</div>
+                    ) : filteredTasks.length === 0 ? (
+                        <div className="p-8 text-center text-gray-500">Không tìm thấy phân công xử lý phù hợp.</div>
+                    ) : (
+                        filteredTasks.map((task) => {
+                            const vb = vanBanCache[task.vanBanId];
+                            return (
+                                <div key={task.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${task.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : task.status === 'PROCESSING' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                                            {task.status === 'COMPLETED' ? 'Hoàn thành' : task.status === 'PROCESSING' ? 'Đang làm' : 'Chưa nhận'}
+                                        </span>
+                                        <div className="flex items-center gap-1">
+                                            <button onClick={() => setSelectedTaskToUpdate(task)} className="p-1.5 text-blue-600 bg-blue-50 rounded-lg" title="Cập nhật"><CheckCircle2 className="w-4 h-4" /></button>
+                                            {user?.role === 'admin' && (
+                                                <>
+                                                    <button onClick={() => setAdminEditTask(task)} className="p-1.5 text-amber-600 bg-amber-50 rounded-lg" title="Sửa"><Settings className="w-4 h-4" /></button>
+                                                    <button onClick={() => setDeleteTaskModal({ isOpen: true, taskId: task.id })} className="p-1.5 text-red-600 bg-red-50 rounded-lg" title="Xóa"><Trash2 className="w-4 h-4" /></button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {vb && (
+                                        <Link to={"/documents/" + vb.id} className="text-blue-600 font-bold text-sm hover:underline line-clamp-2 block">
+                                            {vb.soKyHieu} {vb.ngayBanHanh && `ngày ${isoToVN(vb.ngayBanHanh)}`}
+                                        </Link>
+                                    )}
+                                    <p className="text-sm text-gray-700 line-clamp-2">{task.content}</p>
+                                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                                        <span className="flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full font-medium"><UserCheck className="w-3 h-3" />{task.assigneeName || 'N/A'}</span>
+                                        {task.collaboratorNames?.map((name: string, i: number) => (
+                                            <span key={i} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px]">{name}</span>
+                                        ))}
+                                    </div>
+                                    <div className="flex items-center justify-between text-[10px] text-gray-400">
+                                        <span className="flex items-center gap-1"><Clock className="w-3 h-3" />Giao bởi: {task.assignerName || '--'}</span>
+                                        <span>{task.createdAt ? isoToVN(task.createdAt.split('T')[0]) : '--'}</span>
+                                    </div>
+                                    {(task.result || task.bcDocId) && (
+                                        <div className="pt-2 border-t border-gray-100 space-y-1">
+                                            {task.result && <p className="text-xs text-gray-600 line-clamp-2">{task.result}</p>}
+                                            {task.bcDocId && <TaskFileLinks docId={task.bcDocId} onOpenPreview={setPreviewDocData} />}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+                {/* Desktop Table */}
+                <table className="hidden md:table w-full text-left border-collapse min-w-max">
                     <thead>
                         <tr className="bg-gray-50 border-b border-gray-200 text-sm font-medium text-gray-500">
                             <th className="p-4 border-r border-gray-200 w-16 text-center">STT</th>
@@ -619,8 +676,49 @@ export const Documents = () => {
                         )}
                     </tbody>
                 </table>
+                </>
+            
             ) : (
-                <table className="w-full text-left border-collapse table-fixed min-w-max">
+                <>
+                {/* Mobile Card View for Documents */}
+                <div className="md:hidden space-y-3">
+                    {paginatedDocs.length === 0 ? (
+                        <div className="p-8 text-center text-gray-500">Không tìm thấy văn bản phù hợp...</div>
+                    ) : (
+                        paginatedDocs.map((doc) => (
+                            <div key={doc.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-2">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                        {doc.trangThaiDuLieu === 'REVIEWING' ? (
+                                            <div className="w-7 h-7 rounded-full bg-amber-100 text-amber-600 border border-amber-200 flex items-center justify-center flex-shrink-0"><Clock className="w-4 h-4" /></div>
+                                        ) : (
+                                            <div className="w-7 h-7 rounded-full bg-green-100 text-green-600 border border-green-200 flex items-center justify-center flex-shrink-0"><FileCheck className="w-4 h-4" /></div>
+                                        )}
+                                        <div className="flex items-center gap-1.5">
+                                            {doc.phanLoaiVanBan === 'OUTGOING' && <ArrowUp className={`w-3.5 h-3.5 ${doc.mucDoKhan === 'KHAN' ? 'text-red-600' : 'text-green-600'}`} />}
+                                            {doc.phanLoaiVanBan === 'INCOMING' && <ArrowDown className={`w-3.5 h-3.5 ${doc.mucDoKhan === 'KHAN' ? 'text-red-600' : 'text-blue-600'}`} />}
+                                            <span className="text-xs text-gray-500 font-medium">{doc.loaiVanBan || '--'}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <Link to={"/documents/" + doc.id} className="p-1.5 text-blue-600 bg-blue-50 rounded-lg" title="Xem"><Eye className="w-4 h-4" /></Link>
+                                        {user?.role === 'admin' && (
+                                            <button onClick={() => handleDeleteClick(doc.id)} className="p-1.5 text-red-600 bg-red-50 rounded-lg" title="Xóa"><Trash2 className="w-4 h-4" /></button>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="font-bold text-gray-900 text-sm">{doc.soKyHieu || '--'}</div>
+                                <p className="text-xs text-gray-600 line-clamp-2">{doc.trichYeu || '--'}</p>
+                                <div className="flex items-center justify-between text-[10px] text-gray-400">
+                                    <span>{isoToVN(doc.ngayBanHanh)}</span>
+                                    <span>{doc.coQuanBanHanh || '--'}</span>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+                {/* Desktop Table */}
+                <table className="hidden md:table w-full text-left border-collapse table-fixed min-w-max">
                     <thead>
                         <tr className="bg-gray-50 border-b border-gray-200 text-sm font-medium text-gray-500">
                             <th style={{ width: colWidths.status }} className="p-4 relative group border-r border-gray-200">
@@ -716,7 +814,6 @@ export const Documents = () => {
                                 <td className="p-4 text-gray-500 text-center font-medium border-r border-gray-100">{formatBytes(doc.fileSize)}</td>
                                 <td className="p-4 text-center">
                                     <div className="flex items-center justify-center gap-1">
-
                                         <Link
                                             to={"/documents/" + doc.id}
                                             className="text-gray-400 hover:text-blue-600 bg-white hover:bg-blue-50 p-2 rounded-lg transition-colors border border-gray-100 shadow-sm"
@@ -764,6 +861,7 @@ export const Documents = () => {
                         )}
                     </tbody>
                 </table>
+                </>
             )
             }
 

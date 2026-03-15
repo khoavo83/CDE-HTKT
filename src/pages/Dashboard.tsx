@@ -296,16 +296,16 @@ export const Dashboard = () => {
 
     return (
         <div className="min-h-screen bg-gray-50">
-            <div className="max-w-[1600px] mx-auto px-6 py-8">
+            <div className="max-w-[1600px] mx-auto px-3 py-4 md:px-6 md:py-8">
 
                 {/* ── Header ── */}
-                <div className="mb-8">
-                    <h1 className="text-2xl font-bold text-gray-900">Tổng quan Dự án</h1>
-                    <p className="text-sm text-gray-500 mt-1">Hệ thống CDE Ban Hạ tầng Kỹ thuật</p>
+                <div className="mb-4 md:mb-8">
+                    <h1 className="text-xl md:text-2xl font-bold text-gray-900">Tổng quan Dự án</h1>
+                    <p className="hidden md:block text-sm text-gray-500 mt-1">Hệ thống CDE Ban Hạ tầng Kỹ thuật</p>
                 </div>
 
                 {/* ── Row 6 (Moved): Bảng danh sách Dự án ── (Note: Moved this up) */}
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 md:gap-4 mb-4 md:mb-8">
                     <Link to="/projects" className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center gap-4 hover:shadow-md hover:border-blue-300 transition-all group cursor-pointer">
                         <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors">
                             <FolderTree className="w-6 h-6 text-blue-600" />

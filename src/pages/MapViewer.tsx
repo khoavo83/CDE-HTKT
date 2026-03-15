@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, LayersControl, GeoJSON, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import { MobileWarning } from '../components/MobileWarning';
 import {
     Map as MapIcon, Upload, Layers, Trash2,
     Eye, EyeOff, Loader2, AlertCircle, ChevronLeft, ChevronRight
@@ -96,6 +97,16 @@ interface MapLayer {
 }
 
 export const MapViewer = () => {
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    if (isMobile) return <MobileWarning />;
+
     const { user } = useAuthStore();
     const centerPosition: [number, number] = [10.7769, 106.7009];
     const [layers, setLayers] = useState<MapLayer[]>([]);

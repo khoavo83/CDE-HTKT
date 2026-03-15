@@ -5,7 +5,12 @@ import { db } from '../firebase/config';
 import { useAuthStore } from '../store/useAuthStore';
 import { canManageUser } from '../utils/authUtils';
 import { useCategoryStore } from '../store/useCategoryStore';
-import { Users, ShieldAlert, Loader2, CheckCircle, Edit2, Save, X, Upload, Trash2, UserPlus, RefreshCw } from 'lucide-react';
+import { MobileWarning } from '../components/MobileWarning';
+import {
+    Users, Search, UserPlus, MoreVertical, Shield, Mail, Trash2, 
+    ExternalLink, Download, FileSpreadsheet, RefreshCw, Key,
+    ShieldAlert, Loader2, CheckCircle, Edit2, Save, X, Upload
+} from 'lucide-react';
 import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
 import { GenericConfirmModal } from '../components/GenericConfirmModal';
@@ -13,7 +18,19 @@ import { AddUserModal } from '../components/AddUserModal';
 import { httpsCallable } from 'firebase/functions';
 import { appFunctions } from '../firebase/config';
 
-export const UsersManagement = () => {
+export function UsersManagement() {
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    if (isMobile) {
+        return <MobileWarning />;
+    }
+
     const { user } = useAuthStore();
     const { categories, fetchCategories } = useCategoryStore();
     const [usersList, setUsersList] = useState<any[]>([]);

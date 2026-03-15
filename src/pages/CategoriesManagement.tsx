@@ -2,13 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '../store/useAuthStore';
 import { canEditOrDeleteData } from '../utils/authUtils';
 import { useAppSettingsStore } from '../store/useAppSettingsStore';
+import { MobileWarning } from '../components/MobileWarning';
 import { useCategoryStore, Category } from '../store/useCategoryStore';
 import { useCategoryTabStore } from '../store/useCategoryTabStore';
 import { useMenuConfigStore, MenuItemStatus, MenuConfigItem } from '../store/useMenuConfigStore';
 import { ICON_MAP } from '../layout/MainLayout';
 import {
-    ListTree, Plus, Edit2, Trash2, CheckCircle, XCircle, Save, X,
-    ShieldAlert, Loader2, LayoutGrid, Zap, EyeOff, Eye, HardDrive, RefreshCw, Layers, Settings, AlertCircle, Upload, ArrowUpDown
+    FolderTree, Plus, Edit2, Trash2, CheckCircle, XCircle, Save, X,
+    ShieldAlert, Loader2, LayoutGrid, Zap, EyeOff, Eye, HardDrive, RefreshCw, Layers, Settings, AlertCircle, Upload, ArrowUpDown,
+    Folder, ChevronRight, ChevronDown, Layout, Menu, FileSpreadsheet, Download, AlertTriangle, ListTree
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { db, auth, appFunctions } from '../firebase/config';
@@ -26,6 +28,18 @@ const STATUS_CONFIG: Record<MenuItemStatus, { label: string; badge: string; icon
 };
 
 export const CategoriesManagement = () => {
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    if (isMobile) {
+        return <MobileWarning />;
+    }
+
     const { user } = useAuthStore();
     const { categories, isLoading, error, fetchCategories, addCategory, updateCategory } = useCategoryStore();
     const {

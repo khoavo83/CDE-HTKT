@@ -229,68 +229,70 @@ export const TasksManagement = () => {
         <div className="h-full bg-gray-50 p-4 md:p-6">
             <div className="w-full mx-auto px-2">
                 {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
-                                <ListChecks className="w-5 h-5 text-indigo-600" />
+                        <h1 className="text-lg md:text-2xl font-bold text-gray-900 flex items-center gap-2 md:gap-3">
+                            <div className="w-8 h-8 md:w-10 md:h-10 bg-indigo-100 rounded-xl flex items-center justify-center shrink-0">
+                                <ListChecks className="w-4 h-4 md:w-5 md:h-5 text-indigo-600" />
                             </div>
                             Quản lý công việc
                         </h1>
-                        <p className="text-sm text-gray-500 mt-1 ml-[52px]">Theo dõi, nhận việc, báo cáo tiến độ và hoàn thành công việc được giao</p>
+                        <p className="hidden md:block text-sm text-gray-500 mt-1 ml-[52px]">Theo dõi, nhận việc, báo cáo tiến độ và hoàn thành công việc được giao</p>
                     </div>
-                    <div className="flex items-center gap-3 ml-[52px] md:ml-0">
+                    <div className="flex items-center gap-2 md:gap-3 ml-10 md:ml-0">
                         <button
                             onClick={() => {
                                 setIsSelfAssign(true);
                                 setIsAssignModalOpen(true);
                             }}
-                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors shadow-sm"
+                            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors shadow-sm"
+                            title="Tự giao việc"
                         >
                             <UserCheck className="w-4 h-4" />
-                            Tự giao việc
+                            <span className="hidden md:inline">Tự giao việc</span>
                         </button>
                         <button
                             onClick={() => {
                                 setIsSelfAssign(false);
                                 setIsAssignModalOpen(true);
                             }}
-                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
+                            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
+                            title="Giao việc mới"
                         >
                             <Send className="w-4 h-4" />
-                            Giao việc mới
+                            <span className="hidden md:inline">Giao việc mới</span>
                         </button>
                     </div>
                 </div>
 
                 {/* Stats */}
-                <div className="grid grid-cols-3 gap-4 mb-6">
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <div className="grid grid-cols-3 gap-2 md:gap-4 mb-4 md:mb-6">
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 md:p-4">
                         <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium text-amber-700">Chờ xử lý</p>
-                            <Clock className="w-5 h-5 text-amber-500" />
+                            <p className="text-xs md:text-sm font-medium text-amber-700">Chờ xử lý</p>
+                            <Clock className="w-4 h-4 md:w-5 md:h-5 text-amber-500" />
                         </div>
-                        <p className="text-2xl font-bold text-amber-900 mt-1">{statusCounts.pending}</p>
+                        <p className="text-xl md:text-2xl font-bold text-amber-900 mt-1">{statusCounts.pending}</p>
                     </div>
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-2.5 md:p-4">
                         <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium text-blue-700">Đang xử lý</p>
-                            <Loader2 className="w-5 h-5 text-blue-500" />
+                            <p className="text-xs md:text-sm font-medium text-blue-700">Đang xử lý</p>
+                            <Loader2 className="w-4 h-4 md:w-5 md:h-5 text-blue-500" />
                         </div>
-                        <p className="text-2xl font-bold text-blue-900 mt-1">{statusCounts.inProgress}</p>
+                        <p className="text-xl md:text-2xl font-bold text-blue-900 mt-1">{statusCounts.inProgress}</p>
                     </div>
-                    <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-2.5 md:p-4">
                         <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium text-green-700">Hoàn thành</p>
-                            <CheckCircle2 className="w-5 h-5 text-green-500" />
+                            <p className="text-xs md:text-sm font-medium text-green-700">Hoàn thành</p>
+                            <CheckCircle2 className="w-4 h-4 md:w-5 md:h-5 text-green-500" />
                         </div>
-                        <p className="text-2xl font-bold text-green-900 mt-1">{statusCounts.completed}</p>
+                        <p className="text-xl md:text-2xl font-bold text-green-900 mt-1">{statusCounts.completed}</p>
                     </div>
                 </div>
 
                 {/* Tabs */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="flex border-b border-gray-200">
+                    <div className="flex border-b border-gray-200 overflow-x-auto">
                         {tabs.map(tab => {
                             const Icon = tab.icon;
                             const isActive = activeTab === tab.key;
@@ -302,13 +304,14 @@ export const TasksManagement = () => {
                                 <button
                                     key={tab.key}
                                     onClick={() => setActiveTab(tab.key)}
-                                    className={`flex items-center gap-2 px-5 py-3.5 text-sm font-semibold border-b-2 transition-colors ${isActive
+                                    className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-5 py-3 md:py-3.5 text-xs md:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${isActive
                                         ? 'border-indigo-500 text-indigo-600 bg-indigo-50/50'
                                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                                         }`}
+                                    title={tab.label}
                                 >
                                     <Icon className="w-4 h-4" />
-                                    {tab.label}
+                                    <span className="hidden md:inline">{tab.label}</span>
                                 </button>
                             );
                         })}
@@ -347,7 +350,7 @@ export const TasksManagement = () => {
                         </div>
                     )}
 
-                    {/* Table */}
+                    {/* Table (Desktop) + Card List (Mobile) */}
                     {loading ? (
                         <div className="flex items-center justify-center py-20">
                             <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
@@ -358,7 +361,127 @@ export const TasksManagement = () => {
                             <p className="text-sm">Không có công việc nào trong mục này.</p>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
+                        <>
+                        {/* --- MOBILE CARD VIEW --- */}
+                        <div className="md:hidden divide-y divide-gray-100">
+                            {displayTasks.map((task: any, index: number) => {
+                                const isAssignee = user?.uid === task.assigneeId;
+                                const isCollaborator = task.collaborators?.some((c: any) => c.id === user?.uid);
+                                const isAssigner = user?.uid === task.assignerId;
+                                const isAdmin = user?.role === 'admin';
+                                const canEdit = isAssignee || isCollaborator || isAdmin;
+                                const canDeleteTask = isAssigner || isAdmin;
+                                const isExpanded = expandedTaskId === task.id;
+                                return (
+                                    <div key={task.id} className={`p-3 ${task.status === 'COMPLETED' ? 'opacity-60' : ''}`}>
+                                        {/* Card header: status + date */}
+                                        <div className="flex items-center justify-between mb-2">
+                                            <StatusBadge status={task.status} />
+                                            <span className="text-xs text-gray-400 font-medium">
+                                                {task.createdAt ? new Date(task.createdAt).toLocaleDateString('vi-VN') : ''}
+                                            </span>
+                                        </div>
+                                        {/* Content */}
+                                        <p className="text-sm font-medium text-gray-900 mb-1.5 line-clamp-3">{task.content}</p>
+                                        <p className="text-xs text-gray-500 mb-2">Giao bởi: {task.assignerName || 'PGĐ Bình'}</p>
+                                        {/* VB link */}
+                                        {task.vanBanId && (
+                                            <button
+                                                onClick={() => navigate("/documents/" + task.vanBanId)}
+                                                className="inline-flex items-center gap-1.5 text-blue-700 bg-blue-50 px-2 py-1 rounded-md text-xs font-medium mb-2"
+                                            >
+                                                <FileText className="w-3.5 h-3.5" />
+                                                {getVanBanShortLabel(task.vanBanId)}
+                                            </button>
+                                        )}
+                                        {/* Collaborators */}
+                                        {task.collaborators && task.collaborators.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 mb-2">
+                                                {task.collaborators.map((c: any) => (
+                                                    <span key={c.id} className="px-2 py-0.5 text-[10px] bg-purple-100 text-purple-800 rounded-full font-medium">{c.name}</span>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {/* Report files */}
+                                        {task.reportFiles && task.reportFiles.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 mb-2">
+                                                {task.reportFiles.map((f: any, idx: number) => (
+                                                    <a key={idx} href={f.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[11px] text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100 max-w-[140px] truncate" title={f.name}>
+                                                        <Paperclip className="w-3 h-3 shrink-0" />
+                                                        {f.name}
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {/* Expand result */}
+                                        {(task.result || (task.reportFiles && task.reportFiles.length > 0) || task.bcDocId) && (
+                                            <button
+                                                onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
+                                                className="text-indigo-600 text-xs font-medium flex items-center gap-1 mb-2"
+                                            >
+                                                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                                {isExpanded ? 'Thu gọn' : 'Xem kết quả'}
+                                            </button>
+                                        )}
+                                        {isExpanded && (
+                                            <div className="bg-slate-50 rounded-lg p-3 mb-2 space-y-2">
+                                                {task.result && (
+                                                    <div>
+                                                        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Kết quả:</p>
+                                                        <p className="text-xs text-gray-800 whitespace-pre-wrap bg-white p-2 rounded border">{task.result}</p>
+                                                    </div>
+                                                )}
+                                                {task.bcDocId && vanBanCache[task.bcDocId] && (
+                                                    <div onClick={() => navigate("/documents/" + task.bcDocId)} className="flex items-center gap-2 p-2 bg-white border rounded-lg text-xs text-blue-700 cursor-pointer">
+                                                        <FileText className="w-4 h-4 text-red-500" />
+                                                        <span className="truncate">{vanBanCache[task.bcDocId].trichYeu || vanBanCache[task.bcDocId].fileNameOriginal || 'Văn bản đi'}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        {/* Actions */}
+                                        <div className="flex items-center gap-1.5 pt-2 border-t border-gray-100">
+                                            {canEdit && task.status === 'PENDING' && (
+                                                <button onClick={() => handleAcceptTask(task)} className="text-green-700 bg-green-50 p-1.5 rounded-md" title="Nhận việc">
+                                                    <CheckCircle2 className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            {canEdit && task.status === 'IN_PROGRESS' && (
+                                                <>
+                                                    <button onClick={() => { setUpdateTaskInitialStatus(undefined); setSelectedTaskToUpdate(task); }} className="text-blue-600 bg-blue-50 p-1.5 rounded-md" title="Báo cáo tiến độ">
+                                                        <Send className="w-4 h-4" />
+                                                    </button>
+                                                    <button onClick={() => { setUpdateTaskInitialStatus('COMPLETED'); setSelectedTaskToUpdate(task); }} className="text-green-600 bg-green-50 p-1.5 rounded-md" title="Hoàn thành">
+                                                        <CheckCircle2 className="w-4 h-4" />
+                                                    </button>
+                                                    <label className="text-orange-600 bg-orange-50 p-1.5 rounded-md cursor-pointer" title="Upload file">
+                                                        {uploadingTaskId === task.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                                                        <input type="file" className="hidden" multiple accept=".pdf,.docx,.xlsx,.jpg,.png,.jpeg" onChange={e => e.target.files && handleUploadReport(task.id, e.target.files)} disabled={uploadingTaskId === task.id} />
+                                                    </label>
+                                                </>
+                                            )}
+                                            {canEdit && task.status === 'COMPLETED' && (
+                                                <button onClick={() => setSelectedTaskToUpdate(task)} className="text-indigo-600 bg-indigo-50 p-1.5 rounded-md" title="Sửa báo cáo">
+                                                    <Edit3 className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            {canDeleteTask && (
+                                                <button onClick={() => setDeleteModal({ isOpen: true, taskId: task.id })} className="text-red-500 bg-red-50 p-1.5 rounded-md ml-auto" title="Xóa">
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            {user?.role === 'admin' && (
+                                                <button onClick={() => setAdminEditTask(task)} className="text-amber-600 bg-amber-50 p-1.5 rounded-md" title="Chỉnh sửa (Admin)">
+                                                    <Settings className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        {/* --- DESKTOP TABLE VIEW --- */}
+                        <div className="hidden md:block overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                     <tr>
@@ -756,6 +879,7 @@ export const TasksManagement = () => {
                                 </tbody>
                             </table>
                         </div>
+                        </>
                     )}
                 </div>
             </div>

@@ -171,69 +171,127 @@ export const TrashManagement = () => {
                             <p className="text-sm mt-1">Không có dữ liệu nào bị xóa khớp với tìm kiếm.</p>
                         </div>
                     ) : (
-                        <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="bg-gray-50 text-gray-600 sticky top-0 z-10 shadow-sm">
-                                <tr>
-                                    <th className="px-4 py-3 font-semibold">Dữ liệu</th>
-                                    <th className="px-4 py-3 font-semibold w-48">Nguồn</th>
-                                    <th className="px-4 py-3 font-semibold w-48">Người xóa</th>
-                                    <th className="px-4 py-3 font-semibold w-64">Lý do</th>
-                                    <th className="px-4 py-3 font-semibold w-40 text-center">Thao tác</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
+                        <>
+                            {/* Desktop View Table */}
+                            <table className="hidden md:table w-full text-left text-sm whitespace-nowrap">
+                                <thead className="bg-gray-50 text-gray-600 sticky top-0 z-10 shadow-sm">
+                                    <tr>
+                                        <th className="px-4 py-3 font-semibold">Dữ liệu</th>
+                                        <th className="px-4 py-3 font-semibold w-48">Nguồn</th>
+                                        <th className="px-4 py-3 font-semibold w-48">Người xóa</th>
+                                        <th className="px-4 py-3 font-semibold w-64">Lý do</th>
+                                        <th className="px-4 py-3 font-semibold w-40 text-center">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {filteredItems.map(item => (
+                                        <tr key={item.id} className="hover:bg-blue-50/30 transition-colors group">
+                                            <td className="px-4 py-3">
+                                                <div className="font-medium text-gray-800 break-words whitespace-normal line-clamp-2" title={item.metaSummary}>
+                                                    {item.metaSummary}
+                                                </div>
+                                                <div className="text-xs text-gray-500 mt-1">
+                                                    ID: {item.originalId}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 text-gray-700 text-xs font-medium">
+                                                    {colNameMap[item.originalCollection] || item.originalCollection}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex flex-col">
+                                                    <span className="text-gray-900 truncate max-w-[150px]" title={item.deletedBy}>
+                                                        {item.deletedBy}
+                                                    </span>
+                                                    <span className="text-xs text-gray-500">
+                                                        {isoToVN(item.deletedAt)}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <div className="text-gray-600 italic break-words whitespace-normal line-clamp-2 text-xs" title={item.deleteReason}>
+                                                    "{item.deleteReason}"
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 text-center">
+                                                <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button
+                                                        onClick={() => handleRestore(item)}
+                                                        className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                                                        title="Khôi phục"
+                                                    >
+                                                        <RefreshCw className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handlePermanentlyDelete(item)}
+                                                        className="p-1.5 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                                                        title="Xóa vĩnh viễn"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+
+                            {/* Mobile View Card List */}
+                            <div className="md:hidden divide-y divide-gray-100">
                                 {filteredItems.map(item => (
-                                    <tr key={item.id} className="hover:bg-blue-50/30 transition-colors group">
-                                        <td className="px-4 py-3">
-                                            <div className="font-medium text-gray-800 break-words whitespace-normal line-clamp-2" title={item.metaSummary}>
-                                                {item.metaSummary}
+                                    <div key={item.id} className="p-4 space-y-3 bg-white hover:bg-gray-50 transition-colors">
+                                        <div className="flex justify-between items-start gap-3">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="font-bold text-gray-900 line-clamp-2 leading-tight">
+                                                    {item.metaSummary}
+                                                </div>
+                                                <div className="text-[10px] text-gray-400 mt-1 uppercase tracking-wider">
+                                                    ID: {item.originalId}
+                                                </div>
                                             </div>
-                                            <div className="text-xs text-gray-500 mt-1">
-                                                ID: {item.originalId}
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 text-gray-700 text-xs font-medium">
+                                            <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-[10px] font-bold">
                                                 {colNameMap[item.originalCollection] || item.originalCollection}
                                             </span>
-                                        </td>
-                                        <td className="px-4 py-3">
+                                        </div>
+
+                                        <div className="flex items-center justify-between text-xs py-2 border-y border-gray-50">
                                             <div className="flex flex-col">
-                                                <span className="text-gray-900 truncate max-w-[150px]" title={item.deletedBy}>
-                                                    {item.deletedBy}
-                                                </span>
-                                                <span className="text-xs text-gray-500">
-                                                    {isoToVN(item.deletedAt)}
-                                                </span>
+                                                <span className="text-gray-500 text-[10px]">Người xóa</span>
+                                                <span className="text-gray-900 font-medium">{item.deletedBy}</span>
                                             </div>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <div className="text-gray-600 italic break-words whitespace-normal line-clamp-2 text-xs" title={item.deleteReason}>
+                                            <div className="flex flex-col text-right">
+                                                <span className="text-gray-500 text-[10px]">Thời gian xóa</span>
+                                                <span className="text-gray-900 font-medium">{isoToVN(item.deletedAt)}</span>
+                                            </div>
+                                        </div>
+
+                                        {item.deleteReason && (
+                                            <div className="bg-red-50/50 p-2 rounded text-xs text-red-700 italic border border-red-50">
                                                 "{item.deleteReason}"
                                             </div>
-                                        </td>
-                                        <td className="px-4 py-3 text-center">
-                                            <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    onClick={() => handleRestore(item)}
-                                                    className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-                                                    title="Khôi phục"
-                                                >
-                                                    <RefreshCw className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handlePermanentlyDelete(item)}
-                                                    className="p-1.5 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                                                    title="Xóa vĩnh viễn"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
+                                        )}
+
+                                        <div className="flex gap-2 pt-1">
+                                            <button
+                                                onClick={() => handleRestore(item)}
+                                                className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100"
+                                            >
+                                                <RefreshCw className="w-3.5 h-3.5" />
+                                                Khôi phục
+                                            </button>
+                                            <button
+                                                onClick={() => handlePermanentlyDelete(item)}
+                                                className="flex-1 flex items-center justify-center gap-2 py-2 bg-red-50 text-red-700 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors border border-red-100"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                                Xóa vĩnh viễn
+                                            </button>
+                                        </div>
+                                    </div>
                                 ))}
-                            </tbody>
-                        </table>
+                            </div>
+                        </>
                     )}
                 </div>
             </div>

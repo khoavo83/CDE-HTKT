@@ -80,6 +80,15 @@ export const DocumentReview = () => {
         type: 'save' | 'delete' | null;
         data?: any;
     }>({ isOpen: false, type: null });
+ 
+    const [activeTab, setActiveTab] = useState<'preview' | 'metadata'>('preview');
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 1024);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // Phân quyền
     const canEdit = user?.role === 'admin' || user?.role === 'manager' || user?.role === 'editor';
@@ -536,10 +545,37 @@ export const DocumentReview = () => {
             </div>
 
             {/* Split View Content */}
-            <div className="flex-1 overflow-hidden flex">
+            <div className={`flex-1 overflow-hidden flex ${isMobile ? 'flex-col' : 'flex-row'}`}>
+                
+                {/* Mobile Tab Switcher */}
+                {isMobile && (
+                    <div className="flex border-b bg-white shrink-0">
+                        <button
+                            onClick={() => setActiveTab('preview')}
+                            className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${
+                                activeTab === 'preview' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'
+                            }`}
+                        >
+                            <FileText className="w-4 h-4" />
+                            Xem tệp
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('metadata')}
+                            className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${
+                                activeTab === 'metadata' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'
+                            }`}
+                        >
+                            <Sparkles className="w-4 h-4" />
+                            Thông tin
+                        </button>
+                    </div>
+                )}
 
-                {/* Left Side: Data Form */}
-                <div style={{ width: `${leftWidth}%` }} className="bg-white overflow-y-auto p-8 h-full">
+                {/* Left Side: Data Form / Metadata */}
+                <div 
+                    style={{ width: isMobile ? '100%' : `${leftWidth}%` }} 
+                    className={`bg-white overflow-y-auto h-full ${isMobile && activeTab !== 'metadata' ? 'hidden' : 'p-4 lg:p-8 block'}`}
+                >
                     <div className="mb-6 flex items-start gap-3 text-blue-700 bg-blue-50 p-4 rounded-lg border border-blue-100">
                         <CheckCircle className="w-5 h-5 shrink-0 mt-0.5" />
                         <p className="text-sm font-medium">
@@ -952,21 +988,25 @@ export const DocumentReview = () => {
                         </div>
                     </form>
                 </div>
-
-                {/* Resizer Divider */}
-                <div
-                    onMouseDown={handleMouseDown}
-                    className="w-1.5 bg-gray-200 hover:bg-blue-400 cursor-col-resize transition-colors flex items-center justify-center relative active:bg-blue-500 z-10"
-                >
-                    <div className="flex flex-col gap-0.5">
-                        <div className="w-0.5 h-1 bg-gray-400 rounded-full"></div>
-                        <div className="w-0.5 h-1 bg-gray-400 rounded-full"></div>
-                        <div className="w-0.5 h-1 bg-gray-400 rounded-full"></div>
+                {/* Resizer Divider - Desktop only */}
+                {!isMobile && (
+                    <div
+                        onMouseDown={handleMouseDown}
+                        className="w-1.5 bg-gray-200 hover:bg-blue-400 cursor-col-resize transition-colors flex items-center justify-center relative active:bg-blue-500 z-10"
+                    >
+                        <div className="flex flex-col gap-0.5">
+                            <div className="w-0.5 h-1 bg-gray-400 rounded-full"></div>
+                            <div className="w-0.5 h-1 bg-gray-400 rounded-full"></div>
+                            <div className="w-0.5 h-1 bg-gray-400 rounded-full"></div>
+                        </div>
                     </div>
-                </div>
-
-                {/* Right Side: File Preview */}
-                <div style={{ width: `${100 - leftWidth}%` }} className="bg-gray-100 relative flex flex-col h-full">
+                )}
+ 
+                 {/* Right Side: File Preview */}
+                 <div 
+                    style={{ width: isMobile ? '100%' : `${100 - leftWidth}%` }} 
+                    className={`bg-gray-100 relative flex flex-col h-full ${isMobile && activeTab !== 'preview' ? 'hidden' : 'block'}`}
+                >
                     {previewUrl ? (
                         <>
                             <div className="bg-gray-800 text-white text-xs px-4 py-2 flex items-center justify-between">
