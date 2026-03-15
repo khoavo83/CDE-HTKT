@@ -1,11 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, where, addDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase/config';
+import { collection, getDocs, query, where, addDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { db, auth, appFunctions } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
 import { useAuthStore } from '../store/useAuthStore';
-import { Loader2, X, Send, Search, FileText, UserCheck, Users, Link as LinkIcon, Paperclip } from 'lucide-react';
+import { Loader2, X, Send, Search, FileText, UserCheck, Users, Link as LinkIcon, Paperclip, Upload, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { GenericConfirmModal } from './GenericConfirmModal';
 import { DocAttachmentSelectorModal } from './DocAttachmentSelectorModal';
+import { logVanBanActivity } from '../utils/vanbanLogUtils';
+import { format } from 'date-fns';
+
+// Utilities
+const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = reject;
+    });
 
 
 interface UserItem {
@@ -57,6 +69,12 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
 
+    // Upload & OCR State for New Input File
+    const [isUploadingInputMode, setIsUploadingInputMode] = useState(false);
+    const [inputFile, setInputFile] = useState<File | null>(null);
+    const [isProcessingInputOcr, setIsProcessingInputOcr] = useState(false);
+    const [inputOcrStatus, setInputOcrStatus] = useState('');
+
     useEffect(() => {
         if (isOpen) {
             setSelectedAssigner('');
@@ -64,6 +82,10 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
             setSelectedCollaborators([]);
             setContent('');
             setSelectedVanBan(null);
+            setIsUploadingInputMode(false);
+            setInputFile(null);
+            setIsProcessingInputOcr(false);
+            setInputOcrStatus('');
         }
     }, [isOpen, initialAssigneeId, isSelfAssign, user?.uid]);
 
@@ -162,8 +184,70 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
 
         setIsSubmitting(true);
         try {
+            let finalVanBanId = selectedVanBan?.id || null;
+
+            // Xử lý Upload và OCR nếu chọn chế độ tạo mới Văn bản đến
+            if (isUploadingInputMode && inputFile && !finalVanBanId) {
+                setIsProcessingInputOcr(true);
+                setInputOcrStatus('Đang đọc file và tạo tự động Văn bản đến...');
+
+                const base64Data = await fileToBase64(inputFile);
+                const processOCR = httpsCallable(appFunctions, 'processDocumentOCR');
+
+                const ocrResult: any = await processOCR({
+                    base64Data,
+                    mimeType: inputFile.type,
+                    fileNameOriginal: inputFile.name,
+                    totalSizeBytes: inputFile.size,
+                    dinhKem: []
+                });
+
+                if (!ocrResult.data.success) {
+                    throw new Error(ocrResult.data.message || 'Xử lý file đầu vào thất bại');
+                }
+
+                const aiData = ocrResult.data.data;
+                const newDocId = ocrResult.data.docId;
+
+                const safeSoKyHieu = (aiData.soKyHieu || "NOSO").replace(/\//g, "-").replace(/\\/g, "-");
+                const ngayBanHanhStr = aiData.ngayBanHanh || format(new Date(), 'yyyy-MM-dd');
+                const safeTrichYeu = (aiData.trichYeu || "KhongTrichYeu")
+                    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                    .replace(/[^a-zA-Z0-9 -]/g, "")
+                    .replace(/\s+/g, "_")
+                    .substring(0, 50);
+                const standardName = `${ngayBanHanhStr}_${safeSoKyHieu}_${safeTrichYeu}`;
+
+                // Cập nhật record VB vừa sinh với phân loại là INCOMING (Đầu vào)
+                await updateDoc(doc(db, 'vanban', newDocId), {
+                    ...aiData,
+                    phanLoaiVanBan: 'INCOMING',
+                    mucDoKhan: aiData.mucDoKhan || 'THUONG',
+                    fileNameStandardized: standardName,
+                    trangThaiDuLieu: 'COMPLETED',
+                    history: arrayUnion({
+                        action: "AUTO_CREATED_BY_TASK",
+                        userId: currentUserId,
+                        userEmail: currentUserName,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+
+                await logVanBanActivity({
+                    vanBanId: newDocId,
+                    userId: currentUserId,
+                    userName: currentUserName,
+                    action: "ADD",
+                    details: `Tạo tự động văn bản (INCOMING) từ quá trình Giao nhiệm vụ. Số/Ký hiệu: ${aiData.soKyHieu || ''}`
+                });
+
+                finalVanBanId = newDocId;
+                setInputOcrStatus('');
+                setIsProcessingInputOcr(false);
+            }
+
             const taskData: any = {
-                vanBanId: selectedVanBan?.id || null, // Optional connection
+                vanBanId: finalVanBanId,
                 assignerId: currentUserId,
                 assignerName: currentUserName,
                 assigneeId: assigneeUser.id,
@@ -225,23 +309,82 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
                     <div className="space-y-6">
                         {/* 1. Chọn Văn Bản Đầu Vào (Optional) */}
                         <div className="bg-blue-50/50 p-4 border border-blue-100 rounded-xl space-y-3">
-                            <label className="block text-sm font-semibold text-blue-900 border-b border-blue-200 pb-2">
-                                1. Văn bản đầu vào đính kèm (Ví dụ: VB đến từ sở KHCN...)
-                            </label>
+                            <div className="flex items-center justify-between border-b border-blue-200 pb-2">
+                                <label className="block text-sm font-semibold text-blue-900">
+                                    1. Văn bản đầu vào đính kèm (Tuỳ chọn)
+                                </label>
+                                {!selectedVanBan && (
+                                    <div className="flex bg-blue-100 p-1 rounded-lg">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsUploadingInputMode(false)}
+                                            className={`px-3 py-1.5 text-xs font-semibold transition-all rounded-md ${!isUploadingInputMode ? 'bg-white shadow text-blue-700' : 'text-blue-600 hover:bg-blue-200'}`}
+                                        >
+                                            Chọn VB có sẵn
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsUploadingInputMode(true)}
+                                            className={`px-3 py-1.5 text-xs font-semibold transition-all rounded-md ${isUploadingInputMode ? 'bg-white shadow text-blue-700' : 'text-blue-600 hover:bg-blue-200'}`}
+                                        >
+                                            Upload File Mới
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
 
                             {!selectedVanBan ? (
-                                <button
-                                    onClick={() => setIsDocModalOpen(true)}
-                                    className="w-full flex items-center justify-center gap-2 px-4 py-8 bg-white border-2 border-dashed border-blue-200 rounded-lg text-blue-600 hover:bg-blue-50 hover:border-blue-400 font-medium transition-all group"
-                                >
-                                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-                                        <LinkIcon className="w-5 h-5 text-blue-600" />
-                                    </div>
-                                    <div className="flex flex-col items-start ml-2 text-left">
-                                        <span className="font-semibold text-gray-800 group-hover:text-blue-700">Đính kèm Văn bản</span>
-                                        <span className="text-xs text-gray-500 font-normal">Mở danh sách văn bản và chọn 1 tệp cần đính kèm</span>
-                                    </div>
-                                </button>
+                                <>
+                                    {!isUploadingInputMode ? (
+                                        <button
+                                            onClick={() => setIsDocModalOpen(true)}
+                                            className="w-full flex items-center justify-center gap-2 px-4 py-8 bg-white border-2 border-dashed border-blue-200 rounded-lg text-blue-600 hover:bg-blue-50 hover:border-blue-400 font-medium transition-all group"
+                                        >
+                                            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                                                <LinkIcon className="w-5 h-5 text-blue-600" />
+                                            </div>
+                                            <div className="flex flex-col items-start ml-2 text-left">
+                                                <span className="font-semibold text-gray-800 group-hover:text-blue-700">Đính kèm Văn bản đã lưu</span>
+                                                <span className="text-xs text-gray-500 font-normal">Mở danh sách văn bản và chọn 1 tệp cần đính kèm</span>
+                                            </div>
+                                        </button>
+                                    ) : (
+                                        <div className="bg-white border-2 border-dashed border-blue-300 rounded-lg p-5 text-center relative group hover:bg-blue-50 transition-colors cursor-pointer">
+                                            <input
+                                                type="file"
+                                                accept="application/pdf,image/*"
+                                                onChange={(e) => {
+                                                    if (e.target.files && e.target.files[0]) {
+                                                        setInputFile(e.target.files[0]);
+                                                    }
+                                                }}
+                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                            />
+                                            {inputFile ? (
+                                                <div className="flex flex-col items-center">
+                                                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mb-2">
+                                                        <FileText className="w-5 h-5 text-blue-600" />
+                                                    </div>
+                                                    <p className="text-sm font-bold text-blue-700">✅ {inputFile.name}</p>
+                                                    <p className="text-xs text-gray-400 mt-1">
+                                                        {(inputFile.size / 1024).toFixed(1)} KB - Nhấn để thay file khác<br/>
+                                                        <span className="text-amber-600 flex items-center justify-center gap-1 mt-1">
+                                                            <Sparkles className="w-3 h-3"/> Khi giao việc, AI sẽ đọc file và tạo tự động 1 Văn bản Đến.
+                                                        </span>
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col items-center">
+                                                    <Upload className="w-8 h-8 mx-auto text-blue-400 mb-2 group-hover:text-blue-500 transition-colors" />
+                                                    <p className="text-sm font-semibold text-gray-700">Chọn hoặc kéo thả file TÀI LIỆU GỐC (PDF/Ảnh) vào đây</p>
+                                                    <p className="text-xs text-gray-500 mt-1 max-w-[80%]">
+                                                        Hệ thống sẽ tự động khởi tạo nó thành <span className="font-bold text-blue-600">Văn bản Đầu vào</span> và liên kết với công việc này.
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </>
                             ) : (
                                 <div className="space-y-3">
                                     <div className="flex items-start justify-between bg-white p-3 rounded-lg border border-blue-200 shadow-sm">
@@ -258,7 +401,7 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
                                         </div>
                                         <button
                                             onClick={() => setSelectedVanBan(null)}
-                                            className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded"
+                                            className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors"
                                         >
                                             Gỡ bỏ
                                         </button>
@@ -437,10 +580,10 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
                         disabled={isSubmitting || !selectedAssignee || !content.trim()}
                         className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-xl hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm inline-flex justify-center items-center gap-2"
                     >
-                        {isSubmitting ? (
+                        {isSubmitting || isProcessingInputOcr ? (
                             <>
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                Đang xử lý...
+                                {inputOcrStatus || 'Đang xử lý...'}
                             </>
                         ) : (
                             <>
