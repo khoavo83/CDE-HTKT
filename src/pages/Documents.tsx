@@ -87,15 +87,15 @@ export const Documents = () => {
 
     // Kéo thả độ rộng cột
     const [colWidths, setColWidths] = useState({
-        status: 120,
-        type: 140,
-        symbol: 180,
-        date: 140,
-        agency: 300,
-        summary: 400,
-        pages: 100,
-        size: 100,
-        action: 140
+        status: 90,
+        type: 110,
+        symbol: 150,
+        date: 110,
+        agency: 200,
+        summary: 280,
+        pages: 70,
+        size: 80,
+        action: 110
     });
 
     const resizingCol = useRef<string | null>(null);
@@ -538,7 +538,8 @@ export const Documents = () => {
                     )}
                 </div>
                 {/* Desktop Table */}
-                <table className="hidden md:table w-full text-left border-collapse min-w-max">
+                <div className="hidden md:block overflow-x-auto table-responsive">
+                <table className="w-full text-left border-collapse min-w-[900px]">
                     <thead>
                         <tr className="bg-gray-50 border-b border-gray-200 text-sm font-medium text-gray-500">
                             <th className="p-4 border-r border-gray-200 w-16 text-center">STT</th>
@@ -676,6 +677,7 @@ export const Documents = () => {
                         )}
                     </tbody>
                 </table>
+                </div>
                 </>
             
             ) : (
@@ -718,7 +720,8 @@ export const Documents = () => {
                     )}
                 </div>
                 {/* Desktop Table */}
-                <table className="hidden md:table w-full text-left border-collapse table-fixed min-w-max">
+                <div className="hidden md:block overflow-x-auto table-responsive">
+                <table className="w-full text-left border-collapse table-auto min-w-[900px]">
                     <thead>
                         <tr className="bg-gray-50 border-b border-gray-200 text-sm font-medium text-gray-500">
                             <th style={{ width: colWidths.status }} className="p-4 relative group border-r border-gray-200">
@@ -861,6 +864,7 @@ export const Documents = () => {
                         )}
                     </tbody>
                 </table>
+                </div>
                 </>
             )
             }

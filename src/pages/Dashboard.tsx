@@ -305,7 +305,7 @@ export const Dashboard = () => {
                 </div>
 
                 {/* ── Row 6 (Moved): Bảng danh sách Dự án ── (Note: Moved this up) */}
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 md:gap-4 mb-4 md:mb-8">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-4 mb-4 md:mb-8">
                     <Link to="/projects" className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center gap-4 hover:shadow-md hover:border-blue-300 transition-all group cursor-pointer">
                         <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors">
                             <FolderTree className="w-6 h-6 text-blue-600" />

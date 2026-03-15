@@ -246,10 +246,10 @@ export const MainLayout = () => {
             </aside>
 
             {/* Main Content Area */}
-            <main className="flex-1 overflow-hidden bg-gray-50 transition-colors duration-300 flex flex-col w-full">
+            <main className="flex-1 min-w-0 overflow-hidden bg-gray-50 transition-colors duration-300 flex flex-col w-full main-content">
                 <GlobalHeader onMenuClick={() => setIsMobileMenuOpen(true)} />
-                <div className="flex-1 overflow-auto flex flex-col w-full">
-                    <div className="flex-1">
+                <div className="flex-1 min-w-0 overflow-auto flex flex-col w-full">
+                    <div className="flex-1 min-w-0">
                         <Outlet />
                     </div>
                     <GlobalFooter />

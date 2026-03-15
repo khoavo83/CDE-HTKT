@@ -266,7 +266,7 @@
 }
 
 /* =========================================================
-   MOBILE RESPONSIVE — CSS cơ bản cho mobile
+   RESPONSIVE — Hỗ trợ mọi kích thước & độ phân giải
    ========================================================= */
 
 /* Smooth scrolling trên iOS */
@@ -279,24 +279,48 @@ html {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Giới hạn mobile ≤ 768px */
+/* ── Utility classes cho responsive ── */
+
+/* Đảm bảo flex children không tràn */
+.min-w-0 {
+  min-width: 0;
+}
+
+/* Wrapper cho bảng dữ liệu */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Laptop nhỏ / Tablet lớn (1024 - 1366px) ── */
+@media (max-width: 1366px) {
+  /* Thu nhỏ padding cho vùng chính */
+  .main-content .p-6 {
+    padding: 1rem;
+  }
+  .main-content .px-6 {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+/* ── Mobile ≤ 768px ── */
 @media (max-width: 768px) {
-  /* Thu nhỏ padding tổng thể */
-  .p-4 { padding: 0.5rem; }
-  .p-6 { padding: 0.75rem; }
-  .px-6 { padding-left: 0.75rem; padding-right: 0.75rem; }
-  .py-6 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
-  .p-8 { padding: 1rem; }
+  /* Thu nhỏ padding — chỉ áp dụng cho main-content */
+  .main-content .p-4 { padding: 0.5rem; }
+  .main-content .p-6 { padding: 0.75rem; }
+  .main-content .px-6 { padding-left: 0.75rem; padding-right: 0.75rem; }
+  .main-content .py-6 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+  .main-content .p-8 { padding: 1rem; }
 
   /* Thu nhỏ gap */
-  .gap-6 { gap: 0.75rem; }
+  .main-content .gap-6 { gap: 0.75rem; }
 
-  /* Đảm bảo bảng có thể scroll ngang */
-  table {
-    display: block;
-    overflow-x: auto;
-    white-space: nowrap;
+  /* Bảng dữ liệu: tự động scroll ngang */
+  .table-responsive {
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
   }
 
   /* Modal full-width trên mobile */
@@ -309,26 +333,31 @@ html {
     margin-left: 0.5rem;
     margin-right: 0.5rem;
   }
+}
 
-  /* Font size nhỏ hơn cho heading */
-  h1, .text-3xl { font-size: 1.25rem !important; }
-  h2, .text-2xl { font-size: 1.125rem !important; }
-  h3, .text-xl { font-size: 1rem !important; }
-
-  /* Grid 1 cột trên mobile */
-  .grid-cols-2,
-  .grid-cols-3,
-  .grid-cols-4 {
-    grid-template-columns: 1fr !important;
+/* ── Tablet 769px → 1024px ── */
+@media (min-width: 769px) and (max-width: 1024px) {
+  /* Hiển thị scrollbar mỏng trên bảng */
+  .table-responsive {
+    scrollbar-width: thin;
   }
 }
 
-/* Tablet 769px → 1024px */
-@media (min-width: 769px) and (max-width: 1024px) {
-  .grid-cols-4 {
-    grid-template-columns: repeat(2, 1fr) !important;
-  }
-  .grid-cols-3 {
-    grid-template-columns: repeat(2, 1fr) !important;
-  }
+/* ── Scrollbar styling cho bảng ── */
+.table-responsive::-webkit-scrollbar {
+  height: 6px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 3px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }

@@ -35,7 +35,7 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ onMenuClick }) => {
     }, [user]);
 
     return (
-        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-gray-100 px-6 py-2 grid grid-cols-3 items-center shadow-sm select-none transition-all">
+        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-gray-100 px-3 md:px-6 py-2 flex items-center gap-2 md:gap-4 shadow-sm select-none transition-all">
             {/* Left Section: Logo & Brand */}
             <div className="flex items-center gap-2 md:gap-4">
                 {onMenuClick && (
@@ -64,7 +64,7 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ onMenuClick }) => {
             </div>
 
             {/* Middle Section: Centered Title */}
-            <div className="flex flex-col items-center justify-center text-center overflow-hidden min-w-0 px-2 lg:px-4">
+            <div className="flex-1 min-w-0 flex flex-col items-center justify-center text-center overflow-hidden px-2 lg:px-4">
                 <div className="flex flex-col md:flex-row items-center gap-1 md:gap-3">
                     <Database className="hidden md:block w-5 h-5 text-blue-700 shrink-0" />
                     <h1 className="text-[11px] sm:text-sm md:text-xl font-black bg-gradient-to-r from-blue-700 via-indigo-600 to-blue-800 bg-clip-text text-transparent uppercase tracking-tight truncate w-full">
@@ -76,7 +76,7 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({ onMenuClick }) => {
             {/* Right Section: Drive Status & Notifications */}
 
 
-            <div className="flex items-center justify-end gap-3 md:gap-6 text-xs font-semibold">
+            <div className="flex items-center justify-end gap-2 md:gap-4 shrink-0 text-xs font-semibold">
                 {/* Feedback Button */}
                 <button
                     onClick={() => setIsFeedbackOpen(true)}
