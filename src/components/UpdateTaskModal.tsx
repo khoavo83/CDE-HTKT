@@ -270,7 +270,7 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
                     </button>
                 </div>
 
-                <div className="p-6 overflow-y-auto">
+                <div className="p-6 overflow-y-auto flex-1 min-h-0">
                     {showReview ? (
                         /* ===== OCR REVIEW FORM ===== */
                         <div className="space-y-5">

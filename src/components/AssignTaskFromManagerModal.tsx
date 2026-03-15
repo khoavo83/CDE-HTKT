@@ -305,16 +305,16 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
                 </div>
 
                 {/* Body */}
-                <div className="p-5 md:p-6 overflow-y-auto custom-scrollbar flex-1 relative">
+                <div className="p-5 md:p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0 relative">
                     <div className="space-y-6">
                         {/* 1. Chọn Văn Bản Đầu Vào (Optional) */}
                         <div className="bg-blue-50/50 p-4 border border-blue-100 rounded-xl space-y-3">
-                            <div className="flex items-center justify-between border-b border-blue-200 pb-2">
+                            <div className="flex flex-wrap items-center justify-between border-b border-blue-200 pb-2 gap-2">
                                 <label className="block text-sm font-semibold text-blue-900">
                                     1. Văn bản đầu vào đính kèm (Tuỳ chọn)
                                 </label>
                                 {!selectedVanBan && (
-                                    <div className="flex bg-blue-100 p-1 rounded-lg">
+                                    <div className="flex flex-wrap bg-blue-100 p-1 rounded-lg gap-1">
                                         <button
                                             type="button"
                                             onClick={() => setIsUploadingInputMode(false)}

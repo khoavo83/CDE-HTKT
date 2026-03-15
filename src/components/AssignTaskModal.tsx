@@ -186,7 +186,7 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
                     </button>
                 </div>
 
-                <div className="p-6 overflow-y-auto space-y-5">
+                <div className="p-6 overflow-y-auto space-y-5 flex-1 min-h-0">
                     {/* Người Giao Việc */}
                     <div>
                         <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">

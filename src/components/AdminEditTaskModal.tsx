@@ -325,7 +325,7 @@ export const AdminEditTaskModal: React.FC<AdminEditTaskModalProps> = ({ isOpen, 
                     </button>
                 </div>
 
-                <div className="p-6 overflow-y-auto flex-1">
+                <div className="p-6 overflow-y-auto flex-1 min-h-0">
                     {showReview ? (
                         /* ===== OCR REVIEW FORM ===== */
                         <div className="space-y-5">

@@ -440,7 +440,7 @@ export const TasksManagement = () => {
                                             </div>
                                         )}
                                         {/* Actions */}
-                                        <div className="flex items-center gap-1.5 pt-2 border-t border-gray-100">
+                                        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-gray-100">
                                             {canEdit && task.status === 'PENDING' && (
                                                 <button onClick={() => handleAcceptTask(task)} className="text-green-700 bg-green-50 p-1.5 rounded-md" title="Nhận việc">
                                                     <CheckCircle2 className="w-4 h-4" />
