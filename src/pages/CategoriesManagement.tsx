@@ -13,7 +13,7 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { db, auth, appFunctions, storage } from '../firebase/config';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
 import { DeleteConfirmModal } from '../components/DeleteConfirmModal';
@@ -1256,10 +1256,18 @@ export const CategoriesManagement = () => {
 
 // --- Child Component: Cấu hình chung ---
 const AppSettingsTab = () => {
-    const { settings, updateSettings, error } = useAppSettingsStore();
+    const { settings, updateSettings, fetchSettings, error } = useAppSettingsStore();
     const [localSettings, setLocalSettings] = useState(settings);
     const [isSaving, setIsSaving] = useState(false);
     const [successMsg, setSuccessMsg] = useState('');
+
+    useEffect(() => {
+        fetchSettings();
+    }, [fetchSettings]);
+
+    useEffect(() => {
+        setLocalSettings(settings);
+    }, [settings]);
     const [uploadingBg, setUploadingBg] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -1273,28 +1281,21 @@ const AppSettingsTab = () => {
         }
 
         const bgRef = ref(storage, `public_assets/login_bg_${Date.now()}_${file.name}`);
-        const uploadTask = uploadBytesResumable(bgRef, file);
-
         setUploadingBg(true);
-        setUploadProgress(0);
-
-        uploadTask.on('state_changed',
-            (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                setUploadProgress(Math.round(progress));
-            },
-            (error) => {
-                console.error('Lỗi upload ảnh nền:', error);
-                toast.error('Lỗi upload ảnh nền');
-                setUploadingBg(false);
-            },
-            async () => {
-                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                setLocalSettings(prev => ({ ...prev, loginBgUrl: downloadURL }));
-                setUploadingBg(false);
-                toast.success('Đã tải lên ảnh nền thành công. Hãy bấm Lưu Thay Đổi để áp dụng.');
-            }
-        );
+        setUploadProgress(10); // fake initial progress to show it's working
+        try {
+            await uploadBytes(bgRef, file);
+            setUploadProgress(100);
+            const downloadURL = await getDownloadURL(bgRef);
+            setLocalSettings(prev => ({ ...prev, loginBgUrl: downloadURL }));
+            toast.success('Đã tải lên ảnh nền thành công. Hãy bấm Lưu Thay Đổi để áp dụng.');
+        } catch (error) {
+            console.error('Lỗi upload ảnh nền:', error);
+            toast.error('Lỗi upload ảnh nền. Vui lòng thử lại.');
+        } finally {
+            setUploadingBg(false);
+            e.target.value = ''; // Reset input
+        }
     };
 
     const handleRemoveBg = () => {
