@@ -10,6 +10,7 @@ import { vi } from 'date-fns/locale';
 import { GanttBar } from './GanttBar';
 
 interface GanttTimelineProps {
+    timelineRef?: React.RefObject<HTMLDivElement>;
     tasks: GanttTask[];
     startDate: Date;
     endDate: Date;
@@ -21,7 +22,7 @@ interface GanttTimelineProps {
 }
 
 export const GanttTimeline: React.FC<GanttTimelineProps> = ({
-    tasks, startDate, endDate, viewMode, expandedTaskIds, pixelsPerDay, onUpdateTask, onDocumentClick
+    timelineRef, tasks, startDate, endDate, viewMode, expandedTaskIds, pixelsPerDay, onUpdateTask, onDocumentClick
 }) => {
     // 2. Generate columns based on viewMode
     const columns = useMemo(() => {
@@ -55,7 +56,7 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
     const timelineWidth = totalDaysInTimeline * pixelsPerDay;
 
     return (
-        <div className="flex-1 overflow-auto bg-gray-50 relative hide-scrollbar">
+        <div ref={timelineRef} className="flex-1 overflow-auto bg-gray-50 relative hide-scrollbar">
             <div style={{ width: Math.max(timelineWidth, 800) }} className="relative min-h-full">
 
                 {/* Headers */}
@@ -101,6 +102,7 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
                                         timelineStartDate={startDate}
                                         totalDaysInTimeline={totalDaysInTimeline}
                                         pixelsPerDay={pixelsPerDay}
+                                        viewMode={viewMode}
                                         onUpdateTask={onUpdateTask}
                                         onDocumentClick={onDocumentClick}
                                     />

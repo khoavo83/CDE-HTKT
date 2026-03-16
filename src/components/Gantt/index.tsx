@@ -8,7 +8,7 @@ import { TaskDocumentsModal } from './TaskDocumentsModal';
 import { ganttService } from '../../services/ganttService';
 import toast from 'react-hot-toast';
 import { Loader2, Edit2, Plus, FileText } from 'lucide-react';
-import { addDays, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfQuarter, endOfQuarter, startOfYear, endOfYear } from 'date-fns';
+import { addDays, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfQuarter, endOfQuarter, startOfYear, endOfYear, differenceInDays } from 'date-fns';
 
 interface GanttChartProps {
     projectId: string;
