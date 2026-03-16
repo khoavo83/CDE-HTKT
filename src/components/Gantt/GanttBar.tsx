@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GanttTask } from './types';
+import { GanttTask, ViewMode } from './types';
 import { addDays, differenceInDays, isAfter, isBefore } from 'date-fns';
 import { Paperclip } from 'lucide-react';
 
