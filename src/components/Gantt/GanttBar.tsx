@@ -166,7 +166,7 @@ export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, tot
     const hasDocuments = task.linkedDocumentIds && task.linkedDocumentIds.length > 0;
 
     return (
-        <div className="absolute top-1/2 -translate-y-1/2 w-full h-[32px] pointer-events-none group-hover:block z-10">
+        <div className="absolute top-1/2 -translate-y-1/2 w-full h-[32px] pointer-events-none z-10">
             {/* Planned Bar (Background/Top) */}
             <div 
                 className={`absolute h-[10px] rounded-full bg-blue-200 border border-blue-300 shadow-sm top-0 z-10 pointer-events-auto cursor-grab active:cursor-grabbing ${isDragging && dragType?.includes('planned') ? 'opacity-70 bg-blue-300' : ''}`}
