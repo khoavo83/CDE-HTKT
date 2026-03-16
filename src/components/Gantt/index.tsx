@@ -151,8 +151,8 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
             if (t.actualEndDate) allDates.push(t.actualEndDate instanceof Date ? t.actualEndDate : new Date(t.actualEndDate));
         });
 
-        let minDate = allDates.length > 0 ? new Date(Math.min(...allDates.map(d => d.getTime()))) : new Date();
-        let maxDate = allDates.length > 0 ? new Date(Math.max(...allDates.map(d => d.getTime()))) : addDays(new Date(), 90);
+        let minDate = allDates.length > 0 ? new Date(Math.min(...allDates.filter(d => !isNaN(d.getTime())).map(d => d.getTime()))) : new Date();
+        let maxDate = allDates.length > 0 ? new Date(Math.max(...allDates.filter(d => !isNaN(d.getTime())).map(d => d.getTime()))) : addDays(new Date(), 90);
 
         // Add padding based on view mode
         if (viewMode === 'Week') {

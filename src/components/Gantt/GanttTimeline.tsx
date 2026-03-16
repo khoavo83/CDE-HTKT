@@ -92,7 +92,7 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
                         return (
                             <div key={task.id} className="h-10 w-full relative group hover:bg-black/5 flex items-center border-b border-transparent hover:border-gray-200 transition-colors">
                                 {/* Task Row content (Gantt Bar) */}
-                                <div className="relative h-full flex-1 mx-1">
+                                <div className="relative h-full flex-1">
                                     <GanttBar
                                         task={task}
                                         timelineStartDate={startDate}

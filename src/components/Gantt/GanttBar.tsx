@@ -15,9 +15,16 @@ interface GanttBarProps {
 type DragType = 'planned-move' | 'planned-left' | 'planned-right' | 'actual-move' | 'actual-left' | 'actual-right' | null;
 
 export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, totalDaysInTimeline, pixelsPerDay, onUpdateTask, onDocumentClick }) => {
+    // Helper to ensure we have a valid Date object
+    const toDate = (d: any) => (d instanceof Date ? d : new Date(d));
+
     // 1. Calculate Planned Bar Position
-    const plannedStartFromTimelineStart = Math.max(0, differenceInDays(task.plannedStartDate, timelineStartDate));
-    const plannedDuration = differenceInDays(task.plannedEndDate, task.plannedStartDate) + 1;
+    const pStart = toDate(task.plannedStartDate);
+    const pEnd = toDate(task.plannedEndDate);
+    const tStart = toDate(timelineStartDate);
+
+    const plannedStartFromTimelineStart = Math.max(0, differenceInDays(pStart, tStart));
+    const plannedDuration = Math.max(1, differenceInDays(pEnd, pStart) + 1);
     
     // Convert to percentages relative to total timeline width
     const plannedLeftPct = (plannedStartFromTimelineStart / totalDaysInTimeline) * 100;
@@ -29,18 +36,19 @@ export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, tot
     let isDelayed = false;
 
     if (task.actualStartDate) {
-        const actualStartFromTimelineStart = Math.max(0, differenceInDays(task.actualStartDate, timelineStartDate));
+        const aStart = toDate(task.actualStartDate);
+        const actualStartFromTimelineStart = Math.max(0, differenceInDays(aStart, tStart));
         actualLeftPct = (actualStartFromTimelineStart / totalDaysInTimeline) * 100;
         
         // If no end date yet, draw until today or something similar. For now, just draw a point if no end.
-        const effectiveEndDate = task.actualEndDate || new Date(); 
-        const actualDuration = differenceInDays(effectiveEndDate, task.actualStartDate) + 1;
+        const aEnd = task.actualEndDate ? toDate(task.actualEndDate) : new Date(); 
+        const actualDuration = Math.max(1, differenceInDays(aEnd, aStart) + 1);
         actualWidthPct = (actualDuration / totalDaysInTimeline) * 100;
 
         // Simple delay logic: if actual end > planned end, it's delayed
-        if (task.actualEndDate && isAfter(task.actualEndDate, task.plannedEndDate)) {
+        if (task.actualEndDate && isAfter(toDate(task.actualEndDate), pEnd)) {
             isDelayed = true;
-        } else if (!task.actualEndDate && isAfter(new Date(), task.plannedEndDate)) {
+        } else if (!task.actualEndDate && isAfter(new Date(), pEnd)) {
              isDelayed = true;
         }
     }
