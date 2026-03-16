@@ -14,26 +14,31 @@ export const ganttService = {
         );
         const snapshot = await getDocs(q);
       
-      const ensureDate = (val: any): Date => {
-        if (!val) return new Date();
-        if (typeof val.toDate === 'function') return val.toDate();
-        if (val instanceof Date) return val;
-        const d = new Date(val);
-        return isNaN(d.getTime()) ? new Date() : d;
-      };
-
       const tasks: GanttTask[] = [];
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
+        
+        // Safely parse date from Firestore, which could be Timestamp, Date, or string
+        const parseDate = (val: any, fallback: Date | null = new Date()): any => {
+           if (!val) return fallback;
+           if (typeof val.toDate === 'function') return val.toDate();
+           if (val instanceof Date) return val;
+           if (typeof val === 'string' || typeof val === 'number') {
+               const parsed = new Date(val);
+               return isNaN(parsed.getTime()) ? fallback : parsed;
+           }
+           return fallback;
+        };
+
         tasks.push({
           id: docSnap.id,
           projectId: data.projectId,
           name: data.name,
           parentId: data.parentId,
-          plannedStartDate: ensureDate(data.plannedStartDate),
-          plannedEndDate: ensureDate(data.plannedEndDate),
-          actualStartDate: data.actualStartDate ? ensureDate(data.actualStartDate) : null,
-          actualEndDate: data.actualEndDate ? ensureDate(data.actualEndDate) : null,
+          plannedStartDate: parseDate(data.plannedStartDate, new Date()),
+          plannedEndDate: parseDate(data.plannedEndDate, new Date()),
+          actualStartDate: parseDate(data.actualStartDate, null),
+          actualEndDate: parseDate(data.actualEndDate, null),
           linkedDocumentIds: data.linkedDocumentIds || [],
           order: data.order || 0
         });
