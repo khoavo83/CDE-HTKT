@@ -66,8 +66,11 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
                         return (
                             <div
                                 key={idx}
-                                className="border-r flex items-center justify-center text-xs font-semibold text-gray-600 bg-gray-50"
-                                style={{ width: `${widthPct}%` }}
+                                className="border-r flex items-center justify-center text-[10px] md:text-xs font-semibold text-gray-600 bg-gray-50 shrink-0"
+                                style={{ 
+                                    width: `${widthPct}%`,
+                                    minWidth: viewMode === 'Month' ? '120px' : '60px'
+                                }}
                             >
                                 {col.label}
                             </div>

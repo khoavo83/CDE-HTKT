@@ -17,12 +17,15 @@ type DragType = 'planned-move' | 'planned-left' | 'planned-right' | 'actual-move
 export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, totalDaysInTimeline, pixelsPerDay, onUpdateTask, onDocumentClick }) => {
 
     // Helper to ensure we have a valid Date object
-    const toDate = (d: any) => (d instanceof Date ? d : new Date(d));
+    const toDate = (d: any) => {
+        if (!d) return null;
+        const date = d instanceof Date ? d : new Date(d);
+        return isNaN(date.getTime()) ? null : date;
+    };
 
-    // 1. Calculate Planned Bar Position in PIXELS
-    const pStart = toDate(task.plannedStartDate);
-    const pEnd = toDate(task.plannedEndDate);
-    const tStart = toDate(timelineStartDate);
+    const pStart = toDate(task.plannedStartDate) || new Date();
+    const pEnd = toDate(task.plannedEndDate) || addDays(pStart, 1);
+    const tStart = toDate(timelineStartDate) || pStart;
 
     const msPerDay = 1000 * 60 * 60 * 24;
     const plannedStartDays = Math.max(0, (pStart.getTime() - tStart.getTime()) / msPerDay);
@@ -141,16 +144,23 @@ export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, tot
     let displayActualWidthPx = actualWidthPx;
 
     if (isDragging && dragDeltaDays !== 0) {
-        const deltaPx = dragDeltaDays * pixelsPerDay;
+        // Pixels per day based on view mode (increased for better visibility)
+        let currentPixelsPerDay = pixelsPerDay; // Use the prop as base
+        if (viewMode === 'Week') currentPixelsPerDay = 30;
+        else if (viewMode === 'Month') currentPixelsPerDay = 12;
+        else if (viewMode === 'Quarter') currentPixelsPerDay = 6;
+        else currentPixelsPerDay = 3; // Default for 'Day' or other modes
+
+        const deltaPx = dragDeltaDays * currentPixelsPerDay; // Use currentPixelsPerDay for delta calculation
         
         if (dragType === 'planned-move') {
             displayPlannedLeftPx += deltaPx;
         } else if (dragType === 'planned-left') {
             displayPlannedLeftPx += deltaPx;
             displayPlannedWidthPx -= deltaPx; 
-            if (displayPlannedWidthPx < pixelsPerDay) {
-                displayPlannedLeftPx -= (pixelsPerDay - displayPlannedWidthPx);
-                displayPlannedWidthPx = pixelsPerDay;
+            if (displayPlannedWidthPx < currentPixelsPerDay) { // Use currentPixelsPerDay for min width check
+                displayPlannedLeftPx -= (currentPixelsPerDay - displayPlannedWidthPx);
+                displayPlannedWidthPx = currentPixelsPerDay;
             }
         } else if (dragType === 'planned-right') {
             displayPlannedWidthPx += deltaPx;
@@ -178,9 +188,10 @@ export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, tot
             <div 
                 className={`absolute h-[10px] rounded-full bg-blue-200 border border-blue-300 shadow-sm top-0 z-10 pointer-events-auto cursor-grab active:cursor-grabbing ${isDragging && dragType?.includes('planned') ? 'opacity-70 bg-blue-300' : ''}`}
                 style={{ 
-                    left: `${displayPlannedLeftPx}px`, 
-                    width: `${displayPlannedWidthPx}px`,
+                    left: `${plannedLeftPx}px`, 
+                    width: `${Math.max(24, displayPlannedWidthPx)}px`,
                     transition: isDragging ? 'none' : 'all 0.2s',
+                    minWidth: '24px'
                 }}
                 title={`Kế hoạch: ${pStart.toLocaleDateString()} - ${pEnd.toLocaleDateString()}`}
                 onMouseDown={(e) => handleMouseDown(e, 'planned-move')}
@@ -201,9 +212,10 @@ export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, tot
                         isDelayed ? 'bg-red-400 border-red-500' : 'bg-green-400 border-green-500'
                     } ${isDragging && dragType?.includes('actual') ? 'opacity-70 brightness-90' : ''}`}
                     style={{ 
-                        left: `${displayActualLeftPx}px`, 
-                        width: `${displayActualWidthPx}px`,
+                        left: `${actualLeftPx}px`, 
+                        width: `${Math.max(20, displayActualWidthPx)}px`,
                         transition: isDragging ? 'none' : 'all 0.2s',
+                        minWidth: '20px'
                     }}
                     title={`Thực tế: ${toDate(task.actualStartDate).toLocaleDateString()} - ${task.actualEndDate ? toDate(task.actualEndDate).toLocaleDateString() : 'Đang xử lý'}`}
                     onMouseDown={(e) => handleMouseDown(e, 'actual-move')}
