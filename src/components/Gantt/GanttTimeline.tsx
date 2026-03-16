@@ -11,7 +11,7 @@ import { GanttBar } from './GanttBar';
 
 interface GanttTimelineProps {
     timelineRef?: React.RefObject<HTMLDivElement>;
-    tasks: GanttTask[];
+    tasks: VisibleGanttTask[];
     startDate: Date;
     endDate: Date;
     viewMode: ViewMode;
@@ -31,8 +31,9 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
 
         while (currentDate <= endDate) {
             if (viewMode === 'Week') {
-                const e = endOfWeek(currentDate, { weekStartsOn: 1 });
-                cols.push({ start: currentDate, end: e > endDate ? endDate : e, label: `Tuần ${format(currentDate, 'ww')}` });
+                const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+                const e = currentDate;
+                cols.push({ start: currentDate, end: e > endDate ? endDate : e, label: `${dayNames[currentDate.getDay()]} (${format(currentDate, 'dd/MM')})` });
                 currentDate = addDays(e, 1);
             } else if (viewMode === 'Month') {
                 const e = endOfMonth(currentDate);
@@ -54,6 +55,10 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
     const totalDaysInTimeline = differenceInDays(endDate, startDate) + 1;
     // Set a minimum width per day to ensure bars are visible, adjust based on viewMode
     const timelineWidth = totalDaysInTimeline * pixelsPerDay;
+
+    const today = new Date();
+    const showToday = today >= startDate && today <= endDate;
+    const todayLeft = differenceInDays(today, startDate) * pixelsPerDay;
 
     return (
         <div ref={timelineRef} className="flex-1 overflow-auto bg-gray-50 relative hide-scrollbar">
@@ -85,16 +90,28 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
                          const daysInCol = differenceInDays(col.end, col.start) + 1;
                          const colWidth = daysInCol * pixelsPerDay;
                          return (
-                             <div key={`line-${idx}`} className="border-r border-gray-200 h-full shrink-0" style={{ width: `${colWidth}px` }} />
+                             <div key={`line-${idx}`} className="border-r border-gray-100 h-full shrink-0" style={{ width: `${colWidth}px` }} />
                          );
                     })}
                 </div>
 
+                {/* Today Line */}
+                {showToday && (
+                    <div 
+                        className="absolute top-12 bottom-0 w-px bg-red-400 z-20 pointer-events-none"
+                        style={{ left: `${todayLeft}px` }}
+                    >
+                        <div className="absolute -top-[18px] left-1/2 -translate-x-1/2 bg-red-400 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm">
+                            Hôm nay
+                        </div>
+                    </div>
+                )}
+
                 {/* Task Rows Placeholder */}
-                <div className="relative z-10 w-full pt-2">
+                <div className="relative z-10 w-full">
                     {tasks.map((task, idx) => {
                         return (
-                            <div key={task.id} className="h-10 w-full relative group hover:bg-black/5 flex items-center border-b border-transparent hover:border-gray-200 transition-colors">
+                            <div key={task.id} className="h-10 w-full relative group hover:bg-indigo-50/50 flex items-center border-b border-gray-100 hover:border-gray-200 transition-colors">
                                 {/* Task Row content (Gantt Bar) */}
                                 <div className="relative h-full flex-1">
                                     <GanttBar

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GanttTask } from './types';
-import { addDays, differenceInDays, isAfter, isBefore } from 'date-fns';
+import { addDays, differenceInDays, isAfter, isBefore, format } from 'date-fns';
 import { Paperclip } from 'lucide-react';
 
 interface GanttBarProps {
@@ -170,12 +170,32 @@ export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, tot
     }
 
     const hasDocuments = task.linkedDocumentIds && task.linkedDocumentIds.length > 0;
+    
+    // Depth-based colors
+    const depth = (task as any).depth || 0;
+    let plannedBgColor = 'bg-blue-200';
+    let plannedBorderColor = 'border-blue-300';
+    let draggingBgColor = 'bg-blue-300';
+    
+    if (depth === 0) {
+        plannedBgColor = 'bg-indigo-300';
+        plannedBorderColor = 'border-indigo-400';
+        draggingBgColor = 'bg-indigo-400';
+    } else if (depth === 1) {
+        plannedBgColor = 'bg-sky-300';
+        plannedBorderColor = 'border-sky-400';
+        draggingBgColor = 'bg-sky-400';
+    } else if (depth >= 2) {
+        plannedBgColor = 'bg-blue-200';
+        plannedBorderColor = 'border-blue-300';
+        draggingBgColor = 'bg-blue-300';
+    }
 
     return (
         <div className="absolute top-1/2 -translate-y-1/2 w-full h-[32px] pointer-events-none group-hover:block z-10">
             {/* Planned Bar (Background/Top) */}
             <div 
-                className={`absolute h-[10px] rounded-full bg-blue-200 border border-blue-300 shadow-sm top-0 z-10 pointer-events-auto cursor-grab active:cursor-grabbing ${isDragging && dragType?.includes('planned') ? 'opacity-70 bg-blue-300' : ''}`}
+                className={`absolute h-[10px] rounded-full ${plannedBgColor} border ${plannedBorderColor} shadow-sm top-0 z-10 pointer-events-auto cursor-grab active:cursor-grabbing ${isDragging && dragType?.includes('planned') ? `opacity-70 ${draggingBgColor}` : ''}`}
                 style={{ 
                     left: `${displayPlannedLeftPct}%`, 
                     width: `${displayPlannedWidthPct}%`,
@@ -185,6 +205,18 @@ export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, tot
                 title={`Kế hoạch: ${task.plannedStartDate.toLocaleDateString()} - ${task.plannedEndDate.toLocaleDateString()}`}
                 onMouseDown={(e) => handleMouseDown(e, 'planned-move')}
             >
+                {/* Date Labels */}
+                {!isDragging && (
+                    <>
+                        <div className="absolute -left-12 -top-[2px] w-11 text-right text-[10px] text-gray-500 font-medium truncate pointer-events-none select-none">
+                            {format(pStart, 'dd/MM')}
+                        </div>
+                        <div className="absolute -right-12 -top-[2px] w-11 text-left text-[10px] text-gray-500 font-medium truncate pointer-events-none select-none">
+                            {format(pEnd, 'dd/MM')}
+                        </div>
+                    </>
+                )}
+
                 {/* Drag Handles for Planned */}
                 {onUpdateTask && (
                     <>
