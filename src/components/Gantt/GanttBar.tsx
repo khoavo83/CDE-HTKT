@@ -14,38 +14,36 @@ interface GanttBarProps {
 
 type DragType = 'planned-move' | 'planned-left' | 'planned-right' | 'actual-move' | 'actual-left' | 'actual-right' | null;
 
-export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, totalDaysInTimeline, pixelsPerDay, onUpdateTask, onDocumentClick }) => {
     // Helper to ensure we have a valid Date object
     const toDate = (d: any) => (d instanceof Date ? d : new Date(d));
 
-    // 1. Calculate Planned Bar Position
+    // 1. Calculate Planned Bar Position in PIXELS
     const pStart = toDate(task.plannedStartDate);
     const pEnd = toDate(task.plannedEndDate);
     const tStart = toDate(timelineStartDate);
 
-    const plannedStartFromTimelineStart = Math.max(0, differenceInDays(pStart, tStart));
-    const plannedDuration = Math.max(1, differenceInDays(pEnd, pStart) + 1);
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const plannedStartDays = Math.max(0, (pStart.getTime() - tStart.getTime()) / msPerDay);
+    const plannedDurationDays = Math.max(1, (pEnd.getTime() - pStart.getTime()) / msPerDay + 1);
     
-    // Convert to percentages relative to total timeline width
-    const plannedLeftPct = (plannedStartFromTimelineStart / totalDaysInTimeline) * 100;
-    const plannedWidthPct = (plannedDuration / totalDaysInTimeline) * 100;
+    const plannedLeftPx = plannedStartDays * pixelsPerDay;
+    const plannedWidthPx = plannedDurationDays * pixelsPerDay;
 
-    // 2. Calculate Actual Bar Position (if data exists)
-    let actualLeftPct = 0;
-    let actualWidthPct = 0;
+    // 2. Calculate Actual Bar Position
+    let actualLeftPx = 0;
+    let actualWidthPx = 0;
     let isDelayed = false;
 
     if (task.actualStartDate) {
         const aStart = toDate(task.actualStartDate);
-        const actualStartFromTimelineStart = Math.max(0, differenceInDays(aStart, tStart));
-        actualLeftPct = (actualStartFromTimelineStart / totalDaysInTimeline) * 100;
+        const actualStartDays = Math.max(0, (aStart.getTime() - tStart.getTime()) / msPerDay);
+        actualLeftPx = actualStartDays * pixelsPerDay;
         
-        // If no end date yet, draw until today or something similar. For now, just draw a point if no end.
         const aEnd = task.actualEndDate ? toDate(task.actualEndDate) : new Date(); 
-        const actualDuration = Math.max(1, differenceInDays(aEnd, aStart) + 1);
-        actualWidthPct = (actualDuration / totalDaysInTimeline) * 100;
+        const actualDurationDays = Math.max(1, (aEnd.getTime() - aStart.getTime()) / msPerDay + 1);
+        actualWidthPx = actualDurationDays * pixelsPerDay;
 
-        // Simple delay logic: if actual end > planned end, it's delayed
+        // Simple delay logic
         if (task.actualEndDate && isAfter(toDate(task.actualEndDate), pEnd)) {
             isDelayed = true;
         } else if (!task.actualEndDate && isAfter(new Date(), pEnd)) {
@@ -135,39 +133,38 @@ export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, tot
     }, [isDragging, dragStartX, pixelsPerDay, dragDeltaDays, dragType, task, onUpdateTask]);
 
     // Apply temporary drag styles
-    let displayPlannedLeftPct = plannedLeftPct;
-    let displayPlannedWidthPct = plannedWidthPct;
-    let displayActualLeftPct = actualLeftPct;
-    let displayActualWidthPct = actualWidthPct;
+    let displayPlannedLeftPx = plannedLeftPx;
+    let displayPlannedWidthPx = plannedWidthPx;
+    let displayActualLeftPx = actualLeftPx;
+    let displayActualWidthPx = actualWidthPx;
 
     if (isDragging && dragDeltaDays !== 0) {
-        const deltaPct = (dragDeltaDays / totalDaysInTimeline) * 100;
+        const deltaPx = dragDeltaDays * pixelsPerDay;
         
         if (dragType === 'planned-move') {
-            displayPlannedLeftPct += deltaPct;
+            displayPlannedLeftPx += deltaPx;
         } else if (dragType === 'planned-left') {
-            displayPlannedLeftPct += deltaPct;
-            displayPlannedWidthPct -= deltaPct; 
-            // Avoid negative width
-            if (displayPlannedWidthPct < 0.1) {
-                displayPlannedLeftPct -= (0.1 - displayPlannedWidthPct);
-                displayPlannedWidthPct = 0.1;
+            displayPlannedLeftPx += deltaPx;
+            displayPlannedWidthPx -= deltaPx; 
+            if (displayPlannedWidthPx < pixelsPerDay) {
+                displayPlannedLeftPx -= (pixelsPerDay - displayPlannedWidthPx);
+                displayPlannedWidthPx = pixelsPerDay;
             }
         } else if (dragType === 'planned-right') {
-            displayPlannedWidthPct += deltaPct;
-            if (displayPlannedWidthPct < 0.1) displayPlannedWidthPct = 0.1;
+            displayPlannedWidthPx += deltaPx;
+            if (displayPlannedWidthPx < pixelsPerDay) displayPlannedWidthPx = pixelsPerDay;
         } else if (dragType === 'actual-move') {
-            displayActualLeftPct += deltaPct;
+            displayActualLeftPx += deltaPx;
         } else if (dragType === 'actual-left') {
-             displayActualLeftPct += deltaPct;
-             displayActualWidthPct -= deltaPct;
-             if (displayActualWidthPct < 0.1) {
-                 displayActualLeftPct -= (0.1 - displayActualWidthPct);
-                 displayActualWidthPct = 0.1;
+             displayActualLeftPx += deltaPx;
+             displayActualWidthPx -= deltaPx;
+             if (displayActualWidthPx < pixelsPerDay) {
+                 displayActualLeftPx -= (pixelsPerDay - displayActualWidthPx);
+                 displayActualWidthPx = pixelsPerDay;
              }
         } else if (dragType === 'actual-right') {
-             displayActualWidthPct += deltaPct;
-             if (displayActualWidthPct < 0.1) displayActualWidthPct = 0.1;
+             displayActualWidthPx += deltaPx;
+             if (displayActualWidthPx < pixelsPerDay) displayActualWidthPx = pixelsPerDay;
         }
     }
 
@@ -179,11 +176,11 @@ export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, tot
             <div 
                 className={`absolute h-[10px] rounded-full bg-blue-200 border border-blue-300 shadow-sm top-0 z-10 pointer-events-auto cursor-grab active:cursor-grabbing ${isDragging && dragType?.includes('planned') ? 'opacity-70 bg-blue-300' : ''}`}
                 style={{ 
-                    left: `${displayPlannedLeftPct}%`, 
-                    width: `${displayPlannedWidthPct}%`,
+                    left: `${displayPlannedLeftPx}px`, 
+                    width: `${displayPlannedWidthPx}px`,
                     transition: isDragging ? 'none' : 'all 0.2s',
                 }}
-                title={`Kế hoạch: ${task.plannedStartDate.toLocaleDateString()} - ${task.plannedEndDate.toLocaleDateString()}`}
+                title={`Kế hoạch: ${pStart.toLocaleDateString()} - ${pEnd.toLocaleDateString()}`}
                 onMouseDown={(e) => handleMouseDown(e, 'planned-move')}
             >
                 {/* Drag Handles for Planned */}
@@ -202,11 +199,11 @@ export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, tot
                         isDelayed ? 'bg-red-400 border-red-500' : 'bg-green-400 border-green-500'
                     } ${isDragging && dragType?.includes('actual') ? 'opacity-70 brightness-90' : ''}`}
                     style={{ 
-                        left: `${displayActualLeftPct}%`, 
-                        width: `${displayActualWidthPct}%`,
+                        left: `${displayActualLeftPx}px`, 
+                        width: `${displayActualWidthPx}px`,
                         transition: isDragging ? 'none' : 'all 0.2s',
                     }}
-                    title={`Thực tế: ${task.actualStartDate.toLocaleDateString()} - ${task.actualEndDate ? task.actualEndDate.toLocaleDateString() : 'Đang xử lý'}`}
+                    title={`Thực tế: ${toDate(task.actualStartDate).toLocaleDateString()} - ${task.actualEndDate ? toDate(task.actualEndDate).toLocaleDateString() : 'Đang xử lý'}`}
                     onMouseDown={(e) => handleMouseDown(e, 'actual-move')}
                 >
                     {/* Drag Handles for Actual */}
@@ -224,7 +221,7 @@ export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, tot
                 <div 
                     className="absolute pointer-events-auto bg-white border border-gray-200 shadow-sm rounded-full w-5 h-5 flex items-center justify-center top-[4px] z-30 opacity-80 hover:opacity-100 transition-opacity cursor-pointer"
                     style={{ 
-                        left: `calc(max(${displayPlannedLeftPct + displayPlannedWidthPct}%, ${task.actualStartDate ? displayActualLeftPct + displayActualWidthPct : 0}%) + 8px)`
+                        left: `calc(max(${displayPlannedLeftPx + displayPlannedWidthPx}px, ${task.actualStartDate ? displayActualLeftPx + displayActualWidthPx : 0}px) + 8px)`
                     }}
                     title={`Có ${task.linkedDocumentIds!.length} văn bản đính kèm`}
                     onClick={(e) => {
@@ -237,4 +234,5 @@ export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, tot
             )}
         </div>
     );
+
 };

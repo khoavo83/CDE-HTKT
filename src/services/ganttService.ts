@@ -14,6 +14,14 @@ export const ganttService = {
         );
         const snapshot = await getDocs(q);
       
+      const ensureDate = (val: any): Date => {
+        if (!val) return new Date();
+        if (typeof val.toDate === 'function') return val.toDate();
+        if (val instanceof Date) return val;
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? new Date() : d;
+      };
+
       const tasks: GanttTask[] = [];
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
@@ -22,10 +30,10 @@ export const ganttService = {
           projectId: data.projectId,
           name: data.name,
           parentId: data.parentId,
-          plannedStartDate: data.plannedStartDate?.toDate() || new Date(),
-          plannedEndDate: data.plannedEndDate?.toDate() || new Date(),
-          actualStartDate: data.actualStartDate?.toDate() || null,
-          actualEndDate: data.actualEndDate?.toDate() || null,
+          plannedStartDate: ensureDate(data.plannedStartDate),
+          plannedEndDate: ensureDate(data.plannedEndDate),
+          actualStartDate: data.actualStartDate ? ensureDate(data.actualStartDate) : null,
+          actualEndDate: data.actualEndDate ? ensureDate(data.actualEndDate) : null,
           linkedDocumentIds: data.linkedDocumentIds || [],
           order: data.order || 0
         });
