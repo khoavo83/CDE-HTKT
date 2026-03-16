@@ -59,10 +59,10 @@ export const GanttSidebar: React.FC<GanttSidebarProps> = ({ tasks, expandedIds, 
                 </button>
 
                 <div 
-                    className={`flex-1 truncate text-sm select-none ${task.isCompleted ? 'text-green-700' : (task.depth === 0 ? 'font-bold text-gray-800' : task.depth === 1 ? 'font-semibold text-gray-700' : 'font-medium text-gray-600')}`} 
+                    className={`flex-1 truncate text-sm select-none ${task.isCompleted ? 'text-green-700 font-medium' : (task.depth === 0 ? 'font-bold text-gray-800' : task.depth === 1 ? 'font-semibold text-gray-700' : 'font-medium text-gray-600')}`} 
                     title={task.name}
                 >
-                    <span className={task.isCompleted ? 'line-through opacity-80' : ''}>{task.name}</span>
+                    <span>{task.name}</span>
                 </div>
                 
                 {/* Delay Badge */}
