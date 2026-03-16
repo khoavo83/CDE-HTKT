@@ -141,6 +141,20 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
         }
     };
 
+    const handleToggleComplete = async (task: GanttTask) => {
+        try {
+            const updatedTask = { ...task, isCompleted: !task.isCompleted };
+            if (updatedTask.isCompleted && !updatedTask.actualEndDate) {
+                updatedTask.actualEndDate = new Date(); // automatically set end date to today if not set
+            }
+            await ganttService.saveTask(updatedTask);
+            setFlatTasks(flatTasks.map(t => t.id === task.id ? updatedTask : t));
+            toast.success(updatedTask.isCompleted ? 'Đánh dấu hoàn thành' : 'Đã bỏ đánh dấu hoàn thành');
+        } catch (error) {
+            toast.error('Có lỗi xảy ra khi cập nhật trạng thái');
+        }
+    };
+
     // Compute timeline date range based on tasks and viewMode
     const { timelineStartDate, timelineEndDate, pixelsPerDay } = useMemo(() => {
         const allDates: Date[] = [];
@@ -248,7 +262,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
                     const totalDays = Math.max(1, Math.ceil((pEnd.getTime() - pStart.getTime()) / (1000 * 60 * 60 * 24)));
                     const now = new Date();
                     const elapsed = Math.ceil((now.getTime() - pStart.getTime()) / (1000 * 60 * 60 * 24));
-                    const progress = aEnd ? 100 : Math.min(100, Math.max(0, Math.round((elapsed / totalDays) * 100)));
+                    const progress = task.isCompleted ? 100 : (aEnd ? 100 : Math.min(100, Math.max(0, Math.round((elapsed / totalDays) * 100))));
                     const formatD = (d: Date) => `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}`;
 
                     return (
@@ -279,7 +293,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
                             </div>
                             <div className="flex items-center justify-between text-[10px]">
                                 <span className="text-gray-400">{totalDays} ngày</span>
-                                <span className={`font-bold ${aEnd ? 'text-green-600' : 'text-indigo-600'}`}>{progress}%</span>
+                                <span className={`font-bold ${task.isCompleted || aEnd ? 'text-green-600' : 'text-indigo-600'}`}>{progress}% {task.isCompleted && '(Hoàn thành)'}</span>
                             </div>
                         </div>
                     );
@@ -294,6 +308,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
                     onToggleExpand={handleToggleExpand} 
                     onAddTask={handleOpenAddTask}
                     onEditTask={handleOpenEditTask}
+                    onToggleComplete={handleToggleComplete}
                 />
                  <GanttTimeline 
                     timelineRef={timelineRef}

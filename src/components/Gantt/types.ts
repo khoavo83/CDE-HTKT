@@ -9,6 +9,7 @@ export interface GanttTask {
     actualEndDate: Date | null;
     linkedDocumentIds: string[];
     order: number;
+    isCompleted?: boolean;
     // For rendering tree structure
     children?: GanttTask[];
     isExpanded?: boolean;

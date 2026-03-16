@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { GanttTask } from './types';
 import { VisibleGanttTask } from './utils';
-import { ChevronRight, ChevronDown, AlignLeft, Plus, Edit2, PlusCircle } from 'lucide-react';
+import { ChevronRight, ChevronDown, AlignLeft, Plus, Edit2, PlusCircle, CheckCircle2, Circle } from 'lucide-react';
+import { isAfter, differenceInDays } from 'date-fns';
 
 interface GanttSidebarProps {
     tasks: VisibleGanttTask[];
@@ -9,19 +10,29 @@ interface GanttSidebarProps {
     onToggleExpand: (taskId: string) => void;
     onAddTask: (parentId?: string | null) => void;
     onEditTask: (task: GanttTask) => void;
+    onToggleComplete: (task: GanttTask) => void;
 }
 
-export const GanttSidebar: React.FC<GanttSidebarProps> = ({ tasks, expandedIds, onToggleExpand, onAddTask, onEditTask }) => {
+export const GanttSidebar: React.FC<GanttSidebarProps> = ({ tasks, expandedIds, onToggleExpand, onAddTask, onEditTask, onToggleComplete }) => {
     const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
 
     const renderTaskRow = (task: VisibleGanttTask) => {
         const isHovered = hoveredTaskId === task.id;
         const isExpanded = expandedIds.has(task.id);
-        
+        const pEnd = task.plannedEndDate instanceof Date ? task.plannedEndDate : new Date(task.plannedEndDate);
+        const aEnd = task.actualEndDate ? (task.actualEndDate instanceof Date ? task.actualEndDate : new Date(task.actualEndDate)) : null;
+        let delayDays = 0;
+        if (task.isCompleted || aEnd) {
+             if (aEnd && isAfter(aEnd, pEnd)) delayDays = differenceInDays(aEnd, pEnd);
+        } else {
+             const today = new Date();
+             if (isAfter(today, pEnd)) delayDays = differenceInDays(today, pEnd);
+        }
+
         return (
             <div 
                 key={task.id}
-                className="flex items-center h-10 border-b hover:bg-indigo-50 transition-colors px-2 cursor-pointer group relative"
+                className={`flex items-center h-10 border-b hover:bg-indigo-50 transition-colors px-2 cursor-pointer group relative ${task.isCompleted ? 'bg-green-50/30' : ''}`}
                 style={{ paddingLeft: `${task.depth * 1.5 + 0.5}rem` }}
                 onMouseEnter={() => setHoveredTaskId(task.id)}
                 onMouseLeave={() => setHoveredTaskId(null)}
@@ -38,12 +49,33 @@ export const GanttSidebar: React.FC<GanttSidebarProps> = ({ tasks, expandedIds, 
                         <AlignLeft size={14} className="opacity-50" />
                     )}
                 </div>
+                
+                <button 
+                    onClick={(e) => { e.stopPropagation(); onToggleComplete(task); }}
+                    className={`task-actions mr-2 flex-shrink-0 transition-colors ${task.isCompleted ? 'text-green-500' : 'text-gray-300 hover:text-green-500'}`}
+                    title={task.isCompleted ? "Đánh dấu chưa hoàn thành" : "Đánh dấu hoàn thành"}
+                >
+                    {task.isCompleted ? <CheckCircle2 size={16} /> : <Circle size={16} />}
+                </button>
+
                 <div 
-                    className={`flex-1 truncate text-sm select-none ${task.depth === 0 ? 'font-bold text-gray-800' : task.depth === 1 ? 'font-semibold text-gray-700' : 'font-medium text-gray-600'}`} 
+                    className={`flex-1 truncate text-sm select-none ${task.isCompleted ? 'text-green-700' : (task.depth === 0 ? 'font-bold text-gray-800' : task.depth === 1 ? 'font-semibold text-gray-700' : 'font-medium text-gray-600')}`} 
                     title={task.name}
                 >
-                    {task.name}
+                    <span className={task.isCompleted ? 'line-through opacity-80' : ''}>{task.name}</span>
                 </div>
+                
+                {/* Delay Badge */}
+                {delayDays > 0 && !task.isCompleted && (
+                    <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-600 whitespace-nowrap" title={`${delayDays} ngày trễ so với kế hoạch`}>
+                        Trễ {delayDays}N
+                    </span>
+                )}
+                {delayDays > 0 && task.isCompleted && (
+                    <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-600 whitespace-nowrap" title={`Hoàn thành trễ ${delayDays} ngày`}>
+                        Trễ {delayDays}N
+                    </span>
+                )}
 
                 {/* Action buttons (shown on hover) */}
                 {isHovered && (

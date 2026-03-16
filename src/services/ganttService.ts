@@ -54,7 +54,8 @@ export const ganttService = {
           actualStartDate: parseDate(data.actualStartDate, null),
           actualEndDate: parseDate(data.actualEndDate, null),
           linkedDocumentIds: data.linkedDocumentIds || [],
-          order: data.order || 0
+          order: data.order || 0,
+          isCompleted: data.isCompleted || false
         });
       });
       return tasks;
@@ -103,7 +104,8 @@ export const ganttService = {
         actualStartDate: task.actualStartDate ? Timestamp.fromDate(task.actualStartDate) : null,
         actualEndDate: task.actualEndDate ? Timestamp.fromDate(task.actualEndDate) : null,
         linkedDocumentIds: task.linkedDocumentIds || [],
-        order: task.order || 0
+        order: task.order || 0,
+        isCompleted: task.isCompleted || false
       };
 
       await setDoc(docRef, taskData, { merge: true });

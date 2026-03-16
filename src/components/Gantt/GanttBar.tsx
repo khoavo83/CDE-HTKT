@@ -177,7 +177,11 @@ export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, tot
     let plannedBorderColor = 'border-blue-300';
     let draggingBgColor = 'bg-blue-300';
     
-    if (depth === 0) {
+    if (task.isCompleted) {
+        plannedBgColor = 'bg-green-400';
+        plannedBorderColor = 'border-green-500';
+        draggingBgColor = 'bg-green-500';
+    } else if (depth === 0) {
         plannedBgColor = 'bg-indigo-300';
         plannedBorderColor = 'border-indigo-400';
         draggingBgColor = 'bg-indigo-400';
