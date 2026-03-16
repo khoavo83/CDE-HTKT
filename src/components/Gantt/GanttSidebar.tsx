@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { GanttTask } from './types';
 import { VisibleGanttTask } from './utils';
 import { ChevronRight, ChevronDown, AlignLeft, Plus, Edit2, PlusCircle, CheckCircle2, Circle } from 'lucide-react';
-import { isAfter, differenceInDays } from 'date-fns';
+import { isAfter, isBefore, differenceInDays } from 'date-fns';
 
 interface GanttSidebarProps {
     tasks: VisibleGanttTask[];
@@ -22,8 +22,13 @@ export const GanttSidebar: React.FC<GanttSidebarProps> = ({ tasks, expandedIds, 
         const pEnd = task.plannedEndDate instanceof Date ? task.plannedEndDate : new Date(task.plannedEndDate);
         const aEnd = task.actualEndDate ? (task.actualEndDate instanceof Date ? task.actualEndDate : new Date(task.actualEndDate)) : null;
         let delayDays = 0;
+        let earlyDays = 0;
         if (task.isCompleted || aEnd) {
-             if (aEnd && isAfter(aEnd, pEnd)) delayDays = differenceInDays(aEnd, pEnd);
+             if (aEnd && isAfter(aEnd, pEnd)) {
+                 delayDays = differenceInDays(aEnd, pEnd);
+             } else if (aEnd && isBefore(aEnd, pEnd)) {
+                 earlyDays = differenceInDays(pEnd, aEnd);
+             }
         } else {
              const today = new Date();
              if (isAfter(today, pEnd)) delayDays = differenceInDays(today, pEnd);
@@ -74,6 +79,12 @@ export const GanttSidebar: React.FC<GanttSidebarProps> = ({ tasks, expandedIds, 
                 {delayDays > 0 && task.isCompleted && (
                     <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-600 whitespace-nowrap" title={`Hoàn thành trễ ${delayDays} ngày`}>
                         Trễ {delayDays}N
+                    </span>
+                )}
+                {/* Early Badge */}
+                {earlyDays > 0 && (
+                    <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-600 whitespace-nowrap" title={`Hoàn thành sớm ${earlyDays} ngày so với kế hoạch`}>
+                        Sớm {earlyDays}N
                     </span>
                 )}
 
