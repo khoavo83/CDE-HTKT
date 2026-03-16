@@ -8,13 +8,14 @@ interface GanttBarProps {
     timelineStartDate: Date;
     totalDaysInTimeline: number;
     pixelsPerDay: number;
+    viewMode: ViewMode;
     onUpdateTask?: (task: GanttTask) => void;
     onDocumentClick?: (task: GanttTask) => void;
 }
 
 type DragType = 'planned-move' | 'planned-left' | 'planned-right' | 'actual-move' | 'actual-left' | 'actual-right' | null;
 
-export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, totalDaysInTimeline, pixelsPerDay, onUpdateTask, onDocumentClick }) => {
+export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, totalDaysInTimeline, pixelsPerDay, viewMode, onUpdateTask, onDocumentClick }) => {
 
     // Helper to ensure we have a valid Date object
     const toDate = (d: any) => {

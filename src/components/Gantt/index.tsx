@@ -179,6 +179,17 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
         return { timelineStartDate: minDate, timelineEndDate: maxDate, pixelsPerDay: ppd };
     }, [flatTasks, viewMode]);
 
+    const timelineRef = React.useRef<HTMLDivElement>(null);
+
+    const handleScrollToToday = () => {
+        if (!timelineRef.current) return;
+        const today = new Date();
+        const start = timelineStartDate;
+        const diffDays = differenceInDays(today, start);
+        const scrollPos = diffDays * pixelsPerDay;
+        timelineRef.current.scrollTo({ left: scrollPos - 200, behavior: 'smooth' });
+    };
+
     return (
         <div className="flex flex-col h-full bg-white rounded-lg border shadow-sm overflow-hidden">
             {/* Toolbar */}
@@ -186,6 +197,12 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
                 <div className="flex items-center gap-3">
                     <h2 className="text-lg font-semibold text-gray-800">Sơ đồ Gantt Dự án</h2>
                     {isLoading && <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />}
+                    <button 
+                        onClick={handleScrollToToday}
+                        className="ml-2 px-3 py-1.5 text-xs font-medium bg-white text-indigo-600 border border-indigo-200 rounded-md hover:bg-indigo-50 shadow-sm transition-all"
+                    >
+                        Hiện tại (Hôm nay)
+                    </button>
                 </div>
                 <div className="flex items-center gap-4">
                     <div className="flex bg-white rounded-md border p-1 shadow-sm">
@@ -266,6 +283,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
                     onEditTask={handleOpenEditTask}
                 />
                  <GanttTimeline 
+                    timelineRef={timelineRef}
                     tasks={visibleTasks} 
                     startDate={timelineStartDate}
                     endDate={timelineEndDate}
