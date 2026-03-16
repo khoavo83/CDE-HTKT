@@ -33,7 +33,12 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
             if (viewMode === 'Week') {
                 const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
                 const e = currentDate;
-                cols.push({ start: currentDate, end: e > endDate ? endDate : e, label: `${dayNames[currentDate.getDay()]} (${format(currentDate, 'dd/MM')})` });
+                cols.push({ 
+                    start: currentDate, 
+                    end: e > endDate ? endDate : e, 
+                    labelTop: dayNames[currentDate.getDay()],
+                    labelBottom: format(currentDate, 'dd/MM')
+                });
                 currentDate = addDays(e, 1);
             } else if (viewMode === 'Month') {
                 const e = endOfMonth(currentDate);
@@ -78,7 +83,14 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
                                     minWidth: viewMode === 'Month' ? '120px' : '60px'
                                 }}
                             >
-                                <span className="truncate px-1">{col.label}</span>
+                                {col.labelTop ? (
+                                    <div className="flex flex-col items-center justify-center leading-tight">
+                                        <span className="text-[11px] font-bold text-gray-700">{col.labelTop}</span>
+                                        <span className="text-[9px] font-normal text-gray-500">{col.labelBottom}</span>
+                                    </div>
+                                ) : (
+                                    <span className="truncate px-1">{col.label}</span>
+                                )}
                             </div>
                         );
                     })}
