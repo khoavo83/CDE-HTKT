@@ -14,6 +14,8 @@ interface GanttBarProps {
 
 type DragType = 'planned-move' | 'planned-left' | 'planned-right' | 'actual-move' | 'actual-left' | 'actual-right' | null;
 
+export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, totalDaysInTimeline, pixelsPerDay, onUpdateTask, onDocumentClick }) => {
+
     // Helper to ensure we have a valid Date object
     const toDate = (d: any) => (d instanceof Date ? d : new Date(d));
 
