@@ -144,37 +144,50 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
     // Compute timeline date range based on tasks and viewMode
     const { timelineStartDate, timelineEndDate, pixelsPerDay } = useMemo(() => {
         const allDates: Date[] = [];
+        const now = new Date();
+        
         flatTasks.forEach(t => {
-            if (t.plannedStartDate) allDates.push(t.plannedStartDate instanceof Date ? t.plannedStartDate : new Date(t.plannedStartDate));
-            if (t.plannedEndDate) allDates.push(t.plannedEndDate instanceof Date ? t.plannedEndDate : new Date(t.plannedEndDate));
-            if (t.actualStartDate) allDates.push(t.actualStartDate instanceof Date ? t.actualStartDate : new Date(t.actualStartDate));
-            if (t.actualEndDate) allDates.push(t.actualEndDate instanceof Date ? t.actualEndDate : new Date(t.actualEndDate));
+            const dates = [t.plannedStartDate, t.plannedEndDate, t.actualStartDate, t.actualEndDate];
+            dates.forEach(d => {
+                if (!d) return;
+                const dateObj = d instanceof Date ? d : new Date(d);
+                // Filter out obviously wrong years (placeholder 1970 or far future)
+                if (!isNaN(dateObj.getTime()) && dateObj.getFullYear() > 2000 && dateObj.getFullYear() < 2100) {
+                    allDates.push(dateObj);
+                }
+            });
         });
 
-        let minDate = allDates.length > 0 ? new Date(Math.min(...allDates.filter(d => !isNaN(d.getTime())).map(d => d.getTime()))) : new Date();
-        let maxDate = allDates.length > 0 ? new Date(Math.max(...allDates.filter(d => !isNaN(d.getTime())).map(d => d.getTime()))) : addDays(new Date(), 90);
+        // If no valid dates found, use a default range around now
+        let minDate = allDates.length > 0 ? new Date(Math.min(...allDates.map(d => d.getTime()))) : subDays(now, 30);
+        let maxDate = allDates.length > 0 ? new Date(Math.max(...allDates.map(d => d.getTime()))) : addDays(now, 90);
+
+        // Ensure at least a 30-day range
+        if (differenceInDays(maxDate, minDate) < 30) {
+            maxDate = addDays(minDate, 30);
+        }
 
         // Add padding based on view mode
         if (viewMode === 'Week') {
             minDate = startOfWeek(subDays(minDate, 7), { weekStartsOn: 1 });
             maxDate = endOfWeek(addDays(maxDate, 7), { weekStartsOn: 1 });
         } else if (viewMode === 'Month') {
-            minDate = startOfMonth(subDays(minDate, 15));
-            maxDate = endOfMonth(addDays(maxDate, 15));
+            minDate = startOfMonth(subDays(minDate, 32)); // Extra padding to ensure current months are visible
+            maxDate = endOfMonth(addDays(maxDate, 32));
         } else if (viewMode === 'Quarter') {
-            minDate = startOfQuarter(subDays(minDate, 30));
-            maxDate = endOfQuarter(addDays(maxDate, 30));
+            minDate = startOfQuarter(subDays(minDate, 90));
+            maxDate = endOfQuarter(addDays(maxDate, 90));
         } else {
-            minDate = startOfYear(minDate);
-            maxDate = endOfYear(maxDate);
+            minDate = startOfYear(subDays(minDate, 365));
+            maxDate = endOfYear(addDays(maxDate, 365));
         }
 
         // Pixels per day based on view mode
         let ppd = 4;
-        if (viewMode === 'Week') ppd = 20;
-        else if (viewMode === 'Month') ppd = 6;
-        else if (viewMode === 'Quarter') ppd = 3;
-        else ppd = 1.5;
+        if (viewMode === 'Week') ppd = 24;
+        else if (viewMode === 'Month') ppd = 8;
+        else if (viewMode === 'Quarter') ppd = 4;
+        else ppd = 2;
 
         return { timelineStartDate: minDate, timelineEndDate: maxDate, pixelsPerDay: ppd };
     }, [flatTasks, viewMode]);

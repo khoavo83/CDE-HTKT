@@ -63,17 +63,17 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
                 <div className="h-12 border-b bg-white sticky top-0 z-20 flex">
                     {columns.map((col, idx) => {
                         const daysInCol = differenceInDays(col.end, col.start) + 1;
-                        const widthPct = (daysInCol / totalDaysInTimeline) * 100;
+                        const colWidth = daysInCol * pixelsPerDay;
                         return (
                             <div
                                 key={idx}
-                                className="border-r flex items-center justify-center text-[10px] md:text-xs font-semibold text-gray-600 bg-gray-50 shrink-0"
+                                className="border-r flex items-center justify-center text-[10px] md:text-xs font-semibold text-gray-600 bg-gray-50 shrink-0 overflow-hidden"
                                 style={{ 
-                                    width: `${widthPct}%`,
+                                    width: `${colWidth}px`,
                                     minWidth: viewMode === 'Month' ? '120px' : '60px'
                                 }}
                             >
-                                {col.label}
+                                <span className="truncate px-1">{col.label}</span>
                             </div>
                         );
                     })}
@@ -83,9 +83,9 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
                 <div className="absolute top-12 bottom-0 left-0 right-0 flex pointer-events-none z-0">
                     {columns.map((col, idx) => {
                          const daysInCol = differenceInDays(col.end, col.start) + 1;
-                         const widthPct = (daysInCol / totalDaysInTimeline) * 100;
+                         const colWidth = daysInCol * pixelsPerDay;
                          return (
-                             <div key={`line-${idx}`} className="border-r border-gray-200 h-full" style={{ width: `${widthPct}%` }} />
+                             <div key={`line-${idx}`} className="border-r border-gray-200 h-full shrink-0" style={{ width: `${colWidth}px` }} />
                          );
                     })}
                 </div>

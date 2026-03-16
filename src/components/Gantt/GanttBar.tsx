@@ -8,13 +8,14 @@ interface GanttBarProps {
     timelineStartDate: Date;
     totalDaysInTimeline: number;
     pixelsPerDay: number;
+    viewMode?: string;
     onUpdateTask?: (task: GanttTask) => void;
     onDocumentClick?: (task: GanttTask) => void;
 }
 
 type DragType = 'planned-move' | 'planned-left' | 'planned-right' | 'actual-move' | 'actual-left' | 'actual-right' | null;
 
-export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, totalDaysInTimeline, pixelsPerDay, onUpdateTask, onDocumentClick }) => {
+export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, totalDaysInTimeline, pixelsPerDay, viewMode, onUpdateTask, onDocumentClick }) => {
     const pStart = task.plannedStartDate instanceof Date ? task.plannedStartDate : new Date(task.plannedStartDate);
     const pEnd = task.plannedEndDate instanceof Date ? task.plannedEndDate : new Date(task.plannedEndDate);
     const aStart = task.actualStartDate ? (task.actualStartDate instanceof Date ? task.actualStartDate : new Date(task.actualStartDate)) : null;
@@ -178,6 +179,7 @@ export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, tot
                 style={{ 
                     left: `${displayPlannedLeftPct}%`, 
                     width: `${displayPlannedWidthPct}%`,
+                    minWidth: `${pixelsPerDay}px`,
                     transition: isDragging ? 'none' : 'all 0.2s',
                 }}
                 title={`Kế hoạch: ${task.plannedStartDate.toLocaleDateString()} - ${task.plannedEndDate.toLocaleDateString()}`}
@@ -201,6 +203,7 @@ export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, tot
                     style={{ 
                         left: `${displayActualLeftPct}%`, 
                         width: `${displayActualWidthPct}%`,
+                        minWidth: `${pixelsPerDay}px`,
                         transition: isDragging ? 'none' : 'all 0.2s',
                     }}
                     title={`Thực tế: ${task.actualStartDate.toLocaleDateString()} - ${task.actualEndDate ? task.actualEndDate.toLocaleDateString() : 'Đang xử lý'}`}

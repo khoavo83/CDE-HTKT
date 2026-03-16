@@ -18,15 +18,29 @@ export const ganttService = {
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
         
-        // Safely parse date from Firestore, which could be Timestamp, Date, or string
+        // Safely parse date from Firestore, which could be Timestamp, Date, string, or {seconds, nanoseconds}
         const parseDate = (val: any, fallback: Date | null = new Date()): any => {
            if (!val) return fallback;
+           
+           // Handle Firestore Timestamp
            if (typeof val.toDate === 'function') return val.toDate();
+           
+           // Handle raw Firestore object {seconds, nanoseconds}
+           if (val && typeof val.seconds === 'number') {
+               return new Date(val.seconds * 1000);
+           }
+           
            if (val instanceof Date) return val;
+           
            if (typeof val === 'string' || typeof val === 'number') {
                const parsed = new Date(val);
-               return isNaN(parsed.getTime()) ? fallback : parsed;
+               // Filter out common "zero" dates or extreme outlier years to keep timeline clean
+               if (isNaN(parsed.getTime()) || parsed.getFullYear() < 2000 || parsed.getFullYear() > 2100) {
+                   return fallback;
+               }
+               return parsed;
            }
+           
            return fallback;
         };
 
