@@ -19,19 +19,31 @@ export const GanttSidebar: React.FC<GanttSidebarProps> = ({ tasks, expandedIds, 
     const renderTaskRow = (task: VisibleGanttTask) => {
         const isHovered = hoveredTaskId === task.id;
         const isExpanded = expandedIds.has(task.id);
-        const pEnd = task.plannedEndDate instanceof Date ? task.plannedEndDate : new Date(task.plannedEndDate);
-        const aEnd = task.actualEndDate ? (task.actualEndDate instanceof Date ? task.actualEndDate : new Date(task.actualEndDate)) : null;
+        const safeParseDate = (d: any) => {
+            if (!d) return null;
+            if (d instanceof Date) return d;
+            const pd = new Date(d);
+            return isNaN(pd.getTime()) ? null : pd;
+        };
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const pEnd = safeParseDate(task.plannedEndDate) || today;
+        const aEnd = safeParseDate(task.actualEndDate);
+        
+        // Effective end date for status calculation: 
+        // If completed, use actual end. If not, use today to show current delay/early status.
+        const effectiveEnd = (task.isCompleted && aEnd) ? aEnd : today;
+        
         let delayDays = 0;
         let earlyDays = 0;
-        if (task.isCompleted || aEnd) {
-             if (aEnd && isAfter(aEnd, pEnd)) {
-                 delayDays = differenceInDays(aEnd, pEnd);
-             } else if (aEnd && isBefore(aEnd, pEnd)) {
-                 earlyDays = differenceInDays(pEnd, aEnd);
-             }
-        } else {
-             const today = new Date();
-             if (isAfter(today, pEnd)) delayDays = differenceInDays(today, pEnd);
+
+        if (isAfter(effectiveEnd, pEnd)) {
+            delayDays = differenceInDays(effectiveEnd, pEnd);
+        } else if (isBefore(effectiveEnd, pEnd)) {
+            // Note: only show "Sớm" for parent or completed tasks to avoid confusion for future tasks
+            earlyDays = differenceInDays(pEnd, effectiveEnd);
         }
 
         return (

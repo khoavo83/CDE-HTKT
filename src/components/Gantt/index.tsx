@@ -42,31 +42,36 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
         const computeDates = (taskId: string): [Date, Date | null] => {
             const children = childrenMap.get(taskId);
             const task = taskMap.get(taskId)!;
-            const pEnd = task.plannedEndDate instanceof Date ? task.plannedEndDate : new Date(task.plannedEndDate);
-            const aEnd = task.actualEndDate ? (task.actualEndDate instanceof Date ? task.actualEndDate : new Date(task.actualEndDate)) : null;
+            
+            const parseDate = (d: any) => d instanceof Date ? d : new Date(d);
+            const pEnd = parseDate(task.plannedEndDate);
+            const aEnd = task.actualEndDate ? parseDate(task.actualEndDate) : null;
 
             if (!children || children.length === 0) {
                 return [pEnd, aEnd];
             }
 
             const childResults = children.map(cid => computeDates(cid));
-            const maxPlannedEnd = new Date(Math.max(...childResults.map(r => r[0].getTime())));
+            
+            // Parent Planned End = max of children's planned ends
+            const maxPlannedEnd = new Date(Math.max(...childResults.map(r => r[0].getTime()), pEnd.getTime()));
+            
+            // Parent Actual End = max of children's actual ends (only for those that have documents)
             const actualDates = childResults.map(r => r[1]?.getTime() || 0).filter(t => t > 0);
-            const maxActualEnd = actualDates.length > 0 ? new Date(Math.max(...actualDates)) : null;
+            const maxActualEnd = actualDates.length > 0 ? new Date(Math.max(...actualDates)) : aEnd;
 
-            if (maxPlannedEnd.getTime() > pEnd.getTime()) {
-                task.plannedEndDate = maxPlannedEnd;
-            }
-            if (maxActualEnd && (!aEnd || maxActualEnd.getTime() > aEnd.getTime())) {
-                task.actualEndDate = maxActualEnd;
-                if (!task.actualStartDate) {
-                    task.actualStartDate = task.plannedStartDate;
-                }
+            task.plannedEndDate = maxPlannedEnd;
+            task.actualEndDate = maxActualEnd;
+            
+            // Ensure actualStartDate exists if actualEndDate exists
+            if (task.actualEndDate && !task.actualStartDate) {
+                task.actualStartDate = task.plannedStartDate;
             }
             
             taskMap.set(taskId, task);
-            return [task.plannedEndDate, task.actualEndDate] as any;
+            return [task.plannedEndDate, task.actualEndDate];
         };
+
         tasks.filter(t => !t.parentId).forEach(t => computeDates(t.id));
         return Array.from(taskMap.values());
     };
