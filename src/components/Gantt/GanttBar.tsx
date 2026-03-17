@@ -233,9 +233,9 @@ export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, tot
             {/* Actual Bar (Foreground/Bottom) */}
             {task.actualStartDate && (
                 <div 
-                    className={`absolute h-[10px] rounded-full shadow-sm top-[16px] border z-20 pointer-events-auto cursor-grab active:cursor-grabbing ${
+                    className={`absolute h-[10px] rounded-full shadow-sm top-[16px] border z-20 pointer-events-auto ${
                         isDelayed ? 'bg-red-400 border-red-500' : 'bg-green-400 border-green-500'
-                    } ${isDragging && dragType?.includes('actual') ? 'opacity-70 brightness-90' : ''}`}
+                    }`}
                     style={{ 
                         left: `${displayActualLeftPct}%`, 
                         width: `${displayActualWidthPct}%`,
@@ -243,15 +243,8 @@ export const GanttBar: React.FC<GanttBarProps> = ({ task, timelineStartDate, tot
                         transition: isDragging ? 'none' : 'all 0.2s',
                     }}
                     title={`Thực tế: ${task.actualStartDate.toLocaleDateString()} - ${task.actualEndDate ? task.actualEndDate.toLocaleDateString() : 'Đang xử lý'}`}
-                    onMouseDown={(e) => handleMouseDown(e, 'actual-move')}
                 >
-                    {/* Drag Handles for Actual */}
-                    {onUpdateTask && task.actualEndDate && (
-                        <>
-                            <div className="absolute left-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-black/10 rounded-l-full" onMouseDown={(e) => handleMouseDown(e, 'actual-left')} />
-                            <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-black/10 rounded-r-full" onMouseDown={(e) => handleMouseDown(e, 'actual-right')} />
-                        </>
-                    )}
+                    {/* Handlers removed for actual bar */}
                 </div>
             )}
 

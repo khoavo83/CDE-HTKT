@@ -65,26 +65,30 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         }
     }, [isOpen, task]);
 
-    // Auto-calculate logic when linked docs change
+    // Auto-calculate actual dates from linked docs
     useEffect(() => {
         if (linkedDocs.length > 0) {
-            // Find min and max dates from linked docs
+            // actualStartDate = plannedStartDate of this task
+            if (startDate) {
+                setActualStartDate(startDate);
+            }
+            // actualEndDate = max(ngayBanHanh) of linked docs
             const dates = linkedDocs
                 .map(doc => doc.ngayBanHanh ? new Date(doc.ngayBanHanh).getTime() : 0)
-                .filter(time => time > 0)
-                .sort((a, b) => a - b);
+                .filter(time => time > 0);
             
             if (dates.length > 0) {
-                const earliest = new Date(dates[0]);
-                const latest = new Date(dates[dates.length - 1]);
-                
-                // Update actual dates automatically as a suggestion
-                // (Only update if they were empty or user just added a doc, in a real scenario we might prompt, but autofill is friendly)
-                setActualStartDate(earliest.toISOString().split('T')[0]);
+                const latest = new Date(Math.max(...dates));
                 setActualEndDate(latest.toISOString().split('T')[0]);
+            } else {
+                setActualEndDate('');
             }
+        } else {
+            // No linked docs → no actual dates
+            setActualStartDate('');
+            setActualEndDate('');
         }
-    }, [linkedDocs]);
+    }, [linkedDocs, startDate]);
 
     if (!isOpen) return null;
 
@@ -102,14 +106,16 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         
+        // Actual dates: only set if linked docs exist
+        const hasLinkedDocs = linkedDocs.length > 0;
         onSave({
-            id: task?.id, // undefined means it's a new task
+            id: task?.id,
             name,
             parentId: task ? task.parentId : parentId,
             plannedStartDate: new Date(startDate),
             plannedEndDate: new Date(endDate),
-            actualStartDate: actualStartDate ? new Date(actualStartDate) : undefined,
-            actualEndDate: actualEndDate ? new Date(actualEndDate) : undefined,
+            actualStartDate: hasLinkedDocs && actualStartDate ? new Date(actualStartDate) : undefined,
+            actualEndDate: hasLinkedDocs && actualEndDate ? new Date(actualEndDate) : undefined,
             linkedDocumentIds: linkedDocs.map(d => d.id),
         });
     };
@@ -237,35 +243,28 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                                 )}
                             </div>
 
-                            {/* Actual Dates */}
+                            {/* Actual Dates - Read Only, auto-computed */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1 flex justify-between">
-                                        <span>Bắt đầu thực tế mới nhất</span>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Bắt đầu thực tế
                                     </label>
-                                    <input
-                                        type="date"
-                                        value={actualStartDate}
-                                        onChange={(e) => setActualStartDate(e.target.value)}
-                                        className="w-full px-3 py-2 border border-emerald-200 bg-emerald-50/30 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-shadow"
-                                    />
+                                    <div className={`w-full px-3 py-2 border rounded-lg text-sm ${actualStartDate ? 'border-emerald-200 bg-emerald-50/30 text-gray-800' : 'border-gray-200 bg-gray-50 text-gray-400 italic'}`}>
+                                        {actualStartDate ? new Date(actualStartDate).toLocaleDateString('vi-VN') : 'Chưa có văn bản đính kèm'}
+                                    </div>
                                     <p className="text-[11px] text-gray-500 mt-1 italic">
-                                        Tự động gợi ý từ Ngày Ban Hành nhỏ nhất
+                                        Tự động lấy từ ngày bắt đầu kế hoạch
                                     </p>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1 flex justify-between">
-                                        <span>Kết thúc thực tế mới nhất</span>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Kết thúc thực tế
                                     </label>
-                                    <input
-                                        type="date"
-                                        value={actualEndDate}
-                                        onChange={(e) => setActualEndDate(e.target.value)}
-                                        min={actualStartDate}
-                                        className="w-full px-3 py-2 border border-emerald-200 bg-emerald-50/30 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-shadow"
-                                    />
-                                     <p className="text-[11px] text-gray-500 mt-1 italic">
-                                        Tự động gợi ý từ Ngày Ban Hành lớn nhất
+                                    <div className={`w-full px-3 py-2 border rounded-lg text-sm ${actualEndDate ? 'border-emerald-200 bg-emerald-50/30 text-gray-800' : 'border-gray-200 bg-gray-50 text-gray-400 italic'}`}>
+                                        {actualEndDate ? new Date(actualEndDate).toLocaleDateString('vi-VN') : 'Chưa có văn bản đính kèm'}
+                                    </div>
+                                    <p className="text-[11px] text-gray-500 mt-1 italic">
+                                        Tự động lấy từ max(Ngày Ban Hành) của văn bản
                                     </p>
                                 </div>
                             </div>

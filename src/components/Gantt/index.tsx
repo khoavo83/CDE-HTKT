@@ -27,11 +27,55 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
     const [addingParentId, setAddingParentId] = useState<string | null>(null);
     const [selectedTaskForDocs, setSelectedTaskForDocs] = useState<GanttTask | null>(null);
 
+    // Rollup: parent planned end date = max of children's planned end dates
+    const rollupParentDates = (tasks: GanttTask[]): GanttTask[] => {
+        const taskMap = new Map<string, GanttTask>();
+        tasks.forEach(t => taskMap.set(t.id, { ...t }));
+        const childrenMap = new Map<string, string[]>();
+        tasks.forEach(t => {
+            if (t.parentId) {
+                const siblings = childrenMap.get(t.parentId) || [];
+                siblings.push(t.id);
+                childrenMap.set(t.parentId, siblings);
+            }
+        });
+        const computeDates = (taskId: string): [Date, Date | null] => {
+            const children = childrenMap.get(taskId);
+            const task = taskMap.get(taskId)!;
+            const pEnd = task.plannedEndDate instanceof Date ? task.plannedEndDate : new Date(task.plannedEndDate);
+            const aEnd = task.actualEndDate ? (task.actualEndDate instanceof Date ? task.actualEndDate : new Date(task.actualEndDate)) : null;
+
+            if (!children || children.length === 0) {
+                return [pEnd, aEnd];
+            }
+
+            const childResults = children.map(cid => computeDates(cid));
+            const maxPlannedEnd = new Date(Math.max(...childResults.map(r => r[0].getTime())));
+            const actualDates = childResults.map(r => r[1]?.getTime() || 0).filter(t => t > 0);
+            const maxActualEnd = actualDates.length > 0 ? new Date(Math.max(...actualDates)) : null;
+
+            if (maxPlannedEnd.getTime() > pEnd.getTime()) {
+                task.plannedEndDate = maxPlannedEnd;
+            }
+            if (maxActualEnd && (!aEnd || maxActualEnd.getTime() > aEnd.getTime())) {
+                task.actualEndDate = maxActualEnd;
+                if (!task.actualStartDate) {
+                    task.actualStartDate = task.plannedStartDate;
+                }
+            }
+            
+            taskMap.set(taskId, task);
+            return [task.plannedEndDate, task.actualEndDate] as any;
+        };
+        tasks.filter(t => !t.parentId).forEach(t => computeDates(t.id));
+        return Array.from(taskMap.values());
+    };
+
     const fetchTasks = async () => {
         try {
             setIsLoading(true);
             const data = await ganttService.getTasksByProject(projectId);
-            setFlatTasks(data);
+            setFlatTasks(rollupParentDates(data));
             
             // Auto expand top level nodes initially if empty
             if (expandedIds.size === 0 && data.length > 0) {
@@ -48,14 +92,13 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
     };
 
     useEffect(() => {
-        // Fetch tasks on mount or when projectId changes
         if (projectId) {
             fetchTasks();
         }
     }, [projectId]);
 
     const visibleTasks = useMemo(() => {
-        return getVisibleTasks(flatTasks, expandedIds);
+        return getVisibleTasks(rollupParentDates(flatTasks), expandedIds);
     }, [flatTasks, expandedIds]);
 
     const handleToggleExpand = (taskId: string) => {

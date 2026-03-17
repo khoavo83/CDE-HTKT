@@ -70,22 +70,34 @@ export const GanttSidebar: React.FC<GanttSidebarProps> = ({ tasks, expandedIds, 
                     <span>{task.name}</span>
                 </div>
                 
-                {/* Delay Badge */}
-                {delayDays > 0 && !task.isCompleted && (
-                    <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-600 whitespace-nowrap" title={`${delayDays} ngày trễ so với kế hoạch`}>
-                        Trễ {delayDays}N
-                    </span>
-                )}
-                {delayDays > 0 && task.isCompleted && (
-                    <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-600 whitespace-nowrap" title={`Hoàn thành trễ ${delayDays} ngày`}>
-                        Trễ {delayDays}N
-                    </span>
-                )}
-                {/* Early Badge */}
-                {earlyDays > 0 && (
-                    <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-600 whitespace-nowrap" title={`Hoàn thành sớm ${earlyDays} ngày so với kế hoạch`}>
-                        Sớm {earlyDays}N
-                    </span>
+                {/* Delay/Early Badges */}
+                {task.isCompleted || aEnd ? (
+                    <>
+                        {delayDays > 0 && (
+                            <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-600 whitespace-nowrap" title={`Hoàn thành trễ ${delayDays} ngày`}>
+                                Trễ {delayDays}N
+                            </span>
+                        )}
+                        {earlyDays > 0 && (
+                            <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-600 whitespace-nowrap" title={`Hoàn thành sớm ${earlyDays} ngày so với kế hoạch`}>
+                                Sớm {earlyDays}N
+                            </span>
+                        )}
+                    </>
+                ) : (
+                    <>
+                        {delayDays > 0 ? (
+                            <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-600 whitespace-nowrap" title={`${delayDays} ngày trễ so với kế hoạch`}>
+                                Trễ {delayDays}N
+                            </span>
+                        ) : (
+                             !task.hasChildren && (
+                                <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-400 whitespace-nowrap italic">
+                                    Chưa có VB
+                                </span>
+                             )
+                        )}
+                    </>
                 )}
 
                 {/* Action buttons (shown on hover) */}
