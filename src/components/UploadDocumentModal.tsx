@@ -51,6 +51,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
     });
     const [docId, setDocId] = useState<string>('');
     const [isChecking, setIsChecking] = useState(false);
+    const [isFileNameManuallyEdited, setIsFileNameManuallyEdited] = useState(false);
 
     // States cho Sắp xếp Dự án
     const [isProjectTreeOpen, setIsProjectTreeOpen] = useState(false);
@@ -91,6 +92,22 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
         setMainFilePreviewUrl(url);
         return () => URL.revokeObjectURL(url);
     }, [mainFile]);
+
+    // Tự động điền tên file chuẩn hóa
+    useEffect(() => {
+        if (!isFileNameManuallyEdited) {
+            const safeSoKyHieu = (ocrData.soKyHieu || "NOSO").replace(/\//g, "-").replace(/\\/g, "-");
+            const ngayBanHanhStr = ocrData.ngayBanHanh || format(new Date(), 'yyyy-MM-dd');
+            const newName = `${ngayBanHanhStr}_${safeSoKyHieu}`;
+            
+            if (newName !== ocrData.fileNameStandardized) {
+                setOcrData((prev: any) => ({
+                    ...prev,
+                    fileNameStandardized: newName
+                }));
+            }
+        }
+    }, [ocrData.soKyHieu, ocrData.ngayBanHanh, isFileNameManuallyEdited]);
 
     if (!isOpen) return null;
 
@@ -138,6 +155,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                 .substring(0, 50);
             const initialStandardName = `${ngayBanHanhStr}_${safeSoKyHieu}`;
 
+            setIsFileNameManuallyEdited(false);
             setOcrData({
                 ...data,
                 mucDoKhan: data.mucDoKhan || 'THUONG', // Đảm bảo luôn có giá trị mặc định
@@ -184,6 +202,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
             });
 
             if (result.data.success) {
+                setIsFileNameManuallyEdited(false);
                 setOcrData(result.data.data);
             }
         } catch (error) {
@@ -620,7 +639,10 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                                 <input
                                     type="text"
                                     value={ocrData.fileNameStandardized || ''}
-                                    onChange={(e) => setOcrData({ ...ocrData, fileNameStandardized: e.target.value })}
+                                    onChange={(e) => {
+                                        setIsFileNameManuallyEdited(true);
+                                        setOcrData({ ...ocrData, fileNameStandardized: e.target.value });
+                                    }}
                                     className="w-full px-3 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold text-sm text-blue-800"
                                     placeholder="yyyy-mm-dd_số ký hiệu"
                                 />
