@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, FileText, ExternalLink } from 'lucide-react';
+import { X, FileText, ExternalLink, Paperclip } from 'lucide-react';
 import { getDocIconConfig, getDocFormattedTitle } from '../utils/docUtils';
 
 interface DocumentPreviewModalProps {
@@ -78,6 +78,40 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ doc:
                                 <p className="text-sm text-gray-700 leading-relaxed">{previewDoc.trichYeu}</p>
                             </div>
                         )}
+
+                        {/* Tệp đính kèm (Attachments) */}
+                        {previewDoc.attachments && previewDoc.attachments.length > 0 && (
+                            <div className="pt-4 border-t border-gray-100">
+                                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                                    <Paperclip className="w-3 h-3 text-gray-500" /> Tệp đính kèm ({previewDoc.attachments.length})
+                                </p>
+                                <div className="space-y-2">
+                                    {previewDoc.attachments.map((file: any) => (
+                                        <a
+                                            key={file.id || file.driveFileId}
+                                            href={file.webViewLink || file.storageUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100 hover:bg-blue-50 hover:border-blue-200 hover:shadow-sm transition-all group"
+                                        >
+                                            <div className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center shrink-0 group-hover:border-blue-100 shadow-sm">
+                                                <FileText className="w-4 h-4 text-blue-500" />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-[11px] text-gray-700 font-bold truncate group-hover:text-blue-700" title={file.originalName || file.fileName}>
+                                                    {file.originalName || file.fileName}
+                                                </p>
+                                                {file.fileSize && (
+                                                    <p className="text-[9px] text-gray-400 mt-0.5">{(file.fileSize / 1024).toFixed(0)} KB</p>
+                                                )}
+                                            </div>
+                                            <ExternalLink className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-400 shrink-0" />
+                                        </a>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                     </div>
 
                     {/* Right: Preview */}

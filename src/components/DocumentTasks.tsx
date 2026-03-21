@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuthStore } from '../store/useAuthStore';
-import { CheckCircle2, Clock, CheckSquare, Edit3, Trash2, Send, ChevronDown, ChevronUp, UserPlus, Users, Settings, FileText, ExternalLink } from 'lucide-react';
+import { CheckCircle2, Clock, CheckSquare, Edit3, Trash2, Send, ChevronDown, ChevronUp, UserPlus, Users, Settings, FileText, ExternalLink, Paperclip } from 'lucide-react';
 import { formatDateTime } from '../utils/formatVN';
 import { AssignTaskModal } from './AssignTaskModal';
 import { UpdateTaskModal } from './UpdateTaskModal';
@@ -312,6 +312,20 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                                     <span className="text-gray-400 text-xs italic">—</span>
                                                 )}
                                             </td>
+                                            <td className="px-4 py-4 text-sm">
+                                                {task.inputFiles && task.inputFiles.length > 0 ? (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {task.inputFiles.map((f: any, idx: number) => (
+                                                            <a key={idx} onClick={(e) => e.stopPropagation()} href={f.webViewLink || f.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[11px] text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100 max-w-[140px] truncate" title={f.originalName || f.fileName || f.name}>
+                                                                <Paperclip className="w-3 h-3 shrink-0" />
+                                                                {f.originalName || f.fileName || f.name}
+                                                            </a>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-400 text-xs italic">—</span>
+                                                )}
+                                            </td>
                                             <td className="px-4 py-4 text-center border-l border-gray-100">
                                                 <StatusBadge status={task.status} />
                                             </td>
@@ -385,7 +399,7 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                             </td>
                                         </tr>
                                         {/* Row showing result if expanded */}
-                                        {isExpanded && (task.result || (task.reportFiles && task.reportFiles.length > 0)) && (
+                                        {isExpanded && (task.result || (task.reportFiles && task.reportFiles.length > 0) || (task.resultFiles && task.resultFiles.length > 0)) && (
                                             <tr className="bg-indigo-50/40">
                                                 <td colSpan={7} className="px-6 py-4 text-sm">
                                                     <div className="pl-4 border-l-4 border-indigo-400 rounded-r-md py-2 flex flex-col gap-3">
@@ -410,6 +424,25 @@ export const DocumentTasks: React.FC<DocumentTasksProps> = ({ vanBanId }) => {
                                                                             >
                                                                                 <FileText className="w-3.5 h-3.5" />
                                                                                 <span className="max-w-[200px] truncate">{f.name}</span>
+                                                                            </a>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            {task.resultFiles && task.resultFiles.length > 0 && (
+                                                                <div className="mt-2">
+                                                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Tài liệu báo cáo:</p>
+                                                                    <div className="flex flex-col gap-2">
+                                                                        {task.resultFiles.map((f: any, idx: number) => (
+                                                                            <a
+                                                                                key={idx}
+                                                                                href={f.webViewLink || f.url}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="inline-flex items-center gap-3 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-blue-700 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                                                                            >
+                                                                                <FileText className="w-3.5 h-3.5" />
+                                                                                <span className="truncate">{f.originalName || f.fileName || f.name}</span>
                                                                             </a>
                                                                         ))}
                                                                     </div>

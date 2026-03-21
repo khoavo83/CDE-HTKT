@@ -632,8 +632,17 @@ export const DocumentReview = () => {
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Loại Văn bản</label>
                                     <input
                                         {...register('loaiVanBan')}
+                                        list="loaiVanBanListReview"
                                         className="w-full px-3 py-2 border rounded-md focus:ring-1 focus:ring-blue-500 outline-none disabled:bg-gray-50 disabled:text-gray-600 disabled:border-transparent transiton-colors"
                                     />
+                                    <datalist id="loaiVanBanListReview">
+                                        {categories
+                                            .filter(c => c.type === tabs.find(t => t.label === 'Loại Văn bản')?.id)
+                                            .sort((a, b) => a.order - b.order)
+                                            .map(c => (
+                                                <option key={c.id} value={c.value} />
+                                            ))}
+                                    </datalist>
                                 </div>
                             </div>
 

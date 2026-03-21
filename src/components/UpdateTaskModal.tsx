@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { format } from 'date-fns';
 import { httpsCallable } from 'firebase/functions';
 import { db, appFunctions } from '../firebase/config';
 import {
@@ -45,11 +46,7 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
 
     // Report completion states
     const [reportFile, setReportFile] = useState<File | null>(null);
-    const [isOcrProcessing, setIsOcrProcessing] = useState(false);
-    const [ocrStatus, setOcrStatus] = useState('');
-    const [showReview, setShowReview] = useState(false);
-    const [ocrData, setOcrData] = useState<any>(null);
-    const [docId, setDocId] = useState<string>('');
+    const [isUploadingReport, setIsUploadingReport] = useState(false);
 
     useEffect(() => {
         if (isOpen && task) {
@@ -57,9 +54,6 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
             setResult(task.result || '');
             setChecklist(task.checklist || []);
             setReportFile(null);
-            setShowReview(false);
-            setDocId('');
-            setOcrData(null);
             setNewChecklistItem('');
         }
     }, [isOpen, task]);
@@ -104,7 +98,7 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (status === 'COMPLETED' && !result.trim() && !docId) {
+        if (status === 'COMPLETED' && !result.trim() && !reportFile) {
             toast.error("Vui lòng nhập kết quả xử lý hoặc upload file báo cáo.");
             return;
         }
@@ -113,9 +107,6 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
         try {
             const taskRef = doc(db, 'vanban_tasks', task.id);
             const progress = calculateProgress(checklist);
-            
-            // Auto complete if all checklist items are done and user selects processing, suggest completion?
-            // Actually, just save the status user selected.
             
             const updates: any = { 
                 status, 
@@ -127,8 +118,37 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
             if (status === 'COMPLETED' && task.status !== 'COMPLETED') {
                 updates.completedAt = new Date().toISOString();
             }
-            if (docId) {
-                updates.bcDocId = docId;
+
+            // Xử lý upload reportFile thẳng lên Drive nếu có (cho "Công việc khác")
+            if (status === 'COMPLETED' && reportFile) {
+                setIsUploadingReport(true);
+                const base64Data = await fileToBase64(reportFile);
+                const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string }, any>(appFunctions, 'uploadFileToDriveBase64');
+                
+                const safeOriginalName = reportFile.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
+                const standardizedAttachName = `${format(new Date(), 'yyyyMMdd_HHmmss')}_TaskResult_${safeOriginalName}`;
+
+                const uploaded = await uploadFn({
+                    fileName: standardizedAttachName,
+                    mimeType: reportFile.type,
+                    base64Data: base64Data
+                });
+
+                if (!uploaded.data || !uploaded.data.file) {
+                    throw new Error('Upload báo cáo thất bại');
+                }
+
+                updates.resultFiles = arrayUnion({
+                    id: crypto.randomUUID(),
+                    fileName: standardizedAttachName,
+                    originalName: reportFile.name,
+                    fileSize: reportFile.size,
+                    mimeType: reportFile.type,
+                    driveFileId: uploaded.data.file.id,
+                    webViewLink: uploaded.data.file.webViewLink,
+                    uploadedAt: new Date().toISOString()
+                });
+                setIsUploadingReport(false);
             }
 
             await updateDoc(taskRef, updates);
@@ -154,99 +174,7 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
             toast.error("Lỗi khi cập nhật tiến độ.");
         } finally {
             setIsSubmitting(false);
-        }
-    };
-
-    // Handle OCR processing for uploaded file
-    const handleOcrProcess = async () => {
-        if (!reportFile) {
-            toast.error('Vui lòng chọn tệp báo cáo (PDF hoặc Ảnh)!');
-            return;
-        }
-
-        setIsOcrProcessing(true);
-        setOcrStatus('Đang chuẩn bị dữ liệu báo cáo...');
-
-        try {
-            const base64Data = await fileToBase64(reportFile);
-
-            setOcrStatus('AI Gemini đang đọc văn bản và xử lý tệp...');
-            const processOCR = httpsCallable(appFunctions, 'processDocumentOCR');
-
-            const response: any = await processOCR({
-                base64Data,
-                mimeType: reportFile.type,
-                fileNameOriginal: reportFile.name,
-                totalSizeBytes: reportFile.size,
-                dinhKem: [],
-                nodeId: task.id
-            });
-
-            if (response.data.success) {
-                setDocId(response.data.docId);
-                const aiData = response.data.data;
-                if (!aiData.phanLoaiVanBan) {
-                    aiData.phanLoaiVanBan = 'OUTGOING';
-                }
-                setOcrData(aiData);
-                setShowReview(true);
-            } else {
-                throw new Error('Xử lý OCR thất bại.');
-            }
-        } catch (error: any) {
-            console.error('Loi bao cao hoan thanh:', error);
-            const errorMessage = error?.message || '';
-            if (errorMessage.includes('Invalid Credentials') || errorMessage.includes('unauthenticated')) {
-                toast.error('Phiên làm việc Google đã hết hạn. Vui lòng Đăng xuất -> Đăng nhập lại.');
-            } else {
-                toast.error(errorMessage || 'Xử lý báo cáo thất bại. Vui lòng thử lại.');
-            }
-        } finally {
-            setIsOcrProcessing(false);
-            setOcrStatus('');
-        }
-    };
-
-    // Handle final save after OCR review
-    const handleFinalSave = async () => {
-        setIsSubmitting(true);
-        try {
-            // 1. Update VB data with reviewed OCR info
-            await updateDoc(doc(db, 'vanban', docId), {
-                ...ocrData,
-                trangThaiDuLieu: 'COMPLETED'
-            });
-
-            // 2. Update task status
-            const taskRef = doc(db, 'vanban_tasks', task.id);
-            await updateDoc(taskRef, {
-                status: 'COMPLETED',
-                completedAt: new Date().toISOString(),
-                result: result.trim() || ocrData.trichYeu || '',
-                bcDocId: docId,
-                checklist: checklist,
-                progress: 100
-            });
-
-            // Log activity
-            if (user) {
-                await logVanBanActivity({
-                    vanBanId: task.vanBanId,
-                    action: 'TASK_COMPLETE',
-                    details: `Hoàn thành công việc (có đính kèm báo cáo). Kết quả: ${(result.trim() || ocrData.trichYeu || '').substring(0, 100)}...`,
-                    userId: user.uid,
-                    userName: user.hoTen || user.displayName || user.email || 'Người dùng'
-                });
-            }
-
-            toast.success('Đã báo cáo hoàn thành và lưu Văn bản đi thành công! 🎉');
-            onSuccess();
-            setTimeout(() => onClose(), 500);
-        } catch (error: any) {
-            console.error('Loi luu cuoi cung:', error);
-            toast.error('Không thể lưu thông tin. Vui lòng thử lại.');
-        } finally {
-            setIsSubmitting(false);
+            setIsUploadingReport(false);
         }
     };
 
@@ -259,100 +187,18 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
                 <div className="flex items-center justify-between px-6 py-4 border-b">
                     <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                         <CheckSquare className="w-5 h-5 text-green-600" />
-                        {showReview ? 'Kiểm tra & Xác nhận thông tin AI' : 'Báo cáo Tiến độ Xử lý'}
+                        Báo cáo Tiến độ Xử lý
                     </h3>
                     <button
                         onClick={onClose}
                         className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                        disabled={isSubmitting || isOcrProcessing}
+                        disabled={isSubmitting || isUploadingReport}
                     >
                         <X className="w-5 h-5 text-gray-500" />
                     </button>
                 </div>
 
                 <div className="p-6 overflow-y-auto flex-1 min-h-0">
-                    {showReview ? (
-                        /* ===== OCR REVIEW FORM ===== */
-                        <div className="space-y-5">
-                            <div className="bg-amber-50 border border-amber-100 p-4 rounded-lg flex items-start gap-3 text-sm text-amber-800">
-                                <Sparkles className="w-5 h-5 shrink-0 text-amber-500" />
-                                <div>
-                                    <p className="font-bold">AI Gemini đã trích xuất dữ liệu!</p>
-                                    <p className="opacity-90">Vui lòng kiểm tra lại các thông tin dưới đây từ tệp bạn vừa upload và chỉnh sửa nếu cần.</p>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Số / Ký hiệu</label>
-                                    <input
-                                        type="text"
-                                        value={ocrData.soKyHieu || ''}
-                                        onChange={(e) => setOcrData({ ...ocrData, soKyHieu: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                                        placeholder="VD: 123/QĐ-BHTKT"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Ngày ban hành</label>
-                                    <input
-                                        type="date"
-                                        value={ocrData.ngayBanHanh || ''}
-                                        onChange={(e) => setOcrData({ ...ocrData, ngayBanHanh: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                                    />
-                                </div>
-                                <div className="space-y-1 col-span-2">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Cơ quan ban hành</label>
-                                    <input
-                                        type="text"
-                                        value={ocrData.coQuanBanHanh || ''}
-                                        onChange={(e) => setOcrData({ ...ocrData, coQuanBanHanh: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                                    />
-                                </div>
-                                <div className="space-y-1 col-span-2">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Loại văn bản</label>
-                                    <input
-                                        type="text"
-                                        value={ocrData.loaiVanBan || ''}
-                                        onChange={(e) => setOcrData({ ...ocrData, loaiVanBan: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                                    />
-                                </div>
-                                <div className="space-y-1 col-span-2">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Trích yếu nội dung</label>
-                                    <textarea
-                                        rows={3}
-                                        value={ocrData.trichYeu || ''}
-                                        onChange={(e) => setOcrData({ ...ocrData, trichYeu: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium resize-none"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Người ký</label>
-                                    <input
-                                        type="text"
-                                        value={ocrData.nguoiKy || ''}
-                                        onChange={(e) => setOcrData({ ...ocrData, nguoiKy: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Luồng Văn bản</label>
-                                    <select
-                                        value={ocrData.phanLoaiVanBan || 'OUTGOING'}
-                                        onChange={(e) => setOcrData({ ...ocrData, phanLoaiVanBan: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium bg-white"
-                                    >
-                                        <option value="OUTGOING">Văn bản đi</option>
-                                        <option value="INCOMING">Văn bản đến</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        /* ===== ORIGINAL STATUS UPDATE FORM ===== */
                         <form id="taskForm" onSubmit={handleSubmit}>
                             <div className="bg-blue-50 text-blue-800 p-4 rounded-lg mb-6 border border-blue-100">
                                 <p className="text-sm font-semibold mb-1">Nội dung yêu cầu từ {task.assignerName}:</p>
@@ -474,8 +320,8 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
                                                 placeholder="Ghi rõ kết quả để báo cáo lại người giao việc..."
                                                 value={result}
                                                 onChange={(e) => setResult(e.target.value)}
-                                                disabled={isSubmitting}
-                                                required={status === 'COMPLETED' && !docId}
+                                                disabled={isSubmitting || isUploadingReport}
+                                                required={status === 'COMPLETED'}
                                             />
                                         </div>
 
@@ -486,61 +332,38 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
                                                 <span className="text-sm font-semibold text-gray-700">Báo cáo Hoàn thành (tùy chọn)</span>
                                             </div>
                                             <p className="text-xs text-gray-500 mb-3">
-                                                Upload file kết quả (PDF/Ảnh). AI sẽ đọc và tự động ghi vào Danh mục Văn bản đi.
+                                                Đính kèm file kết quả (PDF/Ảnh) nếu có. File sẽ được lưu cùng với báo cáo này.
                                             </p>
 
-                                            {docId ? (
-                                                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
-                                                    <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
-                                                    <span className="font-medium">Đã xử lý thành công! Văn bản đã được tạo (ID: {docId.slice(0, 8)}...)</span>
-                                                </div>
-                                            ) : (
-                                                <div className="space-y-3">
-                                                    <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-blue-400 hover:bg-blue-50/30 transition-all cursor-pointer relative group">
-                                                        <input
-                                                            type="file"
-                                                            accept=".pdf,image/*"
-                                                            onChange={(e) => setReportFile(e.target.files?.[0] || null)}
-                                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                                            disabled={isOcrProcessing}
-                                                        />
-                                                        {reportFile ? (
-                                                            <div className="space-y-1.5">
-                                                                <FileText className="w-10 h-10 mx-auto text-blue-600" />
-                                                                <p className="text-sm font-bold text-gray-800 truncate px-4">{reportFile.name}</p>
-                                                                <p className="text-xs text-gray-500">{(reportFile.size / 1024).toFixed(1)} KB</p>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="space-y-1.5">
-                                                                <Upload className="w-10 h-10 mx-auto text-gray-300 group-hover:text-blue-400 transition-colors" />
-                                                                <p className="text-sm text-gray-500">Chọn tệp PDF hoặc Hình Ảnh</p>
-                                                                <p className="text-xs text-gray-400">(Bản scan hoặc ảnh chụp kết quả)</p>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    {reportFile && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={handleOcrProcess}
-                                                            disabled={isOcrProcessing}
-                                                            className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-lg hover:bg-indigo-700 transition font-bold shadow-md shadow-indigo-200 disabled:opacity-50"
-                                                        >
-                                                            {isOcrProcessing ? (
-                                                                <><Loader2 className="w-4 h-4 animate-spin" /> {ocrStatus}</>
-                                                            ) : (
-                                                                <><Sparkles className="w-4 h-4" /> AI Đọc & Ghi Văn bản đi</>
-                                                            )}
-                                                        </button>
+                                            <div className="space-y-3">
+                                                <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-blue-400 hover:bg-blue-50/30 transition-all cursor-pointer relative group">
+                                                    <input
+                                                        type="file"
+                                                        accept=".pdf,image/*"
+                                                        onChange={(e) => setReportFile(e.target.files?.[0] || null)}
+                                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                        disabled={isSubmitting || isUploadingReport}
+                                                    />
+                                                    {reportFile ? (
+                                                        <div className="space-y-1.5">
+                                                            <FileText className="w-10 h-10 mx-auto text-blue-600" />
+                                                            <p className="text-sm font-bold text-gray-800 truncate px-4">{reportFile.name}</p>
+                                                            <p className="text-xs text-gray-500">{(reportFile.size / 1024).toFixed(1)} KB</p>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="space-y-1.5">
+                                                            <Upload className="w-10 h-10 mx-auto text-gray-300 group-hover:text-blue-400 transition-colors" />
+                                                            <p className="text-sm text-gray-500">Chọn tệp PDF hoặc Hình Ảnh</p>
+                                                            <p className="text-xs text-gray-400">(Bản scan hoặc ảnh chụp kết quả)</p>
+                                                        </div>
                                                     )}
                                                 </div>
-                                            )}
+                                            </div>
                                         </div>
                                     </div>
                                 )}
                             </div>
                         </form>
-                    )}
                 </div>
 
                 <div className="px-6 py-4 bg-gray-50 border-t flex justify-end gap-3">
@@ -548,34 +371,19 @@ export const UpdateTaskModal: React.FC<UpdateTaskModalProps> = ({ isOpen, onClos
                         type="button"
                         onClick={onClose}
                         className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                        disabled={isSubmitting || isOcrProcessing}
+                        disabled={isSubmitting || isUploadingReport}
                     >
                         Hủy
                     </button>
-                    {showReview ? (
-                        <button
-                            type="button"
-                            onClick={handleFinalSave}
-                            disabled={isSubmitting}
-                            className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-bold shadow-md shadow-green-200 disabled:opacity-50"
-                        >
-                            {isSubmitting ? (
-                                <><Loader2 className="w-5 h-5 animate-spin" /> Đang lưu...</>
-                            ) : (
-                                <><CheckCircle className="w-5 h-5" /> Xác nhận & Hoàn thành</>
-                            )}
-                        </button>
-                    ) : (
-                        <button
-                            type="submit"
-                            form="taskForm"
-                            disabled={isSubmitting || isOcrProcessing}
-                            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                        >
-                            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                            Lưu Cập Nhật
-                        </button>
-                    )}
+                    <button
+                        type="submit"
+                        form="taskForm"
+                        disabled={isSubmitting || isUploadingReport}
+                        className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    >
+                        {(isSubmitting || isUploadingReport) ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                        {isUploadingReport ? "Đang tải file..." : "Lưu Cập Nhật"}
+                    </button>
                 </div>
             </div>
         </div>

@@ -185,63 +185,40 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
         setIsSubmitting(true);
         try {
             let finalVanBanId = selectedVanBan?.id || null;
+            let inputFilesData: any[] = [];
 
-            // Xử lý Upload và OCR nếu chọn chế độ tạo mới Văn bản đến
+            // Xử lý Upload đẩy thẳng lên Drive cho "Công việc khác"
             if (isUploadingInputMode && inputFile && !finalVanBanId) {
                 setIsProcessingInputOcr(true);
-                setInputOcrStatus('Đang đọc file và tạo tự động Văn bản đến...');
+                setInputOcrStatus('Đang upload tệp đính kèm...');
 
                 const base64Data = await fileToBase64(inputFile);
-                const processOCR = httpsCallable(appFunctions, 'processDocumentOCR');
+                const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string }, any>(appFunctions, 'uploadFileToDriveBase64');
+                
+                const safeOriginalName = inputFile.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
+                const standardizedAttachName = `${format(new Date(), 'yyyyMMdd_HHmmss')}_TaskInput_${safeOriginalName}`;
 
-                const ocrResult: any = await processOCR({
-                    base64Data,
+                const uploaded = await uploadFn({
+                    fileName: standardizedAttachName,
                     mimeType: inputFile.type,
-                    fileNameOriginal: inputFile.name,
-                    totalSizeBytes: inputFile.size,
-                    dinhKem: []
+                    base64Data: base64Data
                 });
 
-                if (!ocrResult.data.success) {
-                    throw new Error(ocrResult.data.message || 'Xử lý file đầu vào thất bại');
+                if (!uploaded.data || !uploaded.data.file) {
+                    throw new Error('Upload file thất bại');
                 }
 
-                const aiData = ocrResult.data.data;
-                const newDocId = ocrResult.data.docId;
-
-                const safeSoKyHieu = (aiData.soKyHieu || "NOSO").replace(/\//g, "-").replace(/\\/g, "-");
-                const ngayBanHanhStr = aiData.ngayBanHanh || format(new Date(), 'yyyy-MM-dd');
-                const safeTrichYeu = (aiData.trichYeu || "KhongTrichYeu")
-                    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-                    .replace(/[^a-zA-Z0-9 -]/g, "")
-                    .replace(/\s+/g, "_")
-                    .substring(0, 50);
-                const standardName = `${ngayBanHanhStr}_${safeSoKyHieu}_${safeTrichYeu}`;
-
-                // Cập nhật record VB vừa sinh với phân loại là INCOMING (Đầu vào)
-                await updateDoc(doc(db, 'vanban', newDocId), {
-                    ...aiData,
-                    phanLoaiVanBan: 'INCOMING',
-                    mucDoKhan: aiData.mucDoKhan || 'THUONG',
-                    fileNameStandardized: standardName,
-                    trangThaiDuLieu: 'COMPLETED',
-                    history: arrayUnion({
-                        action: "AUTO_CREATED_BY_TASK",
-                        userId: currentUserId,
-                        userEmail: currentUserName,
-                        timestamp: new Date().toISOString()
-                    })
+                inputFilesData.push({
+                    id: crypto.randomUUID(),
+                    fileName: standardizedAttachName,
+                    originalName: inputFile.name,
+                    fileSize: inputFile.size,
+                    mimeType: inputFile.type,
+                    driveFileId: uploaded.data.file.id,
+                    webViewLink: uploaded.data.file.webViewLink,
+                    uploadedAt: new Date().toISOString()
                 });
 
-                await logVanBanActivity({
-                    vanBanId: newDocId,
-                    userId: currentUserId,
-                    userName: currentUserName,
-                    action: "ADD",
-                    details: `Tạo tự động văn bản (INCOMING) từ quá trình Giao nhiệm vụ. Số/Ký hiệu: ${aiData.soKyHieu || ''}`
-                });
-
-                finalVanBanId = newDocId;
                 setInputOcrStatus('');
                 setIsProcessingInputOcr(false);
             }
@@ -256,6 +233,10 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
                 status: 'PENDING',
                 createdAt: new Date().toISOString(),
             };
+
+            if (inputFilesData.length > 0) {
+                taskData.inputFiles = inputFilesData;
+            }
 
             if (collaboratorsData.length > 0) {
                 taskData.collaborators = collaboratorsData;
@@ -368,8 +349,8 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
                                                     <p className="text-sm font-bold text-blue-700">✅ {inputFile.name}</p>
                                                     <p className="text-xs text-gray-400 mt-1">
                                                         {(inputFile.size / 1024).toFixed(1)} KB - Nhấn để thay file khác<br/>
-                                                        <span className="text-amber-600 flex items-center justify-center gap-1 mt-1">
-                                                            <Sparkles className="w-3 h-3"/> Khi giao việc, AI sẽ đọc file và tạo tự động 1 Văn bản Đến.
+                                                        <span className="text-indigo-600 flex items-center justify-center gap-1 mt-1 font-medium">
+                                                            File này sẽ được ghim làm Tài liệu tham khảo cho công việc.
                                                         </span>
                                                     </p>
                                                 </div>
@@ -378,7 +359,7 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
                                                     <Upload className="w-8 h-8 mx-auto text-blue-400 mb-2 group-hover:text-blue-500 transition-colors" />
                                                     <p className="text-sm font-semibold text-gray-700">Chọn hoặc kéo thả file TÀI LIỆU GỐC (PDF/Ảnh) vào đây</p>
                                                     <p className="text-xs text-gray-500 mt-1 max-w-[80%]">
-                                                        Hệ thống sẽ tự động khởi tạo nó thành <span className="font-bold text-blue-600">Văn bản Đầu vào</span> và liên kết với công việc này.
+                                                        File tải lên sẽ được đính kèm vào <span className="font-bold text-blue-600">Nhiệm vụ này</span> làm tài liệu đầu vào để người xử lý tham khảo.
                                                     </p>
                                                 </div>
                                             )}

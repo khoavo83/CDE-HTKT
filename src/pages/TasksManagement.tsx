@@ -394,6 +394,17 @@ export const TasksManagement = () => {
                                                 {getVanBanShortLabel(task.vanBanId)}
                                             </button>
                                         )}
+                                        {/* Input files */}
+                                        {task.inputFiles && task.inputFiles.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 mb-2">
+                                                {task.inputFiles.map((f: any, idx: number) => (
+                                                    <a key={idx} href={f.webViewLink || f.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[11px] text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100 max-w-[140px] truncate" title={f.originalName || f.fileName || f.name}>
+                                                        <Paperclip className="w-3 h-3 shrink-0" />
+                                                        {f.originalName || f.fileName || f.name}
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        )}
                                         {/* Collaborators */}
                                         {task.collaborators && task.collaborators.length > 0 && (
                                             <div className="flex flex-wrap gap-1 mb-2">
@@ -435,6 +446,19 @@ export const TasksManagement = () => {
                                                     <div onClick={() => navigate("/documents/" + task.bcDocId)} className="flex items-center gap-2 p-2 bg-white border rounded-lg text-xs text-blue-700 cursor-pointer">
                                                         <FileText className="w-4 h-4 text-red-500" />
                                                         <span className="truncate">{vanBanCache[task.bcDocId].trichYeu || vanBanCache[task.bcDocId].fileNameOriginal || 'Văn bản đi'}</span>
+                                                    </div>
+                                                )}
+                                                {task.resultFiles && task.resultFiles.length > 0 && (
+                                                    <div className="mt-2 space-y-1">
+                                                        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Tài liệu báo cáo:</p>
+                                                        <div className="flex flex-col gap-1">
+                                                            {task.resultFiles.map((f: any, idx: number) => (
+                                                                <a key={idx} href={f.webViewLink || f.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 bg-white border rounded-lg text-xs text-blue-700 hover:bg-blue-50 transition-colors">
+                                                                    <FileText className="w-4 h-4 text-green-600" />
+                                                                    <span className="truncate">{f.originalName || f.fileName || f.name}</span>
+                                                                </a>
+                                                            ))}
+                                                        </div>
                                                     </div>
                                                 )}
                                             </div>
@@ -548,6 +572,16 @@ export const TasksManagement = () => {
                                                                             </button>
                                                                             <div>
                                                                                 <div className="line-clamp-2 font-medium">{task.content}</div>
+                                                                                {task.inputFiles && task.inputFiles.length > 0 && (
+                                                                                    <div className="flex flex-wrap gap-1 mt-2">
+                                                                                        {task.inputFiles.map((f: any, idx: number) => (
+                                                                                            <a key={idx} onClick={(e) => e.stopPropagation()} href={f.webViewLink || f.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[11px] text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100 max-w-[140px] truncate" title={f.originalName || f.fileName || f.name}>
+                                                                                                <Paperclip className="w-3 h-3 shrink-0" />
+                                                                                                {f.originalName || f.fileName || f.name}
+                                                                                            </a>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
                                                                                 <div className="text-gray-500 text-xs mt-1">Giao bởi: {task.assignerName || 'PGĐ Bình'}</div>
                                                                             </div>
                                                                         </div>
