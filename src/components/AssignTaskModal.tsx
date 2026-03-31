@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, where, addDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { useAuthStore } from '../store/useAuthStore';
-import { Loader2, X, Send, Users, UserCheck } from 'lucide-react';
+import { Loader2, X, Send, Users, UserCheck, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { GenericConfirmModal } from './GenericConfirmModal';
 import { logVanBanActivity } from '../utils/vanbanLogUtils';
@@ -33,6 +33,11 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
     const [selectedAssignee, setSelectedAssignee] = useState('');
     const [selectedCollaborators, setSelectedCollaborators] = useState<string[]>([]);
     const [content, setContent] = useState('');
+    const [createdAt, setCreatedAt] = useState(() => {
+        const d = new Date();
+        return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+            .toISOString().slice(0, 16);
+    });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
 
@@ -132,7 +137,7 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
                 assigneeName: assigneeUser.displayName || assigneeUser.email,
                 content: content.trim(),
                 status: 'PENDING',
-                createdAt: new Date().toISOString(),
+                createdAt: new Date(createdAt).toISOString(),
             };
 
             if (collaboratorsData.length > 0) {
@@ -156,6 +161,8 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
             setContent('');
             setSelectedAssignee('');
             setSelectedCollaborators([]);
+            const d = new Date();
+            setCreatedAt(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
 
             onSuccess();
             onClose();
@@ -187,6 +194,22 @@ export const AssignTaskModal: React.FC<AssignTaskModalProps> = ({ isOpen, onClos
                 </div>
 
                 <div className="p-6 overflow-y-auto space-y-5 flex-1 min-h-0">
+                    {/* Thời gian giao */}
+                    <div>
+                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                            <Calendar className="w-4 h-4 text-blue-500" />
+                            Thời gian giao <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="datetime-local"
+                            value={createdAt}
+                            onChange={(e) => setCreatedAt(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow text-sm"
+                            disabled={isSubmitting}
+                            required
+                        />
+                    </div>
+
                     {/* Người Giao Việc */}
                     <div>
                         <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">

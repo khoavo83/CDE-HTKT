@@ -3,7 +3,7 @@ import { collection, getDocs, query, where, addDoc, doc, updateDoc, arrayUnion }
 import { db, auth, appFunctions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { useAuthStore } from '../store/useAuthStore';
-import { Loader2, X, Send, Search, FileText, UserCheck, Users, Link as LinkIcon, Paperclip, Upload, Sparkles } from 'lucide-react';
+import { Loader2, X, Send, Search, FileText, UserCheck, Users, Link as LinkIcon, Paperclip, Upload, Sparkles, Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { GenericConfirmModal } from './GenericConfirmModal';
 import { DocAttachmentSelectorModal } from './DocAttachmentSelectorModal';
@@ -66,6 +66,11 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
     const [selectedAssignee, setSelectedAssignee] = useState(initialAssigneeId);
     const [selectedCollaborators, setSelectedCollaborators] = useState<string[]>([]);
     const [content, setContent] = useState('');
+    const [createdAt, setCreatedAt] = useState(() => {
+        const d = new Date();
+        return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+            .toISOString().slice(0, 16);
+    });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
 
@@ -86,6 +91,8 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
             setInputFile(null);
             setIsProcessingInputOcr(false);
             setInputOcrStatus('');
+            const d = new Date();
+            setCreatedAt(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
         }
     }, [isOpen, initialAssigneeId, isSelfAssign, user?.uid]);
 
@@ -231,7 +238,7 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
                 assigneeName: assigneeUser.displayName || assigneeUser.email,
                 content: content.trim(),
                 status: 'PENDING',
-                createdAt: new Date().toISOString(),
+                createdAt: new Date(createdAt).toISOString(),
             };
 
             if (inputFilesData.length > 0) {
@@ -248,6 +255,8 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
 
             // Reset states
             setContent('');
+            const d = new Date();
+            setCreatedAt(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
             setSelectedAssignee('');
             setSelectedCollaborators([]);
             setSelectedVanBan(null);
@@ -288,6 +297,22 @@ export const AssignTaskFromManagerModal: React.FC<AssignTaskFromManagerModalProp
                 {/* Body */}
                 <div className="p-5 md:p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0 relative">
                     <div className="space-y-6">
+                        {/* Thời gian giao */}
+                        <div>
+                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                                <Calendar className="w-4 h-4 text-blue-500" />
+                                Thời gian giao <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="datetime-local"
+                                value={createdAt}
+                                onChange={(e) => setCreatedAt(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow text-sm"
+                                disabled={isSubmitting}
+                                required
+                            />
+                        </div>
+
                         {/* 1. Chọn Văn Bản Đầu Vào (Optional) */}
                         <div className="bg-blue-50/50 p-4 border border-blue-100 rounded-xl space-y-3">
                             <div className="flex flex-wrap items-center justify-between border-b border-blue-200 pb-2 gap-2">
