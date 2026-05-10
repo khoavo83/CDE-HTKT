@@ -5,7 +5,7 @@ import { auth } from '../firebase/config';
 import {
     LayoutDashboard, FileText, Share2, Box, LogOut, Users, Settings,
     Map as MapIcon, FolderTree, Zap, Sun, Moon, BookOpen, Layers, Database,
-    Calendar as CalendarIcon, MessageSquare, Trash2, X, ListChecks, Menu
+    Calendar as CalendarIcon, MessageSquare, Trash2, X, ListChecks, Menu, BarChart2
 } from 'lucide-react';
 import { useMenuConfigStore } from '../store/useMenuConfigStore';
 import { useThemeStore } from '../store/useThemeStore';
@@ -20,7 +20,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 // Map icon string → component
 export const ICON_MAP: Record<string, React.ElementType> = {
     LayoutDashboard, FolderTree, Share2, FileText, Box, Calendar: CalendarIcon,
-    Map: MapIcon, Users, Settings, Zap, BookOpen, Layers, Database, MessageSquare, Trash: Trash2, ListChecks
+    Map: MapIcon, Users, Settings, Zap, BookOpen, Layers, Database, MessageSquare, Trash: Trash2, ListChecks, BarChart2
 };
 
 export const MainLayout = () => {

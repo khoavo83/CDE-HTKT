@@ -1,14 +1,25 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useParams, Navigate, useNavigate } from 'react-router-dom';
 import { GanttChart } from '../components/Gantt';
 import { ArrowLeft } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export const GanttPage = () => {
     const { projectId } = useParams<{ projectId: string }>();
     const navigate = useNavigate();
 
+    useEffect(() => {
+        if (!projectId) {
+            toast('Vui lòng chọn Dự án để xem Sơ đồ Gantt', {
+                icon: '📊',
+                duration: 4000
+            });
+            navigate('/projects', { replace: true });
+        }
+    }, [projectId, navigate]);
+
     if (!projectId) {
-        return <Navigate to="/projects" replace />;
+        return <div className="h-full flex items-center justify-center text-gray-500">Đang chuyển hướng...</div>;
     }
 
     return (

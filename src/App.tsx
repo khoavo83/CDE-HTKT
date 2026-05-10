@@ -83,6 +83,7 @@ function App() {
                     <Route element={<MainLayout />}>
                         <Route path="/" element={<Dashboard />} />
                         <Route path="/projects" element={<Projects />} />
+                        <Route path="/gantt" element={<GanttPage />} />
                         <Route path="/gantt/:projectId" element={<GanttPage />} />
                         <Route path="/tasks" element={<TasksManagement />} />
                         <Route path="/mindmap" element={<Mindmap />} />

@@ -19,6 +19,7 @@ export interface MenuConfigItem {
 export const DEFAULT_MENU_ITEMS: Omit<MenuConfigItem, 'id'>[] = [
     { key: 'dashboard', name: 'Tổng quan', path: '/', icon: 'LayoutDashboard', order: 1, status: 'active', adminOnly: false },
     { key: 'projects', name: 'Quản lý Dự án', path: '/projects', icon: 'FolderTree', order: 2, status: 'active', adminOnly: false },
+    { key: 'gantt', name: 'Sơ đồ Gantt', path: '/gantt', icon: 'BarChart2', order: 2.2, status: 'active', adminOnly: false },
     { key: 'tasks', name: 'Quản lý công việc', path: '/tasks', icon: 'ListChecks', order: 2.5, status: 'active', adminOnly: false },
     { key: 'mindmap', name: 'Sơ đồ Mindmap', path: '/mindmap', icon: 'Share2', order: 3, status: 'active', adminOnly: false },
     { key: 'documents', name: 'Văn bản & Hồ sơ', path: '/documents', icon: 'FileText', order: 4, status: 'active', adminOnly: false },
@@ -43,7 +44,7 @@ interface MenuConfigState {
     seedMenuConfig: () => Promise<void>;
 }
 
-export const useMenuConfigStore = create<MenuConfigState>((set) => ({
+export const useMenuConfigStore = create<MenuConfigState>((set, get) => ({
     menuItems: [],
     isLoading: true,
 
@@ -52,6 +53,15 @@ export const useMenuConfigStore = create<MenuConfigState>((set) => ({
         const q = query(collection(db, 'menu_config'), orderBy('order', 'asc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const list: MenuConfigItem[] = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MenuConfigItem));
+            const hasInternalDocs = list.some(item => item.key === 'internal_docs');
+            const hasMeetings = list.some(item => item.key === 'meetings');
+            const hasFeedbacks = list.some(item => item.key === 'feedbacks');
+            const hasTrash = list.some(item => item.key === 'trash');
+            const hasTasks = list.some(item => item.key === 'tasks');
+            const hasGantt = list.some(item => item.key === 'gantt');
+            if (!hasInternalDocs || !hasMeetings || !hasFeedbacks || !hasTrash || !hasTasks || !hasGantt) {
+                get().seedMenuConfig();
+            }
             set({ menuItems: list, isLoading: false });
         }, (err) => {
             console.error('Lỗi load menu_config:', err);
