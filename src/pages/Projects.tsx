@@ -562,6 +562,20 @@ export const Projects = () => {
 
     const selectedNode = selectedNodeId ? allNodes.find(n => n.id === selectedNodeId) : null;
 
+    const getChildNodes = () => {
+        const findNodeInTree = (nodes: NodeTreeItem[], id: string): NodeTreeItem | null => {
+            for (const n of nodes) {
+                if (n.id === id) return n;
+                const found = findNodeInTree(n.children, id);
+                if (found) return found;
+            }
+            return null;
+        };
+        const selectedTreeNode = selectedNodeId ? findNodeInTree(treeData, selectedNodeId) : null;
+        return selectedTreeNode ? selectedTreeNode.children : [];
+    };
+    const childNodes = getChildNodes();
+
     return (
         <div className="h-full flex flex-col p-3 md:p-6 bg-gray-50 uppercase-fix">
             <div className="flex justify-between items-center mb-3 md:mb-6 shrink-0">
@@ -677,6 +691,42 @@ export const Projects = () => {
                                 </p>
                             </div>
 
+                            {childNodes.length > 0 ? (
+                                <div className="mb-8">
+                                    <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
+                                        <h3 className="text-lg font-semibold text-gray-900">Danh sách Thư mục con <span className="ml-2 text-sm font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{childNodes.length}</span></h3>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {childNodes.map((child, index) => (
+                                            <div 
+                                                key={child.id} 
+                                                onClick={() => setSelectedNodeId(child.id)}
+                                                className="bg-white border border-gray-200 rounded-xl p-4 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer flex items-start gap-3 group"
+                                            >
+                                                <div className="p-2.5 bg-gray-50 rounded-lg shrink-0 group-hover:bg-blue-50 transition-colors">
+                                                    {getTypeIcon(child.type)}
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <h4 className="font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors" title={child.name}>
+                                                        {index + 1}. {child.name}
+                                                    </h4>
+                                                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                                        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider bg-gray-100 px-2 py-0.5 rounded">
+                                                            {getTypeName(child.type)}
+                                                        </span>
+                                                        {child.totalDocCount > 0 && (
+                                                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                                                <FileText className="w-3 h-3" /> {child.totalDocCount} file
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
                             {/* ======== THỜI GIAN THỰC HIỆN (tính từ Văn bản đính kèm) ======== */}
                             {(() => {
                                 const nodeDocs = allLinks.filter(l => l.nodeId === selectedNodeId).map(link => allDocs.find(d => d.id === link.vanBanId)).filter(Boolean);
@@ -801,6 +851,8 @@ export const Projects = () => {
                                     </div>
                                 )}
                             </div>
+                                </>
+                            )}
 
                             {/* Footer */}
                             <div className="flex items-center justify-between pt-4 border-t border-gray-100 mt-6">
