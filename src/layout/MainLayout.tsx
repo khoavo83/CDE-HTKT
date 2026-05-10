@@ -5,7 +5,7 @@ import { auth } from '../firebase/config';
 import {
     LayoutDashboard, FileText, Share2, Box, LogOut, Users, Settings,
     Map as MapIcon, FolderTree, Zap, Sun, Moon, BookOpen, Layers, Database,
-    Calendar as CalendarIcon, MessageSquare, Trash2, X, ListChecks
+    Calendar as CalendarIcon, MessageSquare, Trash2, X, ListChecks, Menu
 } from 'lucide-react';
 import { useMenuConfigStore } from '../store/useMenuConfigStore';
 import { useThemeStore } from '../store/useThemeStore';
@@ -31,6 +31,7 @@ export const MainLayout = () => {
     const [isProfileModalOpen, setIsProfileModalOpen] = React.useState(false);
     const [isLogoutModalOpen, setIsLogoutModalOpen] = React.useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+    const [isDesktopMenuCollapsed, setIsDesktopMenuCollapsed] = React.useState(false);
     const [pendingCount, setPendingCount] = React.useState(0);
 
     // Lắng nghe số lượng user pending cho badge ở Menu
@@ -110,12 +111,19 @@ export const MainLayout = () => {
             )}
 
             {/* Sidebar */}
-            <aside className={`fixed md:relative flex flex-col w-60 h-full bg-white border-r border-gray-200 z-50 transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-                <div className="p-6 flex items-center justify-between">
-                    <div>
+            <aside className={`fixed md:relative flex flex-col h-full bg-white border-r border-gray-200 z-50 transition-all duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0 w-60' : '-translate-x-full md:translate-x-0'} ${isDesktopMenuCollapsed ? 'md:w-20' : 'md:w-60'}`}>
+                <div className={`p-4 flex items-center ${isDesktopMenuCollapsed ? 'md:justify-center justify-between' : 'justify-between'}`}>
+                    <div className={`${isDesktopMenuCollapsed ? 'md:hidden' : ''}`}>
                         <h2 className="text-xl font-bold text-primary-600">CDE - HTKT</h2>
-                        <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-widest font-bold">Quản lý Dữ liệu Tập trung</p>
+                        <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-widest font-bold">Quản lý Dữ liệu</p>
                     </div>
+                    <button
+                        onClick={() => setIsDesktopMenuCollapsed(!isDesktopMenuCollapsed)}
+                        className="hidden md:flex p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                        title="Thu gọn/Mở rộng Menu"
+                    >
+                        <Menu className="w-5 h-5" />
+                    </button>
                     <button
                         onClick={() => setIsMobileMenuOpen(false)}
                         className="md:hidden p-2 text-gray-500 bg-gray-100 rounded-lg"
@@ -126,31 +134,25 @@ export const MainLayout = () => {
 
                 <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
                     {visibleItems.map((item) => {
-                        const Icon = ICON_MAP[item.icon] || FileText;
-                        const isActive = location.pathname === item.path;
-                        const isComingSoon = item.status === 'coming_soon';
-
                         if (isComingSoon) {
                             if (user.role === 'admin') {
                                 return (
                                     <Link
                                         key={item.key}
                                         to={item.path}
-                                        className={`flex flex-col gap-1 px-3 py-2.5 rounded-lg font-medium transition-colors ${isActive
+                                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors ${isActive
                                             ? 'bg-primary-50 text-primary-600'
                                             : 'text-gray-600 hover:bg-gray-100'
-                                            } `}
-                                        title="Tính năng đang phát triển - Admin test bypass"
+                                            } ${isDesktopMenuCollapsed ? 'justify-center' : ''}`}
+                                        title={`${item.name} (Coming soon - Admin test)`}
                                     >
-                                        <div className="flex items-center gap-3">
-                                            <Icon className="w-5 h-5" />
-                                            <span>{item.name}</span>
-                                        </div>
-                                        <div className="pl-8 text-left">
-                                            <span className="text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 border border-amber-300 px-1.5 py-0.5 rounded-full leading-tight inline-block">
-                                                Coming soon
-                                            </span>
-                                        </div>
+                                        <Icon className="w-5 h-5 shrink-0" />
+                                        {!isDesktopMenuCollapsed && (
+                                            <>
+                                                <span className="flex-1">{item.name}</span>
+                                                <span className="text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">Test</span>
+                                            </>
+                                        )}
                                     </Link>
                                 );
                             }
@@ -158,18 +160,16 @@ export const MainLayout = () => {
                             return (
                                 <div
                                     key={item.key}
-                                    className="flex flex-col gap-1 px-3 py-2.5 rounded-lg font-medium text-gray-400 cursor-not-allowed select-none"
-                                    title="Tính năng đang phát triển"
+                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-gray-400 cursor-not-allowed select-none ${isDesktopMenuCollapsed ? 'justify-center' : ''}`}
+                                    title={`${item.name} (Coming soon)`}
                                 >
-                                    <div className="flex items-center gap-3">
-                                        <Icon className="w-5 h-5 opacity-50" />
-                                        <span className="opacity-70">{item.name}</span>
-                                    </div>
-                                    <div className="pl-8 text-left">
-                                        <span className="text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 border border-amber-300 px-1.5 py-0.5 rounded-full leading-tight inline-block opacity-70">
-                                            Coming soon
-                                        </span>
-                                    </div>
+                                    <Icon className="w-5 h-5 opacity-50 shrink-0" />
+                                    {!isDesktopMenuCollapsed && (
+                                        <>
+                                            <span className="flex-1 opacity-70">{item.name}</span>
+                                            <span className="text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full opacity-70">Soon</span>
+                                        </>
+                                    )}
                                 </div>
                             );
                         }
@@ -179,15 +179,16 @@ export const MainLayout = () => {
                                 key={item.key}
                                 to={item.path}
                                 onClick={() => setIsMobileMenuOpen(false)}
-                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors ${isActive
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors relative ${isActive
                                     ? 'bg-primary-50 text-primary-600'
                                     : 'text-gray-600 hover:bg-gray-100'
-                                    } `}
+                                    } ${isDesktopMenuCollapsed ? 'justify-center' : ''}`}
+                                title={isDesktopMenuCollapsed ? item.name : undefined}
                             >
-                                <Icon className="w-5 h-5" />
-                                <span className="flex-1">{item.name}</span>
+                                <Icon className="w-5 h-5 shrink-0" />
+                                {!isDesktopMenuCollapsed && <span className="flex-1">{item.name}</span>}
                                 {item.key === 'users' && pendingCount > 0 && (
-                                    <span className="flex h-5 w-5 items-center justify-center bg-red-500 text-[10px] text-white rounded-full font-bold animate-pulse">
+                                    <span className={`flex items-center justify-center bg-red-500 text-[10px] text-white rounded-full font-bold animate-pulse ${isDesktopMenuCollapsed ? 'absolute top-1 right-1 w-4 h-4 text-[8px]' : 'h-5 w-5'}`}>
                                         {pendingCount}
                                     </span>
                                 )}
@@ -196,15 +197,17 @@ export const MainLayout = () => {
                     })}
                 </nav>
 
-                <DriveStorageStatus />
+                <div className={isDesktopMenuCollapsed ? 'hidden' : 'px-4 mb-2'}>
+                    <DriveStorageStatus />
+                </div>
 
                 {/* User profile & Logout */}
-                <div className="p-4 border-t border-gray-200 mt-2">
-                    <div className="flex items-center gap-3 mb-3">
+                <div className={`p-4 border-t border-gray-200 mt-2 flex flex-col ${isDesktopMenuCollapsed ? 'items-center gap-4' : 'gap-3'}`}>
+                    <div className={`flex items-center ${isDesktopMenuCollapsed ? 'justify-center w-full' : 'gap-3 w-full'}`}>
                         <button
                             title="Nhấp để thay đổi Thông tin & Ảnh đại diện"
                             onClick={() => setIsProfileModalOpen(true)}
-                            className="flex items-center gap-3 w-full text-left hover:bg-gray-50 p-1.5 -ml-1.5 rounded-lg transition-colors overflow-hidden shrink min-w-0"
+                            className={`flex items-center gap-3 text-left hover:bg-gray-50 p-1.5 rounded-lg transition-colors overflow-hidden shrink min-w-0 ${isDesktopMenuCollapsed ? '' : '-ml-1.5 flex-1'}`}
                         >
                             <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-bold shrink-0 overflow-hidden border border-primary-200">
                                 {user.photoURL ? (
@@ -213,34 +216,38 @@ export const MainLayout = () => {
                                     (user.hoTen || user.displayName).charAt(0).toUpperCase()
                                 )}
                             </div>
-                            <div className="flex-1 min-w-0 pr-1">
-                                <p className="text-sm font-bold text-gray-900 truncate hover:text-primary-600 transition-colors">
-                                    {user.hoTen || user.displayName}
-                                </p>
-                                <p className="text-[11px] font-medium text-gray-500 truncate capitalize bg-gray-100 px-1.5 py-0.5 rounded-md inline-block mt-0.5">{user.role}</p>
-                            </div>
-                        </button>
-
-                        {/* Nút chuyển đổi Theme */}
-                        <button
-                            onClick={toggleTheme}
-                            title={theme === 'light' ? 'Chuyển sang Dark mode' : 'Chuyển sang Light mode'}
-                            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors flex-shrink-0"
-                        >
-                            {theme === 'light' ? (
-                                <Moon className="w-4 h-4" />
-                            ) : (
-                                <Sun className="w-4 h-4" />
+                            {!isDesktopMenuCollapsed && (
+                                <div className="flex-1 min-w-0 pr-1">
+                                    <p className="text-sm font-bold text-gray-900 truncate hover:text-primary-600 transition-colors">
+                                        {user.hoTen || user.displayName}
+                                    </p>
+                                    <p className="text-[11px] font-medium text-gray-500 truncate capitalize bg-gray-100 px-1.5 py-0.5 rounded-md inline-block mt-0.5">{user.role}</p>
+                                </div>
                             )}
                         </button>
+
+                        {!isDesktopMenuCollapsed && (
+                            <button
+                                onClick={toggleTheme}
+                                title={theme === 'light' ? 'Chuyển sang Dark mode' : 'Chuyển sang Light mode'}
+                                className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors flex-shrink-0"
+                            >
+                                {theme === 'light' ? (
+                                    <Moon className="w-4 h-4" />
+                                ) : (
+                                    <Sun className="w-4 h-4" />
+                                )}
+                            </button>
+                        )}
                     </div>
 
                     <button
                         onClick={() => setIsLogoutModalOpen(true)}
-                        className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-bold text-red-600 rounded-xl hover:bg-red-50 hover:text-red-700 transition-all active:scale-95 border border-transparent hover:border-red-100"
+                        title="Đăng xuất"
+                        className={`flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-bold text-red-600 rounded-xl hover:bg-red-50 hover:text-red-700 transition-all active:scale-95 border border-transparent hover:border-red-100 ${isDesktopMenuCollapsed ? 'w-10 h-10 p-0 rounded-lg' : 'w-full'}`}
                     >
-                        <LogOut className="w-4 h-4" />
-                        Đăng xuất
+                        <LogOut className="w-5 h-5 shrink-0" />
+                        {!isDesktopMenuCollapsed && <span>Đăng xuất</span>}
                     </button>
                 </div>
             </aside>
