@@ -338,6 +338,66 @@ export const Mindmap = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [previewDoc, setPreviewDoc] = useState<any | null>(null);
 
+    // ===== Search State =====
+    const [searchTerm, setSearchTerm] = useState('');
+    const [searchResultIndex, setSearchResultIndex] = useState(0);
+
+    // Compute matching node/doc IDs based on searchTerm
+    const searchResultIds = useMemo(() => {
+        if (!searchTerm.trim()) return [];
+        const term = searchTerm.toLowerCase();
+        const matchIds: string[] = [];
+
+        // Search in project_nodes (folders, tasks)
+        loadedNodesRef.current.forEach((node, id) => {
+            if (
+                (node.name && node.name.toLowerCase().includes(term))
+            ) {
+                matchIds.push(id);
+            }
+        });
+
+        // Search in documents (soKyHieu, trichYeu, coQuanBanHanh, loaiVanBan)
+        loadedDocsRef.current.forEach((doc, id) => {
+            if (
+                (doc.soKyHieu && doc.soKyHieu.toLowerCase().includes(term)) ||
+                (doc.trichYeu && doc.trichYeu.toLowerCase().includes(term)) ||
+                (doc.coQuanBanHanh && doc.coQuanBanHanh.toLowerCase().includes(term)) ||
+                (doc.loaiVanBan && doc.loaiVanBan.toLowerCase().includes(term)) ||
+                (doc.name && doc.name.toLowerCase().includes(term))
+            ) {
+                matchIds.push(id);
+            }
+        });
+
+        return matchIds;
+    }, [searchTerm, docRevision, loading]);
+
+    // Reset search index khi kết quả thay đổi
+    useEffect(() => {
+        setSearchResultIndex(0);
+    }, [searchResultIds.length]);
+
+    // Zoom to search result
+    const zoomToSearchResult = useCallback((index: number) => {
+        if (!rfInstance || searchResultIds.length === 0) return;
+        const targetId = searchResultIds[index];
+        const currentNodes = rfInstance.getNodes();
+        const targetNode = currentNodes.find((n: any) => n.id === targetId);
+        if (targetNode) {
+            rfInstance.setCenter(targetNode.position.x + 140, targetNode.position.y + 20, { zoom: 1.2, duration: 500 });
+        }
+    }, [rfInstance, searchResultIds]);
+
+    // Auto-zoom khi search result index thay đổi
+    useEffect(() => {
+        if (searchResultIds.length > 0) {
+            // Small delay để đợi buildGraph re-render xong
+            const timer = setTimeout(() => zoomToSearchResult(searchResultIndex), 300);
+            return () => clearTimeout(timer);
+        }
+    }, [searchResultIndex, searchResultIds, zoomToSearchResult]);
+
     // ===== Hàm tính prefix số thứ tự =====
     const getPrefix = useCallback((nodeId: string): string => {
         const node = loadedNodesRef.current.get(nodeId);
@@ -462,6 +522,7 @@ export const Mindmap = () => {
             const hasKids = (childCountRef.current.get(dbNode.id) || 0) > 0;
             const isExp = expandedIds.has(dbNode.id);
             const isLoadingKids = loadingChildrenIds.has(dbNode.id);
+            const isSearchMatch = searchResultIds.includes(dbNode.id);
 
             // Document nodes CAN be added to the graph directly
             // Removed filter return; for Document
@@ -473,7 +534,14 @@ export const Mindmap = () => {
             if (dbNode.type === 'DOCUMENT') {
                 label = getDocFormattedTitle(dbNode);
                 style = { ...style, backgroundColor: '#f8fafc', border: '1px dashed #64748b', color: '#334155' };
-            } else {
+            }
+
+            // Search highlight override
+            if (isSearchMatch) {
+                style = { ...style, border: '3px solid #f59e0b', boxShadow: '0 0 12px rgba(245, 158, 11, 0.5)', backgroundColor: dbNode.type === 'DOCUMENT' ? '#fffbeb' : style.backgroundColor };
+            }
+
+            if (dbNode.type !== 'DOCUMENT') {
                 label = `${emoji} ${prefix} ${dbNode.name || 'Chưa đặt tên'}`;
             }
 
@@ -553,7 +621,7 @@ export const Mindmap = () => {
         const { nodes: laidNodes, edges: laidEdges } = computeRecursiveLayout(rfNodes, rfEdges, nodeLayouts, direction);
         setNodes(laidNodes);
         setEdges(laidEdges);
-    }, [expandedIds, loadingChildrenIds, nodeLayouts, targetNodeId, setNodes, setEdges, getPrefix, settings.appName, docRevision]);
+    }, [expandedIds, loadingChildrenIds, nodeLayouts, targetNodeId, setNodes, setEdges, getPrefix, settings.appName, docRevision, searchResultIds]);
 
     // ===== Toggle Expand =====
     const handleToggleExpand = useCallback(async (nodeId: string) => {
@@ -825,6 +893,57 @@ export const Mindmap = () => {
     return (
         <div className="h-full bg-gray-50 p-4">
             <div className="bg-white w-full h-full rounded-xl shadow-inner border overflow-hidden relative">
+                {/* Search Bar Overlay */}
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 w-full max-w-lg px-4">
+                    <div className="relative flex items-center bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 transition-all focus-within:shadow-xl focus-within:border-blue-400">
+                        <div className="pl-4 flex items-center pointer-events-none">
+                            <Search className="h-4 w-4 text-gray-400" />
+                        </div>
+                        <input
+                            id="mindmap-search"
+                            type="text"
+                            placeholder="Tìm theo số KH, trích yếu, cơ quan, tên mục..."
+                            className="flex-1 pl-3 pr-2 py-2.5 bg-transparent text-sm focus:outline-none placeholder:text-gray-400"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        {searchTerm && (
+                            <div className="flex items-center gap-1 pr-2">
+                                {searchResultIds.length > 0 ? (
+                                    <>
+                                        <span className="text-xs text-gray-500 font-medium whitespace-nowrap">
+                                            {searchResultIndex + 1}/{searchResultIds.length}
+                                        </span>
+                                        <button
+                                            onClick={() => setSearchResultIndex(prev => (prev - 1 + searchResultIds.length) % searchResultIds.length)}
+                                            className="p-1 hover:bg-gray-100 rounded text-gray-500 transition-colors"
+                                            title="Kết quả trước"
+                                        >
+                                            <ChevronDown className="w-3.5 h-3.5 rotate-180" />
+                                        </button>
+                                        <button
+                                            onClick={() => setSearchResultIndex(prev => (prev + 1) % searchResultIds.length)}
+                                            className="p-1 hover:bg-gray-100 rounded text-gray-500 transition-colors"
+                                            title="Kết quả tiếp"
+                                        >
+                                            <ChevronDown className="w-3.5 h-3.5" />
+                                        </button>
+                                    </>
+                                ) : (
+                                    <span className="text-xs text-red-400 font-medium whitespace-nowrap">Không tìm thấy</span>
+                                )}
+                                <button
+                                    onClick={() => { setSearchTerm(''); setSearchResultIndex(0); }}
+                                    className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 transition-colors"
+                                    title="Xóa tìm kiếm"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
                 {loading && (
                     <div className="absolute inset-0 z-50 bg-white/50 backdrop-blur-sm flex items-center justify-center">
                         <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
