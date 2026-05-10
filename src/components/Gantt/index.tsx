@@ -7,7 +7,7 @@ import { TaskModal } from './TaskModal';
 import { TaskDocumentsModal } from './TaskDocumentsModal';
 import { ganttService } from '../../services/ganttService';
 import toast from 'react-hot-toast';
-import { Loader2, Edit2, Plus, FileText } from 'lucide-react';
+import { Loader2, Edit2, Plus, FileText, Menu } from 'lucide-react';
 import { addDays, subDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfQuarter, endOfQuarter, startOfYear, endOfYear, differenceInDays } from 'date-fns';
 
 interface GanttChartProps {
@@ -16,10 +16,11 @@ interface GanttChartProps {
 }
 
 export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initialTasks }) => {
-    const [viewMode, setViewMode] = useState<ViewMode>('Month');
+    const [viewMode, setViewMode] = useState<ViewMode>('Quarter');
     const [flatTasks, setFlatTasks] = useState<GanttTask[]>([]);
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
     const [isLoading, setIsLoading] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     // Modal states
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -324,6 +325,13 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
             {/* Toolbar */}
             <div className="flex items-center justify-between p-4 border-b bg-gray-50">
                 <div className="flex items-center gap-3">
+                    <button 
+                        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                        className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors md:block hidden"
+                        title="Ẩn/Hiện Danh sách Hạng mục"
+                    >
+                        <Menu className="w-5 h-5" />
+                    </button>
                     <h2 className="text-lg font-semibold text-gray-800">Sơ đồ Gantt Dự án</h2>
                     {isLoading && <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />}
                     <button 
@@ -404,15 +412,17 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
 
             {/* Desktop: Main Gantt Area (Sidebar + Timeline) */}
             <div className="hidden md:flex flex-1 overflow-hidden relative group/gantt">
-                 <GanttSidebar 
-                    tasks={visibleTasks} 
-                    expandedIds={expandedIds}
-                    onToggleExpand={handleToggleExpand} 
-                    onAddTask={handleOpenAddTask}
-                    onEditTask={handleOpenEditTask}
-                    onToggleComplete={handleToggleComplete}
-                    onMoveTask={handleMoveTask}
-                />
+                {isSidebarOpen && (
+                    <GanttSidebar 
+                        tasks={visibleTasks} 
+                        expandedIds={expandedIds}
+                        onToggleExpand={handleToggleExpand} 
+                        onAddTask={handleOpenAddTask}
+                        onEditTask={handleOpenEditTask}
+                        onToggleComplete={handleToggleComplete}
+                        onMoveTask={handleMoveTask}
+                    />
+                )}
                  <GanttTimeline 
                     timelineRef={timelineRef}
                     tasks={visibleTasks} 
