@@ -501,9 +501,12 @@ export const Projects = () => {
                     <div
                         className={`flex items-center group cursor-pointer px-2 py-1.5 rounded-md text-sm transition-colors ${isSelected ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-100 text-gray-700'}`}
                         style={{ paddingLeft: `${level * 20 + 8}px` }}
-                        onClick={() => setSelectedNodeId(item.id)}
+                        onClick={(e) => {
+                            setSelectedNodeId(item.id);
+                            if (hasChildren) toggleExpand(e, item.id);
+                        }}
                     >
-                        <div className="w-5 h-5 flex items-center justify-center mr-1" onClick={(e) => hasChildren ? toggleExpand(e, item.id) : null}>
+                        <div className="w-5 h-5 flex items-center justify-center mr-1">
                             {hasChildren ? (
                                 isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />
                             ) : <span className="w-4 h-4" />}
@@ -1066,9 +1069,7 @@ export const Projects = () => {
                                                     <th className="px-4 py-2.5 whitespace-nowrap">Ngày ban hành</th>
                                                     <th className="px-4 py-2.5 min-w-[150px]">Cơ quan ban hành</th>
                                                     <th className="px-4 py-2.5 min-w-[300px]">Trích yếu nội dung</th>
-                                                    <th className="px-4 py-2.5 whitespace-nowrap text-center">Số trang</th>
                                                     <th className="px-4 py-2.5 whitespace-nowrap text-center">Đính kèm</th>
-                                                    <th className="px-4 py-2.5 whitespace-nowrap text-center">Dung lượng</th>
                                                     <th className="px-3 py-2.5 w-16 text-center">Thao tác</th>
                                                 </tr>
                                             </thead>
@@ -1101,7 +1102,6 @@ export const Projects = () => {
                                                             <td className="px-4 py-3 leading-relaxed text-gray-700 break-words" title={d.trichYeu}>
                                                                 {d.trichYeu || '--'}
                                                             </td>
-                                                            <td className="px-4 py-3 text-gray-500 text-center font-medium whitespace-nowrap">{d.soTrang || '--'}</td>
                                                             <td className="px-4 py-3 text-center">
                                                                 {attCount > 0 ? (
                                                                     <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
@@ -1112,7 +1112,6 @@ export const Projects = () => {
                                                                     <span className="text-gray-400">--</span>
                                                                 )}
                                                             </td>
-                                                            <td className="px-4 py-3 text-gray-500 text-center font-medium whitespace-nowrap">{formatBytes(d.fileSize)}</td>
                                                             <td className="px-3 py-3 text-center">
                                                                 <button
                                                                     onClick={() => handleRemoveDocLink(d.linkId)}
@@ -1131,7 +1130,7 @@ export const Projects = () => {
                                                         {/* Dòng phụ: Hiển thị file đính kèm */}
                                                         {attCount > 0 && (
                                                             <tr className="bg-blue-50/30">
-                                                                <td colSpan={11} className="px-4 py-2">
+                                                                <td colSpan={8} className="px-4 py-2">
                                                                     <div className="flex items-center gap-2 mb-1.5">
                                                                         <Paperclip className="w-3.5 h-3.5 text-blue-500" />
                                                                         <span className="text-xs font-bold text-blue-600 uppercase tracking-wide">Tệp đính kèm ({attCount})</span>

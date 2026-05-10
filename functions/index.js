@@ -686,7 +686,7 @@ exports.attachDocumentToNode = onCall({ timeoutSeconds: 120 }, async (request) =
                 const res = await drive.files.create({
                     supportsAllDrives: true,
                     requestBody: {
-                        name: (vbData.fileNameStandardized || vbData.fileNameOriginal || "Link") + " (Shortcut)",
+                        name: (vbData.fileNameStandardized || vbData.fileNameOriginal || "Link"),
                         mimeType: 'application/vnd.google-apps.shortcut',
                         shortcutDetails: { targetId: vbData.driveFileId_Original },
                         parents: [nodeData.driveFolderId]
@@ -703,7 +703,7 @@ exports.attachDocumentToNode = onCall({ timeoutSeconds: 120 }, async (request) =
                 for (const att of vbData.attachments) {
                     if (att.driveFileId) {
                         try {
-                            const attName = (att.fileName || att.originalName || "DinhKem") + " (Shortcut)";
+                            const attName = (att.fileName || att.originalName || "DinhKem");
                             const attRes = await drive.files.create({
                                 supportsAllDrives: true,
                                 requestBody: {
@@ -727,7 +727,7 @@ exports.attachDocumentToNode = onCall({ timeoutSeconds: 120 }, async (request) =
                 for (const dk of vbData.dinhKem) {
                     if (dk.driveFileId) {
                         try {
-                            const dkName = (dk.fileName || dk.name || "DinhKem_Legacy") + " (Shortcut)";
+                            const dkName = (dk.fileName || dk.name || "DinhKem_Legacy");
                             const dkRes = await drive.files.create({
                                 supportsAllDrives: true,
                                 requestBody: {
@@ -738,7 +738,7 @@ exports.attachDocumentToNode = onCall({ timeoutSeconds: 120 }, async (request) =
                                 }
                             });
                             attachmentShortcutIds.push(dkRes.data.id);
-                            console.log(`[ATTACH] Created dinhKem shortcut: ${dkName} -> ${dkRes.data.id}`);
+                            console.log(`[ATTACH] Created legacy attachment shortcut: ${dkName} -> ${dkRes.data.id}`);
                         } catch (err) {
                             console.error(`[ATTACH] Error creating dinhKem shortcut for ${dk.driveFileId}: ${err.message}`);
                         }
@@ -1133,7 +1133,7 @@ exports.syncDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) => 
         let count = 0;
         const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-        const syncNodeRecursive = async (parentId, driveParentId, prefix = "") => {
+        const syncNodeRecursive = async (parentId, driveParentId, level = 0, prefix = "") => {
             // Lọc con và sắp xếp theo order/createdAt để nhất quán với Frontend
             const children = nodes.filter(n => {
                 const pId = n.parentId === "" ? null : (n.parentId || null);
@@ -1142,8 +1142,12 @@ exports.syncDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) => 
 
             for (let i = 0; i < children.length; i++) {
                 const node = children[i];
-                const currentPrefix = prefix ? `${prefix}${i + 1}.` : `${i + 1}.`;
-                const expectedName = `${currentPrefix} ${node.name}`;
+                // Match logic từ Projects.tsx renderTree
+                // Level 0: Gốc dự án -> Không prefix
+                // Level 1: Hạng mục -> 1., 2.
+                // Level 2: Mục con -> 1.1., 1.2.
+                const currentPrefix = level === 0 ? '' : (prefix ? `${prefix}${i + 1}.` : `${i + 1}.`);
+                const expectedName = currentPrefix ? `${currentPrefix} ${node.name}` : node.name;
 
                 let currentDriveId = node.driveFolderId;
 

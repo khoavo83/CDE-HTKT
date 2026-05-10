@@ -37,7 +37,10 @@ const CustomMindmapNode = ({ data, id }: NodeProps) => {
     const isLoading = data.isLoadingChildren;
 
     return (
-        <div style={style} className="relative group cursor-pointer select-none">
+        <div 
+            style={style} 
+            className="relative group cursor-pointer select-none"
+        >
             <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
             <div className="text-sm leading-snug break-words whitespace-pre-wrap">
                 {data.label}
@@ -49,7 +52,10 @@ const CustomMindmapNode = ({ data, id }: NodeProps) => {
             )}
             {hasChildren && (
                 <button
-                    onClick={(e) => { e.stopPropagation(); data.onToggleExpand?.(id); }}
+                    onClick={(e) => { 
+                        e.stopPropagation(); 
+                        if (!isLoading) data.onToggleExpand?.(id); 
+                    }}
                     className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white border-2 border-gray-300 rounded-full flex items-center justify-center shadow-sm hover:border-blue-500 hover:bg-blue-50 transition-all z-10"
                     title={isExpanded ? 'Thu gọn' : 'Mở rộng'}
                 >
@@ -286,7 +292,6 @@ export const Mindmap = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    if (isMobile) return <MobileWarning />;
 
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -317,6 +322,12 @@ export const Mindmap = () => {
     const childCountRef = useRef<Map<string, number>>(new Map());
     // Tăng counter này mỗi khi load xong Docs mới -> trigger lại buildGraph
     const [docRevision, setDocRevision] = useState(0);
+
+    // [UX FIX] Refs để đảm bảo handleToggleExpand luôn có data mới nhất mà không cần phụ thuộc (dependency)
+    const expandedIdsRef = useRef(expandedIds);
+    useEffect(() => { expandedIdsRef.current = expandedIds; }, [expandedIds]);
+    const loadingChildrenIdsRef = useRef(loadingChildrenIds);
+    useEffect(() => { loadingChildrenIdsRef.current = loadingChildrenIds; }, [loadingChildrenIds]);
 
     const [nodeLayouts, setNodeLayouts] = useState<Record<string, string>>({});
     const nodeTypes = useMemo(() => ({ custom: CustomMindmapNode }), []);
@@ -376,20 +387,16 @@ export const Mindmap = () => {
             const snap = await getDocs(query(collection(db, 'project_nodes'), where('parentId', 'in', batch)));
             const allNodesInBatch = snap.docs.map(d => ({ id: d.id, ...d.data() as any }));
 
-            // Tìm tất cả TASK IDs trong batch này để đếm văn bản gắn vào TASK
-            const taskIds = allNodesInBatch.filter(n => n.type === 'TASK').map(n => n.id);
-            const nonTaskNodes = allNodesInBatch.filter(n => n.type !== 'TASK');
+            // Đếm tất cả
+            const nonTaskNodes = allNodesInBatch;
 
-            // Query links cho tất cả node trong batch + các TASK con (nếu đã biết)
-            const nodeAndTaskIds = [...batch, ...taskIds];
             const linkBatches: string[][] = [];
-            for (let i = 0; i < nodeAndTaskIds.length; i += 30) {
-                linkBatches.push(nodeAndTaskIds.slice(i, i + 30));
+            for (let i = 0; i < batch.length; i += 30) {
+                linkBatches.push(batch.slice(i, i + 30));
             }
 
             const counts: Record<string, number> = {};
 
-            // Đếm các node con không phải TASK
             nonTaskNodes.forEach(n => {
                 counts[n.parentId] = (counts[n.parentId] || 0) + 1;
             });
@@ -400,10 +407,7 @@ export const Mindmap = () => {
                 snapLinks.docs.forEach(d => {
                     const lData = d.data() as any;
                     const directNodeId = lData.nodeId;
-
-                    // Nếu link gắn vào TASK, ta tính cho parent của TASK đó
-                    const taskNode = allNodesInBatch.find(n => n.id === directNodeId);
-                    const targetId = (taskNode && taskNode.type === 'TASK') ? taskNode.parentId : directNodeId;
+                    const targetId = directNodeId;
 
                     if (batch.includes(targetId)) {
                         counts[targetId] = (counts[targetId] || 0) + 1;
@@ -553,17 +557,19 @@ export const Mindmap = () => {
 
     // ===== Toggle Expand =====
     const handleToggleExpand = useCallback(async (nodeId: string) => {
-        if (expandedIds.has(nodeId)) {
+        if (expandedIdsRef.current.has(nodeId)) {
             // Collapse: remove from expanded
             setExpandedIds(prev => {
                 const next = new Set(prev);
                 next.delete(nodeId);
+                expandedIdsRef.current.delete(nodeId);
                 // Cũng collapse tất cả con cháu
                 const removeDescendants = (pid: string) => {
                     Array.from(loadedNodesRef.current.values())
                         .filter(n => n.parentId === pid)
                         .forEach(child => {
                             next.delete(child.id);
+                            expandedIdsRef.current.delete(child.id);
                             removeDescendants(child.id);
                         });
                 };
@@ -571,13 +577,20 @@ export const Mindmap = () => {
                 return next;
             });
         } else {
-            // Expand: fetch children nếu chưa có
+            // Expand: Phản hồi UI ngay lập tức
+            setExpandedIds(prev => new Set(prev).add(nodeId));
+            expandedIdsRef.current.add(nodeId);
+
+            // fetch children nếu chưa có
             const existingChildren = Array.from(loadedNodesRef.current.values()).filter(n => n.parentId === nodeId);
             const needsFetchChildren = existingChildren.length === 0;
             const needsFetchDocs = !loadedDocsNodeIds.current.has(nodeId);
 
             if (needsFetchChildren || needsFetchDocs) {
+                if (loadingChildrenIdsRef.current.has(nodeId)) return; // Tránh fetch trùng lặp
+
                 setLoadingChildrenIds(prev => new Set(prev).add(nodeId));
+                loadingChildrenIdsRef.current.add(nodeId);
                 try {
                     let children: any[] = existingChildren;
                     if (needsFetchChildren) {
@@ -590,9 +603,7 @@ export const Mindmap = () => {
                     if (needsFetchDocs) {
                         loadedDocsNodeIds.current.add(nodeId);
 
-                        // Tìm các TASK IDs thuộc nodeId này
-                        const childTaskIds = children.filter(c => c.type === 'TASK').map(c => c.id);
-                        const queryIds = [nodeId, ...childTaskIds];
+                        const queryIds = [nodeId];
 
                         const dl: any[] = [];
                         // Query links theo từng batch 30
@@ -606,34 +617,37 @@ export const Mindmap = () => {
                                     const { getDoc: getDocFn, doc: docRef } = await import('firebase/firestore');
                                     const vbDoc = await getDocFn(docRef(db, 'vanban', link.vanBanId));
                                     if (vbDoc.exists()) {
-                                        // Gán parentId là nodeId hiện tại (Hạng mục) để hiển thị trên Mindmap tại đây
-                                        dl.push({
-                                            id: vbDoc.id,
+                                        const docObj = {
+                                            id: `doclink_${link.id}`,
+                                            vanBanId: vbDoc.id,
                                             ...vbDoc.data(),
                                             _linkId: link.id,
-                                            parentId: nodeId,
-                                            _realNodeId: link.nodeId, // Lưu lại ID gốc (có thể là TASK)
+                                            parentId: link.nodeId,
+                                            _realNodeId: link.nodeId,
                                             type: 'DOCUMENT'
-                                        });
+                                        };
+                                        loadedDocsRef.current.set(`doclink_${link.id}`, docObj);
+                                        dl.push(docObj);
                                     }
                                 } catch (e) { /* skip */ }
                             }
                         }
-                        dl.forEach(d => loadedDocsRef.current.set(d.id, d));
                         // Trigger buildGraph rebuild vì Ref không tự re-render
                         setDocRevision(prev => prev + 1);
                     }
+                } catch (e) {
+                    console.error('Expand error:', e);
                 } finally {
                     setLoadingChildrenIds(prev => {
                         const next = new Set(prev);
                         next.delete(nodeId);
                         return next;
                     });
+                    loadingChildrenIdsRef.current.delete(nodeId);
                 }
             }
-            setExpandedIds(prev => new Set(prev).add(nodeId));
         }
-    }, [expandedIds, fetchChildren, countChildren]);
+    }, [fetchChildren, countChildren]); // Ổn định hoàn toàn, không phụ thuộc vào expandedIds
 
     // ===== Initial Load =====
     useEffect(() => {
@@ -643,7 +657,7 @@ export const Mindmap = () => {
                 // 1. Fetch tất cả project_nodes (folders, projects, etc.)
                 const allSnap = await getDocs(query(collection(db, 'project_nodes')));
                 const allNodes = allSnap.docs.map(d => ({ id: d.id, ...d.data() as any }));
-                const nonTaskNodes = allNodes.filter(n => n.type !== 'TASK');
+                const nonTaskNodes = allNodes; // Keep tasks!
 
                 // Track everything in Ref
                 nonTaskNodes.forEach(n => {
@@ -691,11 +705,7 @@ export const Mindmap = () => {
                     allDocsMap.set(d.id, { id: d.id, ...d.data() });
                 });
 
-                // 4. Lọc và group Links (bao gồm việc map TASK về parent node và bỏ qua broken links)
-                const allTaskNodes = allNodes.filter(n => n.type === 'TASK');
-                const taskParentMap = new Map<string, string>();
-                allTaskNodes.forEach(t => { if (t.parentId) taskParentMap.set(t.id, t.parentId); });
-
+                // 4. Lọc và group Links
                 const linksMap = new Map<string, any[]>();
                 const validLinkDocs = new Set<string>();
 
@@ -711,8 +721,7 @@ export const Mindmap = () => {
                     if (docData && !isFolder) {
                         validLinkDocs.add(d.id);
 
-                        // Nếu link gắn vào TASK, tính cho Parent Hạng Mục của TASK đó
-                        const targetNodeId = taskParentMap.has(linkNodeId) ? taskParentMap.get(linkNodeId)! : linkNodeId;
+                        const targetNodeId = linkNodeId;
 
                         if (!linksMap.has(targetNodeId)) linksMap.set(targetNodeId, []);
                         linksMap.get(targetNodeId)!.push({ id: d.id, ...data });
@@ -720,6 +729,18 @@ export const Mindmap = () => {
                         // Tăng số đếm childCountRef cho targetNodeId để hiển thị nút +
                         const currentCount = childCountRef.current.get(targetNodeId) || 0;
                         childCountRef.current.set(targetNodeId, currentCount + 1);
+
+                        // [BUGFIX] Nạp luôn vào loadedDocsRef để hiển thị ngay lần đầu do thư mục mặc định đã được Expand
+                        loadedDocsRef.current.set(`doclink_${d.id}`, {
+                            id: `doclink_${d.id}`,
+                            vanBanId: data.vanBanId,
+                            ...docData,
+                            _linkId: d.id,
+                            parentId: targetNodeId,
+                            _realNodeId: linkNodeId,
+                            type: 'DOCUMENT'
+                        });
+                        loadedDocsNodeIds.current.add(targetNodeId);
                     }
                 });
 
@@ -763,55 +784,27 @@ export const Mindmap = () => {
             return;
         }
 
+        // Toggle expand khi click vào node có con
+        const hasKids = (childCountRef.current.get(node.id) || 0) > 0;
+        if (hasKids) {
+            handleToggleExpand(node.id);
+        }
+
         setSelectedNode(node);
         setIsSidebarOpen(true);
 
-        // Fetch Documents của toàn bộ nhánh (chọn node nào hiện hết file của nhánh đó)
-        if (!loadedDocsNodeIds.current.has(node.id)) {
-            try {
-                // Lấy tất cả node ID thuộc nhánh này (bao gồm node hiện tại và tất cả con cháu)
-                const getAllDescendantIds = (pid: string): string[] => {
-                    const children = Array.from(loadedNodesRef.current.values()).filter(n => n.parentId === pid);
-                    let ids = [pid];
-                    children.forEach(c => {
-                        ids = [...ids, ...getAllDescendantIds(c.id)];
-                    });
-                    return ids;
-                };
-
-                const queryIds = getAllDescendantIds(node.id);
-                setSelectedNodeDescendants(new Set(queryIds));
-
-                for (let i = 0; i < queryIds.length; i += 30) {
-                    const batch = queryIds.slice(i, i + 30);
-                    const snapLinks = await getDocs(query(collection(db, 'vanban_node_links'), where('nodeId', 'in', batch)));
-                    const linkData = snapLinks.docs.map(d => ({ id: d.id, ...d.data() as any }));
-
-                    for (const link of linkData) {
-                        try {
-                            const { getDoc: getDocFn, doc: docRef } = await import('firebase/firestore');
-                            const vbDoc = await getDocFn(docRef(db, 'vanban', link.vanBanId));
-                            if (vbDoc.exists()) {
-                                loadedDocsRef.current.set(vbDoc.id, {
-                                    id: vbDoc.id,
-                                    ...vbDoc.data(),
-                                    _linkId: link.id,
-                                    parentId: node.id, // Gán parentId là node được click để Sidebar dễ filter
-                                    _realNodeId: link.nodeId,
-                                    type: 'DOCUMENT'
-                                });
-                            }
-                        } catch (e) { /* skip */ }
-                    }
-                }
-                setSelectedNodeDescendants(new Set(getAllDescendantIds(node.id)));
-                // Trigger re-render để sidebar cập nhật
-                setSelectedNode({ ...node });
-            } catch (e) {
-                console.error('Fetch docs error on click:', e);
-            }
-        }
-    }, [setSelectedNode]);
+        // Tính descendants cho sidebar
+        const getAllDescendantIds = (pid: string): string[] => {
+            const children = Array.from(loadedNodesRef.current.values()).filter(n => n.parentId === pid);
+            let ids = [pid];
+            children.forEach(c => {
+                ids = [...ids, ...getAllDescendantIds(c.id)];
+            });
+            return ids;
+        };
+        const queryIds = getAllDescendantIds(node.id);
+        setSelectedNodeDescendants(new Set(queryIds));
+    }, [handleToggleExpand]);
 
     const onConnect = useCallback((params: Edge | Connection) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
 
@@ -827,6 +820,8 @@ export const Mindmap = () => {
     };
 
     // ===== RENDER =====
+    if (isMobile) return <MobileWarning />;
+
     return (
         <div className="h-full bg-gray-50 p-4">
             <div className="bg-white w-full h-full rounded-xl shadow-inner border overflow-hidden relative">
