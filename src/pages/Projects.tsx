@@ -13,8 +13,7 @@ import { DeleteConfirmModal } from '../components/DeleteConfirmModal';
 import { moveToTrash } from '../utils/trashUtils';
 import { isoToVN, formatBytes } from '../utils/formatVN';
 import { GenericConfirmModal } from '../components/GenericConfirmModal';
-import { utils, writeFile } from 'xlsx';
-import { format } from 'date-fns';
+import ExcelJS from 'exceljs';
 
 
 interface ProjectNode {
@@ -579,7 +578,7 @@ export const Projects = () => {
     const childNodes = getChildNodes();
 
     // ====== XUẤT EXCEL TOÀN BỘ CẤU TRÚC DỰ ÁN ======
-    const handleExportExcel = () => {
+    const handleExportExcel = async () => {
         if (!selectedNodeId) return;
 
         const findNodeInTree = (nodes: NodeTreeItem[], id: string): NodeTreeItem | null => {
@@ -593,20 +592,7 @@ export const Projects = () => {
         const rootNode = findNodeInTree(treeData, selectedNodeId);
         if (!rootNode) return;
 
-        // Headers: STT | Hạng mục / Mục con | Ngày bắt đầu | Ngày kết thúc | Số Ký hiệu | Ngày ban hành | Cơ quan ban hành | Văn bản pháp lý | Số trang | Link Google Drive
-        const HEADERS = ['STT', 'Hạng mục / Mục con', 'Ngày bắt đầu', 'Ngày kết thúc', 'Số Ký hiệu', 'Ngày ban hành', 'Cơ quan ban hành', 'Văn bản pháp lý', 'Số trang', 'Link Google Drive'];
-        const COL_COUNT = HEADERS.length;
-
-        // Mảng chứa các dòng dữ liệu thô (mỗi dòng là 1 mảng giá trị)
-        const dataRows: any[][] = [];
-        // Mảng chứa outline level cho mỗi dòng (dùng để group trong Excel)
-        const outlineLevels: number[] = [];
-        // Mảng đánh dấu dòng nào là dòng hạng mục (để bold)
-        const isNodeRow: boolean[] = [];
-
-        let stt = 0;
-
-        // Tạo chuỗi "Văn bản pháp lý" theo cấu trúc chuẩn
+        // Tạo chuỗi pháp lý chuẩn
         const buildPhapLy = (d: any): string => {
             const parts: string[] = [];
             if (d.loaiVanBan) parts.push(d.loaiVanBan);
@@ -620,28 +606,42 @@ export const Projects = () => {
             return parts.join(' ');
         };
 
-        // Đệ quy duyệt cây — tạo dòng riêng cho mỗi node và mỗi văn bản
+        // Thu thập dữ liệu: { type: 'node'|'doc', level, data }
+        type RowInfo = {
+            type: 'node' | 'doc';
+            level: number;
+            nodeLabel?: string;
+            startDate?: string;
+            endDate?: string;
+            driveFolder?: string;
+            // Doc fields
+            phapLy?: string;
+            soKyHieu?: string;
+            ngayBanHanh?: string;
+            coQuanBanHanh?: string;
+            vanBanPhapLy?: string;
+            soTrang?: string | number;
+            driveLink?: string;
+        };
+
+        const rowInfos: RowInfo[] = [];
+
         const traverseNode = (node: NodeTreeItem, level: number, prefix: string) => {
-            // === DÒNG HẠNG MỤC / MỤC CON ===
-            stt++;
             const nodeLabel = `${prefix ? prefix + ' ' : ''}${node.name}`;
-            const driveFolder = node.driveFolderLink || '';
 
-            dataRows.push([
-                stt,
+            // Dòng hạng mục
+            rowInfos.push({
+                type: 'node',
+                level,
                 nodeLabel,
-                node.startDate ? node.startDate.split('-').reverse().join('/') : '',
-                node.endDate ? node.endDate.split('-').reverse().join('/') : '',
-                '', '', '', '', '',
-                driveFolder
-            ]);
-            outlineLevels.push(level);
-            isNodeRow.push(true);
+                startDate: node.startDate ? node.startDate.split('-').reverse().join('/') : '',
+                endDate: node.endDate ? node.endDate.split('-').reverse().join('/') : '',
+                driveFolder: node.driveFolderLink || '',
+            });
 
-            // === CÁC DÒNG VĂN BẢN ĐÍNH KÈM ===
+            // Văn bản đính kèm
             const nodeDocLinks = allLinks.filter(l => l.nodeId === node.id);
             const linkedDocs = nodeDocLinks.map(link => allDocs.find(d => d.id === link.vanBanId)).filter((d): d is any => d !== null);
-
             linkedDocs.sort((a, b) => {
                 const dateA = a.ngayBanHanh ? new Date(a.ngayBanHanh).getTime() : 0;
                 const dateB = b.ngayBanHanh ? new Date(b.ngayBanHanh).getTime() : 0;
@@ -649,24 +649,20 @@ export const Projects = () => {
             });
 
             linkedDocs.forEach(d => {
-                stt++;
-                const driveLink = d.driveFileId_Original
+                const driveUrl = d.driveFileId_Original
                     ? `https://drive.google.com/file/d/${d.driveFileId_Original}/view`
                     : (d.driveFileId ? `https://drive.google.com/file/d/${d.driveFileId}/view` : '');
-
-                dataRows.push([
-                    stt,
-                    '',  // Không ghi tên hạng mục — dòng này thuộc về node phía trên
-                    '', '',
-                    d.soKyHieu || '',
-                    d.ngayBanHanh ? isoToVN(d.ngayBanHanh) : '',
-                    d.coQuanBanHanh || '',
-                    buildPhapLy(d),
-                    d.soTrang || '',
-                    driveLink
-                ]);
-                outlineLevels.push(level + 1);  // Văn bản nằm sâu hơn node 1 cấp
-                isNodeRow.push(false);
+                rowInfos.push({
+                    type: 'doc',
+                    level: level + 1,
+                    phapLy: buildPhapLy(d),
+                    soKyHieu: d.soKyHieu || '',
+                    ngayBanHanh: d.ngayBanHanh ? isoToVN(d.ngayBanHanh) : '',
+                    coQuanBanHanh: d.coQuanBanHanh || '',
+                    vanBanPhapLy: buildPhapLy(d),
+                    soTrang: d.soTrang || '',
+                    driveLink: driveUrl,
+                });
             });
 
             // Đệ quy con
@@ -678,58 +674,164 @@ export const Projects = () => {
 
         traverseNode(rootNode, 0, '');
 
-        if (dataRows.length === 0) {
+        if (rowInfos.length === 0) {
             toast.error('Không có dữ liệu để xuất.');
             return;
         }
 
-        // Tạo worksheet từ mảng AoA (Array of Arrays)
-        const aoa: any[][] = [HEADERS, ...dataRows];
-        const ws = utils.aoa_to_sheet(aoa);
+        // ========== TẠO WORKBOOK VỚI EXCELJS ==========
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'CDE - Ban HTKT';
+        const sheetName = (rootNode.name || 'Du_an').substring(0, 31).replace(/[\[\]\*?/\\]/g, '_');
+        const ws = workbook.addWorksheet(sheetName);
 
-        // Ghi HYPERLINK formula cho cột Link Google Drive (cột J = index 9)
-        const driveColIdx = 9;  // Cột J (0-indexed)
-        for (let r = 0; r < dataRows.length; r++) {
-            const url = dataRows[r][driveColIdx];
-            if (url && typeof url === 'string' && url.startsWith('http')) {
-                const cellRef = utils.encode_cell({ r: r + 1, c: driveColIdx }); // +1 vì dòng 0 là header
-                ws[cellRef] = {
-                    t: 's',
-                    f: `HYPERLINK("${url}","Mở trên Drive")`
-                };
-            }
-        }
-
-        // Đặt outline level cho mỗi dòng (grouping)
-        if (!ws['!rows']) ws['!rows'] = [];
-        for (let r = 0; r < dataRows.length; r++) {
-            ws['!rows'][r + 1] = { level: outlineLevels[r], hidden: false };
-        }
-        // Mặc định hiển thị nút group bên trên (SummaryBelow = false)
-        if (!ws['!outline']) (ws as any)['!outline'] = {};
-        (ws as any)['!outline'] = { above: true, left: true };
-
-        // Đặt độ rộng cột hợp lý
-        ws['!cols'] = [
-            { wch: 5 },   // STT
-            { wch: 45 },  // Hạng mục / Mục con
-            { wch: 13 },  // Ngày bắt đầu
-            { wch: 13 },  // Ngày kết thúc
-            { wch: 20 },  // Số Ký hiệu
-            { wch: 14 },  // Ngày ban hành
-            { wch: 28 },  // Cơ quan ban hành
-            { wch: 80 },  // Văn bản pháp lý (chuỗi dài)
-            { wch: 8 },   // Số trang
-            { wch: 20 },  // Link Drive
+        // Thiết lập cột
+        // A: STT | B: Pháp lý | C: Hạng mục / Mục con | D: Ngày bắt đầu | E: Ngày kết thúc | F: Số Ký hiệu | G: Ngày ban hành | H: Cơ quan ban hành | I: Văn bản pháp lý | J: Số trang | K: Link file
+        ws.columns = [
+            { header: 'STT', key: 'stt', width: 6 },
+            { header: 'Pháp lý', key: 'phapLy', width: 45 },
+            { header: 'Hạng mục / Mục con', key: 'hangMuc', width: 40 },
+            { header: 'Ngày bắt đầu', key: 'ngayBD', width: 14 },
+            { header: 'Ngày kết thúc', key: 'ngayKT', width: 14 },
+            { header: 'Số Ký hiệu', key: 'soKyHieu', width: 20 },
+            { header: 'Ngày ban hành', key: 'ngayBH', width: 14 },
+            { header: 'Cơ quan ban hành', key: 'cqBanHanh', width: 28 },
+            { header: 'Văn bản pháp lý', key: 'vanBanPL', width: 65 },
+            { header: 'Số trang', key: 'soTrang', width: 9 },
+            { header: 'Link file', key: 'linkFile', width: 14 },
         ];
 
-        const wb = utils.book_new();
-        const sheetName = (rootNode.name || 'Du_an').substring(0, 31).replace(/[\[\]\*?/\\]/g, '_');
-        utils.book_append_sheet(wb, ws, sheetName);
+        // Font mặc định cho toàn bộ sheet
+        const defaultFont: Partial<ExcelJS.Font> = { name: 'Times New Roman', size: 13 };
 
+        // Style dòng header (dòng 1)
+        const headerRow = ws.getRow(1);
+        headerRow.font = { ...defaultFont, bold: true, color: { argb: 'FFFFFFFF' } };
+        headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+        headerRow.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        headerRow.height = 30;
+        headerRow.eachCell(cell => {
+            cell.border = {
+                top: { style: 'thin' }, bottom: { style: 'thin' },
+                left: { style: 'thin' }, right: { style: 'thin' },
+            };
+        });
+
+        // Ghi dữ liệu
+        let docStt = 0;
+        rowInfos.forEach((info, _idx) => {
+            if (info.type === 'node') {
+                // --- DÒNG HẠNG MỤC ---
+                const row = ws.addRow({
+                    stt: '',
+                    phapLy: '',
+                    hangMuc: info.nodeLabel || '',
+                    ngayBD: info.startDate || '',
+                    ngayKT: info.endDate || '',
+                    soKyHieu: '', ngayBH: '', cqBanHanh: '', vanBanPL: '', soTrang: '',
+                    linkFile: '',
+                });
+                // Bold + nền xanh nhạt cho dòng hạng mục
+                row.font = { ...defaultFont, bold: true };
+                row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD6E4F0' } };
+                row.alignment = { vertical: 'middle', wrapText: true };
+                row.eachCell(cell => {
+                    cell.border = {
+                        top: { style: 'thin', color: { argb: 'FFB4C6E7' } },
+                        bottom: { style: 'thin', color: { argb: 'FFB4C6E7' } },
+                        left: { style: 'thin', color: { argb: 'FFB4C6E7' } },
+                        right: { style: 'thin', color: { argb: 'FFB4C6E7' } },
+                    };
+                });
+
+                // Hyperlink cho thư mục Drive nếu có
+                if (info.driveFolder) {
+                    const linkCell = row.getCell('linkFile');
+                    linkCell.value = { text: 'Xem file', hyperlink: info.driveFolder };
+                    linkCell.font = { ...defaultFont, bold: true, color: { argb: 'FF0563C1' }, underline: true };
+                }
+
+                // Outline level cho grouping
+                row.outlineLevel = info.level > 0 ? info.level : 0;
+            } else {
+                // --- DÒNG VĂN BẢN ---
+                docStt++;
+                const row = ws.addRow({
+                    stt: docStt,
+                    phapLy: info.phapLy || '',
+                    hangMuc: '',
+                    ngayBD: '', ngayKT: '',
+                    soKyHieu: info.soKyHieu || '',
+                    ngayBH: info.ngayBanHanh || '',
+                    cqBanHanh: info.coQuanBanHanh || '',
+                    vanBanPL: info.vanBanPhapLy || '',
+                    soTrang: info.soTrang || '',
+                    linkFile: '',
+                });
+                row.font = { ...defaultFont };
+                row.alignment = { vertical: 'top', wrapText: true };
+                row.eachCell(cell => {
+                    cell.border = {
+                        top: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+                        bottom: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+                        left: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+                        right: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+                    };
+                });
+
+                // STT căn giữa
+                row.getCell('stt').alignment = { horizontal: 'center', vertical: 'top' };
+                row.getCell('soTrang').alignment = { horizontal: 'center', vertical: 'top' };
+
+                // Hyperlink cho file Drive
+                if (info.driveLink) {
+                    const linkCell = row.getCell('linkFile');
+                    linkCell.value = { text: 'Xem file', hyperlink: info.driveLink };
+                    linkCell.font = { ...defaultFont, color: { argb: 'FF0563C1' }, underline: true };
+                }
+
+                // Outline level cho grouping
+                row.outlineLevel = info.level > 0 ? info.level : 0;
+            }
+        });
+
+        // ========== THIẾT LẬP IN ẤN ==========
+        // Lặp lại dòng tiêu đề khi in
+        ws.pageSetup = {
+            paperSize: 9,  // A4
+            orientation: 'landscape',
+            fitToPage: true,
+            fitToWidth: 1,
+            fitToHeight: 0,  // 0 = không giới hạn số trang chiều dọc
+            printTitlesRow: '1:1',  // Lặp lại header
+            horizontalCentered: true,
+            margins: {
+                left: 0.3, right: 0.3, top: 0.5, bottom: 0.5,
+                header: 0.2, footer: 0.2
+            }
+        };
+
+        // Outline properties: group summary ở trên
+        ws.properties.outlineLevelRow = 7;
+        ws.properties.outlineLevelCol = 0;
+
+        // ========== TẢI FILE ==========
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         const safeName = (rootNode.name || 'Du_an').replace(/[^a-zA-Z0-9_\-\u00C0-\u024F\u1E00-\u1EFF ]/g, '_').replace(/\s+/g, '_');
-        const fileName = `Cau_truc_${safeName}_${format(new Date(), 'ddMMyyyy_HHmm')}.xlsx`;
-        writeFile(wb, fileName);
+        const fileName = `${dateStr}_${safeName}.xlsx`;
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
         toast.success('Đã xuất file Excel thành công!');
     };
 
