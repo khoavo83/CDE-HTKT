@@ -724,13 +724,7 @@ export const Documents = () => {
                 <table className="w-full text-left border-collapse table-auto min-w-[900px]">
                     <thead>
                         <tr className="bg-gray-50 border-b border-gray-200 text-sm font-medium text-gray-500">
-                            <th style={{ width: colWidths.status }} className="p-4 relative group border-r border-gray-200">
-                                <div onClick={() => handleSort('trangThaiDuLieu')} className="flex justify-center items-center gap-2 cursor-pointer hover:text-gray-700 mx-auto w-fit select-none">
-                                    Trạng thái
-                                    {renderSortIcon('trangThaiDuLieu')}
-                                </div>
-                                <div onMouseDown={(e) => handleMouseDown(e, 'status')} className="absolute right-0 top-0 h-full w-2 cursor-col-resize hover:bg-primary-400 z-10 transition-colors" />
-                            </th>
+
                             <th style={{ width: colWidths.type }} className="p-4 relative group border-r border-gray-200">
                                 <div onClick={() => handleSort('loaiVanBan')} className="flex items-center gap-2 cursor-pointer hover:text-gray-700 w-fit select-none">
                                     Loại Văn bản
@@ -791,17 +785,7 @@ export const Documents = () => {
                     <tbody className="divide-y divide-gray-200 text-sm">
                         {paginatedDocs.map((doc) => (
                             <tr key={doc.id} className="even:bg-slate-50 odd:bg-white hover:bg-blue-50/50 transition-colors">
-                                <td className="p-4 text-center border-r border-gray-100">
-                                    {doc.trangThaiDuLieu === 'REVIEWING' ? (
-                                        <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-100 text-amber-600 border border-amber-200 shadow-sm" title="Chờ phân loại và sắp xếp">
-                                            <Clock className="w-5 h-5" />
-                                        </div>
-                                    ) : (
-                                        <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-100 text-green-600 border border-green-200 shadow-sm" title="Đã được chuấn hóa và có link Drive">
-                                            <FileCheck className="w-5 h-5" />
-                                        </div>
-                                    )}
-                                </td>
+
                                 <td className="p-4 text-gray-800 leading-relaxed break-words border-r border-gray-100" title={doc.loaiVanBan}>
                                     <div className="flex items-center gap-2">
                                         {doc.phanLoaiVanBan === 'OUTGOING' && <ArrowUp className={`w - 4 h - 4 flex - shrink - 0 ${doc.mucDoKhan === 'KHAN' ? 'text-red-600' : 'text-green-600'} `} />}

@@ -11,7 +11,7 @@ import { toast } from 'react-hot-toast';
 import { ReportCompletionModal } from '../components/ReportCompletionModal';
 import { DeleteConfirmModal } from '../components/DeleteConfirmModal';
 import { moveToTrash } from '../utils/trashUtils';
-import { isoToVN } from '../utils/formatVN';
+import { isoToVN, formatBytes } from '../utils/formatVN';
 import { GenericConfirmModal } from '../components/GenericConfirmModal';
 
 
@@ -793,24 +793,19 @@ export const Projects = () => {
                                             <thead className="bg-gray-50 text-gray-700 font-medium border-b border-gray-200">
                                                 <tr>
                                                     <th className="px-3 py-2.5 w-12 text-center"></th>
-                                                    <th className="px-4 py-2.5 min-w-[250px]">Văn bản pháp lý</th>
-                                                    <th className="px-3 py-2.5 w-10 text-center"></th>
+                                                    <th className="px-4 py-2.5 whitespace-nowrap">Loại Văn bản</th>
+                                                    <th className="px-4 py-2.5 whitespace-nowrap">Số Ký hiệu</th>
+                                                    <th className="px-4 py-2.5 whitespace-nowrap">Ngày ban hành</th>
+                                                    <th className="px-4 py-2.5 whitespace-nowrap">Cơ quan ban hành</th>
+                                                    <th className="px-4 py-2.5 min-w-[200px]">Trích yếu nội dung</th>
+                                                    <th className="px-4 py-2.5 whitespace-nowrap text-center">Số trang</th>
+                                                    <th className="px-4 py-2.5 whitespace-nowrap text-center">Dung lượng</th>
+                                                    <th className="px-3 py-2.5 w-16 text-center">Thao tác</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
                                                 {nodeLinksWithDocs.map(d => {
                                                     const { Icon, bg, color } = getDocIconConfig(d);
-                                                    // Tạo câu pháp lý đầy đủ
-                                                    const parts: string[] = [];
-                                                    if (d.loaiVanBan) parts.push(d.loaiVanBan);
-                                                    if (d.soKyHieu) parts.push(`số ${d.soKyHieu}`);
-                                                    if (d.ngayBanHanh) {
-                                                        const [y, m, dd] = d.ngayBanHanh.split('-');
-                                                        parts.push(`ngày ${dd} tháng ${m} năm ${y}`);
-                                                    }
-                                                    if (d.coQuanBanHanh) parts.push(`của ${d.coQuanBanHanh}`);
-                                                    if (d.trichYeu) parts.push(`${d.trichYeu}`);
-                                                    const phapLy = parts.join(' ');
                                                     return (
                                                         <tr key={d.linkId} className="hover:bg-gray-50/80 transition-colors group">
                                                             <td className="px-3 py-3 text-center">
@@ -822,9 +817,21 @@ export const Projects = () => {
                                                                     <Icon className="w-5 h-5" />
                                                                 </button>
                                                             </td>
-                                                            <td className="px-4 py-3 leading-relaxed text-gray-700" title={phapLy}>
-                                                                <p className="line-clamp-2 text-sm">{phapLy || '--'}</p>
+                                                            <td className="px-4 py-3 leading-relaxed text-gray-700 whitespace-nowrap" title={d.loaiVanBan}>
+                                                                <div className="flex items-center gap-2">
+                                                                    {d.phanLoaiVanBan === 'OUTGOING' && <ArrowUp className={`w-4 h-4 flex-shrink-0 ${d.mucDoKhan === 'KHAN' ? 'text-red-600' : 'text-green-600'}`} />}
+                                                                    {d.phanLoaiVanBan === 'INCOMING' && <ArrowDown className={`w-4 h-4 flex-shrink-0 ${d.mucDoKhan === 'KHAN' ? 'text-red-600' : 'text-blue-600'}`} />}
+                                                                    <span>{d.loaiVanBan || '--'}</span>
+                                                                </div>
                                                             </td>
+                                                            <td className="px-4 py-3 leading-relaxed text-gray-700 whitespace-nowrap" title={d.soKyHieu}>{d.soKyHieu || '--'}</td>
+                                                            <td className="px-4 py-3 text-gray-600 font-medium whitespace-nowrap">{isoToVN(d.ngayBanHanh)}</td>
+                                                            <td className="px-4 py-3 leading-relaxed text-gray-700 whitespace-nowrap" title={d.coQuanBanHanh}>{d.coQuanBanHanh || '--'}</td>
+                                                            <td className="px-4 py-3 leading-relaxed text-gray-700" title={d.trichYeu}>
+                                                                <p className="line-clamp-2 text-sm">{d.trichYeu || '--'}</p>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-gray-500 text-center font-medium whitespace-nowrap">{d.soTrang || '--'}</td>
+                                                            <td className="px-4 py-3 text-gray-500 text-center font-medium whitespace-nowrap">{formatBytes(d.fileSize)}</td>
                                                             <td className="px-3 py-3 text-center">
                                                                 <button
                                                                     onClick={() => handleRemoveDocLink(d.linkId)}
