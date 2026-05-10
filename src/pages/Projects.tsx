@@ -125,8 +125,11 @@ export const Projects = () => {
     }, []);
 
     const unassignedDocs = useMemo(() => {
-        const assignedIds = allLinks.map(l => l.vanBanId);
-        let docs = allDocs.filter(d => !assignedIds.includes(d.id));
+        const assignedToCurrentNodeIds = allLinks
+            .filter(l => l.nodeId === selectedNodeId)
+            .map(l => l.vanBanId);
+            
+        let docs = allDocs.filter(d => !assignedToCurrentNodeIds.includes(d.id));
 
         if (attachSearchTerm) {
             const lowerTerm = attachSearchTerm.toLowerCase();
@@ -137,7 +140,7 @@ export const Projects = () => {
             );
         }
         return docs;
-    }, [allDocs, allLinks, attachSearchTerm]);
+    }, [allDocs, allLinks, attachSearchTerm, selectedNodeId]);
 
     const nodeLinksWithDocs = useMemo(() => {
         if (!selectedNodeId) return [];
@@ -1018,15 +1021,15 @@ export const Projects = () => {
                                         <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mb-4">
                                             <FileCheck className="w-8 h-8 text-blue-500" />
                                         </div>
-                                        <p className="font-bold text-gray-900 text-lg mb-1">Tất cả văn bản đã được sắp xếp!</p>
-                                        <p className="text-sm text-gray-500 max-w-sm">Không còn văn bản chưa phân bổ nào trong kho. Hãy tải lên văn bản mới bên mục Quản lý Văn bản.</p>
+                                        <p className="font-bold text-gray-900 text-lg mb-1">Tất cả văn bản đã được đính kèm vào mục này!</p>
+                                        <p className="text-sm text-gray-500 max-w-sm">Không còn văn bản nào khả dụng. Hãy tải lên văn bản mới bên mục Quản lý Văn bản.</p>
                                     </div>
                                 )}
                             </div>
 
                             {unassignedDocs.length > 0 && (
                                 <div className="px-6 py-3 border-t border-gray-100 bg-white shrink-0">
-                                    <span className="text-sm text-gray-500">Đang hiển thị <b>{unassignedDocs.length}</b> văn bản chưa được phân bổ vào hệ thống.</span>
+                                    <span className="text-sm text-gray-500">Đang hiển thị <b>{unassignedDocs.length}</b> văn bản khả dụng.</span>
                                 </div>
                             )}
                         </div>
