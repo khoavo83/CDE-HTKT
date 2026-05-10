@@ -13,6 +13,8 @@ import { DeleteConfirmModal } from '../components/DeleteConfirmModal';
 import { moveToTrash } from '../utils/trashUtils';
 import { isoToVN, formatBytes } from '../utils/formatVN';
 import { GenericConfirmModal } from '../components/GenericConfirmModal';
+import { utils, writeFile } from 'xlsx';
+import { format } from 'date-fns';
 
 
 interface ProjectNode {
@@ -576,6 +578,133 @@ export const Projects = () => {
     };
     const childNodes = getChildNodes();
 
+    // ====== XUẤT EXCEL TOÀN BỘ CẤU TRÚC DỰ ÁN ======
+    const handleExportExcel = () => {
+        if (!selectedNodeId) return;
+
+        // Tìm node gốc đang chọn trong tree
+        const findNodeInTree = (nodes: NodeTreeItem[], id: string): NodeTreeItem | null => {
+            for (const n of nodes) {
+                if (n.id === id) return n;
+                const found = findNodeInTree(n.children, id);
+                if (found) return found;
+            }
+            return null;
+        };
+        const rootNode = findNodeInTree(treeData, selectedNodeId);
+        if (!rootNode) return;
+
+        const rows: any[] = [];
+        let stt = 0;
+
+        // Đệ quy duyệt cây
+        const traverseNode = (node: NodeTreeItem, level: number, prefix: string) => {
+            const indent = '  '.repeat(level);
+            const nodeLabel = `${indent}${prefix ? prefix + ' ' : ''}${node.name}`;
+
+            // Lấy các văn bản đính kèm trực tiếp vào node này
+            const nodeDocLinks = allLinks.filter(l => l.nodeId === node.id);
+            const linkedDocs = nodeDocLinks.map(link => {
+                return allDocs.find(d => d.id === link.vanBanId);
+            }).filter((d): d is any => d !== null);
+
+            // Sắp xếp văn bản theo ngày ban hành
+            linkedDocs.sort((a, b) => {
+                const dateA = a.ngayBanHanh ? new Date(a.ngayBanHanh).getTime() : 0;
+                const dateB = b.ngayBanHanh ? new Date(b.ngayBanHanh).getTime() : 0;
+                return dateA - dateB;
+            });
+
+            if (linkedDocs.length === 0) {
+                // Node không có văn bản — vẫn ghi 1 dòng để hiển thị cấu trúc
+                stt++;
+                rows.push({
+                    'STT': stt,
+                    'Hạng mục / Mục con': nodeLabel,
+                    'Loại': getTypeName(node.type),
+                    'Trạng thái': node.status === 'ACTIVE' ? 'Đang hoạt động' : node.status === 'COMPLETED' ? 'Đã hoàn thành' : 'Tạm dừng',
+                    'Ngày bắt đầu': node.startDate ? node.startDate.split('-').reverse().join('/') : '',
+                    'Ngày kết thúc': node.endDate ? node.endDate.split('-').reverse().join('/') : '',
+                    'Loại Văn bản': '',
+                    'Số Ký hiệu': '',
+                    'Ngày ban hành': '',
+                    'Cơ quan ban hành': '',
+                    'Trích yếu nội dung': '',
+                    'Số trang': '',
+                    'Dung lượng': '',
+                    'Link Google Drive': node.driveFolderLink || '',
+                });
+            } else {
+                // Node có văn bản — ghi mỗi văn bản 1 dòng, dòng đầu kèm tên node
+                linkedDocs.forEach((d, i) => {
+                    stt++;
+                    const driveLink = d.driveFileId_Original
+                        ? `https://drive.google.com/file/d/${d.driveFileId_Original}/view`
+                        : (d.driveFileId ? `https://drive.google.com/file/d/${d.driveFileId}/view` : '');
+                    rows.push({
+                        'STT': stt,
+                        'Hạng mục / Mục con': i === 0 ? nodeLabel : '',
+                        'Loại': i === 0 ? getTypeName(node.type) : '',
+                        'Trạng thái': i === 0 ? (node.status === 'ACTIVE' ? 'Đang hoạt động' : node.status === 'COMPLETED' ? 'Đã hoàn thành' : 'Tạm dừng') : '',
+                        'Ngày bắt đầu': i === 0 ? (node.startDate ? node.startDate.split('-').reverse().join('/') : '') : '',
+                        'Ngày kết thúc': i === 0 ? (node.endDate ? node.endDate.split('-').reverse().join('/') : '') : '',
+                        'Loại Văn bản': d.loaiVanBan || '',
+                        'Số Ký hiệu': d.soKyHieu || '',
+                        'Ngày ban hành': d.ngayBanHanh ? isoToVN(d.ngayBanHanh) : '',
+                        'Cơ quan ban hành': d.coQuanBanHanh || '',
+                        'Trích yếu nội dung': d.trichYeu || '',
+                        'Số trang': d.soTrang || '',
+                        'Dung lượng': formatBytes(d.fileSize),
+                        'Link Google Drive': driveLink,
+                    });
+                });
+            }
+
+            // Đệ quy con
+            node.children.forEach((child, idx) => {
+                const childPrefix = level === 0 ? `${idx + 1}.` : `${prefix}${idx + 1}.`;
+                traverseNode(child, level + 1, childPrefix);
+            });
+        };
+
+        traverseNode(rootNode, 0, '');
+
+        if (rows.length === 0) {
+            toast.error('Không có dữ liệu để xuất.');
+            return;
+        }
+
+        // Tạo workbook
+        const ws = utils.json_to_sheet(rows);
+
+        // Đặt độ rộng cột hợp lý
+        ws['!cols'] = [
+            { wch: 5 },   // STT
+            { wch: 40 },  // Hạng mục
+            { wch: 14 },  // Loại
+            { wch: 16 },  // Trạng thái
+            { wch: 12 },  // Ngày bắt đầu
+            { wch: 12 },  // Ngày kết thúc
+            { wch: 16 },  // Loại Văn bản
+            { wch: 20 },  // Số Ký hiệu
+            { wch: 14 },  // Ngày ban hành
+            { wch: 30 },  // Cơ quan ban hành
+            { wch: 50 },  // Trích yếu
+            { wch: 8 },   // Số trang
+            { wch: 12 },  // Dung lượng
+            { wch: 50 },  // Link Drive
+        ];
+
+        const wb = utils.book_new();
+        const sheetName = (rootNode.name || 'Du_an').substring(0, 31).replace(/[\[\]\*?/\\]/g, '_');
+        utils.book_append_sheet(wb, ws, sheetName);
+
+        const safeName = (rootNode.name || 'Du_an').replace(/[^a-zA-Z0-9_\-\u00C0-\u024F\u1E00-\u1EFF ]/g, '_').replace(/\s+/g, '_');
+        const fileName = `Cau_truc_${safeName}_${format(new Date(), 'ddMMyyyy_HHmm')}.xlsx`;
+        writeFile(wb, fileName);
+        toast.success('Đã xuất file Excel thành công!');
+    };
+
     return (
         <div className="h-full flex flex-col p-3 md:p-6 bg-gray-50 uppercase-fix">
             <div className="flex justify-between items-center mb-3 md:mb-6 shrink-0">
@@ -681,6 +810,14 @@ export const Projects = () => {
                                             <span className="hidden md:inline">Tạo mục con</span>
                                         </button>
                                     )}
+                                    <button
+                                        onClick={handleExportExcel}
+                                        className="flex items-center gap-2 bg-green-50 text-green-700 font-medium px-3 md:px-4 py-2 rounded-md hover:bg-green-100 transition-colors text-sm"
+                                        title="Xuất Excel"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                        <span className="hidden md:inline">Xuất Excel</span>
+                                    </button>
                                 </div>
                             </div>
 
