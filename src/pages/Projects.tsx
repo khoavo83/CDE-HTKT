@@ -3,7 +3,7 @@ import { collection, query, onSnapshot, doc, setDoc, deleteDoc, updateDoc } from
 import { db, appFunctions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { Link } from 'react-router-dom';
-import { FolderTree, Folder, FileCheck, Layers, Plus, Edit2, Trash2, ChevronRight, ChevronDown, CheckCircle, Clock, ArrowUp, ArrowDown, FileText, FileImage, FileSpreadsheet, X, Link as LinkIcon, Unlink, ExternalLink, HardDrive, Search, Calendar, Loader2, ArrowUpDown, AlertTriangle, Download, BarChart3, ArrowLeft } from 'lucide-react';
+import { FolderTree, Folder, FileCheck, Layers, Plus, Edit2, Trash2, ChevronRight, ChevronDown, CheckCircle, Clock, ArrowUp, ArrowDown, FileText, FileImage, FileSpreadsheet, X, Link as LinkIcon, Unlink, ExternalLink, HardDrive, Search, Calendar, Loader2, ArrowUpDown, AlertTriangle, Download, BarChart3, ArrowLeft, Paperclip } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useAuthStore } from '../store/useAuthStore';
 import { canEditOrDeleteData } from '../utils/authUtils';
@@ -1066,6 +1066,7 @@ export const Projects = () => {
                                                     <th className="px-4 py-2.5 min-w-[150px]">Cơ quan ban hành</th>
                                                     <th className="px-4 py-2.5 min-w-[300px]">Trích yếu nội dung</th>
                                                     <th className="px-4 py-2.5 whitespace-nowrap text-center">Số trang</th>
+                                                    <th className="px-4 py-2.5 whitespace-nowrap text-center">Đính kèm</th>
                                                     <th className="px-4 py-2.5 whitespace-nowrap text-center">Dung lượng</th>
                                                     <th className="px-3 py-2.5 w-16 text-center">Thao tác</th>
                                                 </tr>
@@ -1073,8 +1074,10 @@ export const Projects = () => {
                                             <tbody className="divide-y divide-gray-100">
                                                 {nodeLinksWithDocs.map(d => {
                                                     const { Icon, bg, color } = getDocIconConfig(d);
+                                                    const attCount = (d.attachments?.length || 0) + (d.dinhKem?.length || 0);
                                                     return (
-                                                        <tr key={d.linkId} className="hover:bg-gray-50/80 transition-colors group">
+                                                        <React.Fragment key={d.linkId}>
+                                                        <tr className="hover:bg-gray-50/80 transition-colors group">
                                                             <td className="px-3 py-3 text-center">
                                                                 <button
                                                                     onClick={() => setPreviewDocId(d.id)}
@@ -1098,6 +1101,16 @@ export const Projects = () => {
                                                                 {d.trichYeu || '--'}
                                                             </td>
                                                             <td className="px-4 py-3 text-gray-500 text-center font-medium whitespace-nowrap">{d.soTrang || '--'}</td>
+                                                            <td className="px-4 py-3 text-center">
+                                                                {attCount > 0 ? (
+                                                                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                                                                        <Paperclip className="w-3 h-3" />
+                                                                        {attCount}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-gray-400">--</span>
+                                                                )}
+                                                            </td>
                                                             <td className="px-4 py-3 text-gray-500 text-center font-medium whitespace-nowrap">{formatBytes(d.fileSize)}</td>
                                                             <td className="px-3 py-3 text-center">
                                                                 <button
@@ -1114,6 +1127,44 @@ export const Projects = () => {
                                                                 </button>
                                                             </td>
                                                         </tr>
+                                                        {/* Dòng phụ: Hiển thị file đính kèm */}
+                                                        {attCount > 0 && (
+                                                            <tr className="bg-blue-50/30">
+                                                                <td colSpan={11} className="px-4 py-2">
+                                                                    <div className="flex items-center gap-2 mb-1.5">
+                                                                        <Paperclip className="w-3.5 h-3.5 text-blue-500" />
+                                                                        <span className="text-xs font-bold text-blue-600 uppercase tracking-wide">Tệp đính kèm ({attCount})</span>
+                                                                    </div>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {d.attachments?.map((att: any, idx: number) => (
+                                                                            <a
+                                                                                key={`att-${idx}`}
+                                                                                href={att.webViewLink}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="inline-flex items-center gap-1.5 text-xs text-blue-700 bg-blue-100/80 hover:bg-blue-200 px-2.5 py-1.5 rounded-lg transition-colors border border-blue-200/60 max-w-xs"
+                                                                                title={att.fileName || att.originalName}
+                                                                            >
+                                                                                <FileText className="w-3.5 h-3.5 shrink-0" />
+                                                                                <span className="truncate">{att.fileName || att.originalName}</span>
+                                                                                {att.fileSize && <span className="text-blue-400 shrink-0">({(att.fileSize / 1024).toFixed(0)} KB)</span>}
+                                                                            </a>
+                                                                        ))}
+                                                                        {d.dinhKem?.map((att: any, idx: number) => (
+                                                                            <div
+                                                                                key={`dk-${idx}`}
+                                                                                className="inline-flex items-center gap-1.5 text-xs text-gray-600 bg-gray-100 px-2.5 py-1.5 rounded-lg border border-gray-200/60 max-w-xs"
+                                                                                title={att.fileName || att.name}
+                                                                            >
+                                                                                <FileText className="w-3.5 h-3.5 shrink-0" />
+                                                                                <span className="truncate">{att.fileName || att.name}</span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                        </React.Fragment>
                                                     );
                                                 })}                                            </tbody>
                                         </table>
@@ -1429,6 +1480,41 @@ export const Projects = () => {
                                         <div className="pt-3 border-t border-gray-100">
                                             <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Trích yếu</p>
                                             <p className="text-sm text-gray-700 leading-relaxed">{previewDoc.trichYeu}</p>
+                                        </div>
+                                    )}
+                                    {/* Tệp đính kèm */}
+                                    {((previewDoc?.attachments?.length || 0) + (previewDoc?.dinhKem?.length || 0)) > 0 && (
+                                        <div className="pt-3 border-t border-gray-100">
+                                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                                <Paperclip className="w-3 h-3" />
+                                                Tệp đính kèm ({(previewDoc?.attachments?.length || 0) + (previewDoc?.dinhKem?.length || 0)})
+                                            </p>
+                                            <div className="space-y-1.5">
+                                                {previewDoc?.attachments?.map((att: any, idx: number) => (
+                                                    <a
+                                                        key={`prev-att-${idx}`}
+                                                        href={att.webViewLink}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="flex items-center gap-2 text-xs text-blue-600 hover:bg-blue-50 px-2 py-1.5 rounded-lg transition-colors border border-transparent hover:border-blue-200"
+                                                        title={att.fileName || att.originalName}
+                                                    >
+                                                        <FileText className="w-3.5 h-3.5 shrink-0 text-blue-500" />
+                                                        <span className="truncate flex-1">{att.fileName || att.originalName}</span>
+                                                        {att.fileSize && <span className="text-[10px] text-blue-400 shrink-0">{(att.fileSize / 1024).toFixed(0)} KB</span>}
+                                                    </a>
+                                                ))}
+                                                {previewDoc?.dinhKem?.map((att: any, idx: number) => (
+                                                    <div
+                                                        key={`prev-dk-${idx}`}
+                                                        className="flex items-center gap-2 text-xs text-gray-600 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                                                        title={att.fileName || att.name}
+                                                    >
+                                                        <FileText className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+                                                        <span className="truncate flex-1">{att.fileName || att.name}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
