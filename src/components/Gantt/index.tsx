@@ -141,7 +141,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
                 actualStartDate: taskData.actualStartDate || null,
                 actualEndDate: taskData.actualEndDate || null,
                 linkedDocumentIds: taskData.linkedDocumentIds || [],
-                order: taskData.order || (isNew ? flatTasks.length : 0),
+                order: taskData.order !== undefined ? taskData.order : (isNew ? flatTasks.length : 0),
             };
 
             await ganttService.saveTask(finalTask);
@@ -209,7 +209,9 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
             const siblings = flatTasks
                 .filter(t => t.parentId === task.parentId)
                 .sort((a, b) => {
-                    if (a.order !== b.order) return (a.order || 0) - (b.order || 0);
+                    const orderA = a.order !== undefined ? a.order : 0;
+                    const orderB = b.order !== undefined ? b.order : 0;
+                    if (orderA !== orderB) return orderA - orderB;
                     const dateA = a.plannedStartDate ? new Date(a.plannedStartDate).getTime() : 0;
                     const dateB = b.plannedStartDate ? new Date(b.plannedStartDate).getTime() : 0;
                     if (dateA !== dateB) return dateA - dateB;
@@ -219,6 +221,8 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
             const currentIndex = siblings.findIndex(t => t.id === task.id);
             if (currentIndex === -1) return;
 
+            let updated = false;
+
             if (direction === 'up' && currentIndex > 0) {
                 // Assign index-based orders to all siblings to ensure no collisions
                 siblings.forEach((s, idx) => { s.order = idx; });
@@ -226,13 +230,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
                 // Swap
                 siblings[currentIndex].order = currentIndex - 1;
                 siblings[currentIndex - 1].order = currentIndex;
-
-                // Save all siblings sequentially (or in Promise.all)
-                await Promise.all(siblings.map(s => ganttService.saveTask(s)));
-                
-                // Update state by re-rolling up
-                setFlatTasks(rollupParentDates([...flatTasks]));
-                toast.success('Đã di chuyển lên');
+                updated = true;
             } else if (direction === 'down' && currentIndex < siblings.length - 1) {
                 // Assign index-based orders
                 siblings.forEach((s, idx) => { s.order = idx; });
@@ -240,11 +238,18 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
                 // Swap
                 siblings[currentIndex].order = currentIndex + 1;
                 siblings[currentIndex + 1].order = currentIndex;
+                updated = true;
+            }
 
-                await Promise.all(siblings.map(s => ganttService.saveTask(s)));
-                
+            if (updated) {
+                // Optimistic UI Update
                 setFlatTasks(rollupParentDates([...flatTasks]));
-                toast.success('Đã di chuyển xuống');
+                
+                // Save to background
+                Promise.all(siblings.map(s => ganttService.saveTask(s))).catch(err => {
+                    console.error("Lỗi khi lưu vị trí:", err);
+                    toast.error('Có lỗi xảy ra khi lưu vị trí');
+                });
             }
         } catch (error) {
             console.error(error);
