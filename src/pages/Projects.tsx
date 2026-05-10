@@ -145,20 +145,8 @@ export const Projects = () => {
     const nodeLinksWithDocs = useMemo(() => {
         if (!selectedNodeId) return [];
 
-        // Lấy danh sách tất cả node con cháu (đệ quy)
-        const getAllDescendantIds = (parentId: string): string[] => {
-            const children = allNodes.filter(n => n.parentId === parentId);
-            let ids = children.map(c => c.id);
-            children.forEach(c => {
-                ids = [...ids, ...getAllDescendantIds(c.id)];
-            });
-            return ids;
-        };
-
-        const targetNodeIds = [selectedNodeId, ...getAllDescendantIds(selectedNodeId)];
-
-        // Lấy các link của các node trong targetNodeIds
-        const relevantLinks = allLinks.filter(l => targetNodeIds.includes(l.nodeId));
+        // Lấy các link của node hiện tại (chỉ văn bản đính kèm trực tiếp)
+        const relevantLinks = allLinks.filter(l => l.nodeId === selectedNodeId);
 
         const unsortedDocs = relevantLinks.map(link => {
             const docData = allDocs.find(d => d.id === link.vanBanId);
