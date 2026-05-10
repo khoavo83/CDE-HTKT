@@ -582,7 +582,6 @@ export const Projects = () => {
     const handleExportExcel = () => {
         if (!selectedNodeId) return;
 
-        // Tìm node gốc đang chọn trong tree
         const findNodeInTree = (nodes: NodeTreeItem[], id: string): NodeTreeItem | null => {
             for (const n of nodes) {
                 if (n.id === id) return n;
@@ -594,71 +593,81 @@ export const Projects = () => {
         const rootNode = findNodeInTree(treeData, selectedNodeId);
         if (!rootNode) return;
 
-        const rows: any[] = [];
+        // Headers: STT | Hạng mục / Mục con | Ngày bắt đầu | Ngày kết thúc | Số Ký hiệu | Ngày ban hành | Cơ quan ban hành | Văn bản pháp lý | Số trang | Link Google Drive
+        const HEADERS = ['STT', 'Hạng mục / Mục con', 'Ngày bắt đầu', 'Ngày kết thúc', 'Số Ký hiệu', 'Ngày ban hành', 'Cơ quan ban hành', 'Văn bản pháp lý', 'Số trang', 'Link Google Drive'];
+        const COL_COUNT = HEADERS.length;
+
+        // Mảng chứa các dòng dữ liệu thô (mỗi dòng là 1 mảng giá trị)
+        const dataRows: any[][] = [];
+        // Mảng chứa outline level cho mỗi dòng (dùng để group trong Excel)
+        const outlineLevels: number[] = [];
+        // Mảng đánh dấu dòng nào là dòng hạng mục (để bold)
+        const isNodeRow: boolean[] = [];
+
         let stt = 0;
 
-        // Đệ quy duyệt cây
+        // Tạo chuỗi "Văn bản pháp lý" theo cấu trúc chuẩn
+        const buildPhapLy = (d: any): string => {
+            const parts: string[] = [];
+            if (d.loaiVanBan) parts.push(d.loaiVanBan);
+            if (d.soKyHieu) parts.push(`số ${d.soKyHieu}`);
+            if (d.ngayBanHanh) {
+                const [y, m, dd] = d.ngayBanHanh.split('-');
+                parts.push(`ngày ${parseInt(dd)} tháng ${parseInt(m)} năm ${y}`);
+            }
+            if (d.coQuanBanHanh) parts.push(`của ${d.coQuanBanHanh}`);
+            if (d.trichYeu) parts.push(`${d.trichYeu}`);
+            return parts.join(' ');
+        };
+
+        // Đệ quy duyệt cây — tạo dòng riêng cho mỗi node và mỗi văn bản
         const traverseNode = (node: NodeTreeItem, level: number, prefix: string) => {
-            const indent = '  '.repeat(level);
-            const nodeLabel = `${indent}${prefix ? prefix + ' ' : ''}${node.name}`;
+            // === DÒNG HẠNG MỤC / MỤC CON ===
+            stt++;
+            const nodeLabel = `${prefix ? prefix + ' ' : ''}${node.name}`;
+            const driveFolder = node.driveFolderLink || '';
 
-            // Lấy các văn bản đính kèm trực tiếp vào node này
+            dataRows.push([
+                stt,
+                nodeLabel,
+                node.startDate ? node.startDate.split('-').reverse().join('/') : '',
+                node.endDate ? node.endDate.split('-').reverse().join('/') : '',
+                '', '', '', '', '',
+                driveFolder
+            ]);
+            outlineLevels.push(level);
+            isNodeRow.push(true);
+
+            // === CÁC DÒNG VĂN BẢN ĐÍNH KÈM ===
             const nodeDocLinks = allLinks.filter(l => l.nodeId === node.id);
-            const linkedDocs = nodeDocLinks.map(link => {
-                return allDocs.find(d => d.id === link.vanBanId);
-            }).filter((d): d is any => d !== null);
+            const linkedDocs = nodeDocLinks.map(link => allDocs.find(d => d.id === link.vanBanId)).filter((d): d is any => d !== null);
 
-            // Sắp xếp văn bản theo ngày ban hành
             linkedDocs.sort((a, b) => {
                 const dateA = a.ngayBanHanh ? new Date(a.ngayBanHanh).getTime() : 0;
                 const dateB = b.ngayBanHanh ? new Date(b.ngayBanHanh).getTime() : 0;
                 return dateA - dateB;
             });
 
-            if (linkedDocs.length === 0) {
-                // Node không có văn bản — vẫn ghi 1 dòng để hiển thị cấu trúc
+            linkedDocs.forEach(d => {
                 stt++;
-                rows.push({
-                    'STT': stt,
-                    'Hạng mục / Mục con': nodeLabel,
-                    'Loại': getTypeName(node.type),
-                    'Trạng thái': node.status === 'ACTIVE' ? 'Đang hoạt động' : node.status === 'COMPLETED' ? 'Đã hoàn thành' : 'Tạm dừng',
-                    'Ngày bắt đầu': node.startDate ? node.startDate.split('-').reverse().join('/') : '',
-                    'Ngày kết thúc': node.endDate ? node.endDate.split('-').reverse().join('/') : '',
-                    'Loại Văn bản': '',
-                    'Số Ký hiệu': '',
-                    'Ngày ban hành': '',
-                    'Cơ quan ban hành': '',
-                    'Trích yếu nội dung': '',
-                    'Số trang': '',
-                    'Dung lượng': '',
-                    'Link Google Drive': node.driveFolderLink || '',
-                });
-            } else {
-                // Node có văn bản — ghi mỗi văn bản 1 dòng, dòng đầu kèm tên node
-                linkedDocs.forEach((d, i) => {
-                    stt++;
-                    const driveLink = d.driveFileId_Original
-                        ? `https://drive.google.com/file/d/${d.driveFileId_Original}/view`
-                        : (d.driveFileId ? `https://drive.google.com/file/d/${d.driveFileId}/view` : '');
-                    rows.push({
-                        'STT': stt,
-                        'Hạng mục / Mục con': i === 0 ? nodeLabel : '',
-                        'Loại': i === 0 ? getTypeName(node.type) : '',
-                        'Trạng thái': i === 0 ? (node.status === 'ACTIVE' ? 'Đang hoạt động' : node.status === 'COMPLETED' ? 'Đã hoàn thành' : 'Tạm dừng') : '',
-                        'Ngày bắt đầu': i === 0 ? (node.startDate ? node.startDate.split('-').reverse().join('/') : '') : '',
-                        'Ngày kết thúc': i === 0 ? (node.endDate ? node.endDate.split('-').reverse().join('/') : '') : '',
-                        'Loại Văn bản': d.loaiVanBan || '',
-                        'Số Ký hiệu': d.soKyHieu || '',
-                        'Ngày ban hành': d.ngayBanHanh ? isoToVN(d.ngayBanHanh) : '',
-                        'Cơ quan ban hành': d.coQuanBanHanh || '',
-                        'Trích yếu nội dung': d.trichYeu || '',
-                        'Số trang': d.soTrang || '',
-                        'Dung lượng': formatBytes(d.fileSize),
-                        'Link Google Drive': driveLink,
-                    });
-                });
-            }
+                const driveLink = d.driveFileId_Original
+                    ? `https://drive.google.com/file/d/${d.driveFileId_Original}/view`
+                    : (d.driveFileId ? `https://drive.google.com/file/d/${d.driveFileId}/view` : '');
+
+                dataRows.push([
+                    stt,
+                    '',  // Không ghi tên hạng mục — dòng này thuộc về node phía trên
+                    '', '',
+                    d.soKyHieu || '',
+                    d.ngayBanHanh ? isoToVN(d.ngayBanHanh) : '',
+                    d.coQuanBanHanh || '',
+                    buildPhapLy(d),
+                    d.soTrang || '',
+                    driveLink
+                ]);
+                outlineLevels.push(level + 1);  // Văn bản nằm sâu hơn node 1 cấp
+                isNodeRow.push(false);
+            });
 
             // Đệ quy con
             node.children.forEach((child, idx) => {
@@ -669,30 +678,49 @@ export const Projects = () => {
 
         traverseNode(rootNode, 0, '');
 
-        if (rows.length === 0) {
+        if (dataRows.length === 0) {
             toast.error('Không có dữ liệu để xuất.');
             return;
         }
 
-        // Tạo workbook
-        const ws = utils.json_to_sheet(rows);
+        // Tạo worksheet từ mảng AoA (Array of Arrays)
+        const aoa: any[][] = [HEADERS, ...dataRows];
+        const ws = utils.aoa_to_sheet(aoa);
+
+        // Ghi HYPERLINK formula cho cột Link Google Drive (cột J = index 9)
+        const driveColIdx = 9;  // Cột J (0-indexed)
+        for (let r = 0; r < dataRows.length; r++) {
+            const url = dataRows[r][driveColIdx];
+            if (url && typeof url === 'string' && url.startsWith('http')) {
+                const cellRef = utils.encode_cell({ r: r + 1, c: driveColIdx }); // +1 vì dòng 0 là header
+                ws[cellRef] = {
+                    t: 's',
+                    f: `HYPERLINK("${url}","Mở trên Drive")`
+                };
+            }
+        }
+
+        // Đặt outline level cho mỗi dòng (grouping)
+        if (!ws['!rows']) ws['!rows'] = [];
+        for (let r = 0; r < dataRows.length; r++) {
+            ws['!rows'][r + 1] = { level: outlineLevels[r], hidden: false };
+        }
+        // Mặc định hiển thị nút group bên trên (SummaryBelow = false)
+        if (!ws['!outline']) (ws as any)['!outline'] = {};
+        (ws as any)['!outline'] = { above: true, left: true };
 
         // Đặt độ rộng cột hợp lý
         ws['!cols'] = [
             { wch: 5 },   // STT
-            { wch: 40 },  // Hạng mục
-            { wch: 14 },  // Loại
-            { wch: 16 },  // Trạng thái
-            { wch: 12 },  // Ngày bắt đầu
-            { wch: 12 },  // Ngày kết thúc
-            { wch: 16 },  // Loại Văn bản
+            { wch: 45 },  // Hạng mục / Mục con
+            { wch: 13 },  // Ngày bắt đầu
+            { wch: 13 },  // Ngày kết thúc
             { wch: 20 },  // Số Ký hiệu
             { wch: 14 },  // Ngày ban hành
-            { wch: 30 },  // Cơ quan ban hành
-            { wch: 50 },  // Trích yếu
+            { wch: 28 },  // Cơ quan ban hành
+            { wch: 80 },  // Văn bản pháp lý (chuỗi dài)
             { wch: 8 },   // Số trang
-            { wch: 12 },  // Dung lượng
-            { wch: 50 },  // Link Drive
+            { wch: 20 },  // Link Drive
         ];
 
         const wb = utils.book_new();
