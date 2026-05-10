@@ -134,6 +134,10 @@ export const MainLayout = () => {
 
                 <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
                     {visibleItems.map((item) => {
+                        const Icon = ICON_MAP[item.icon] || FileText;
+                        const isActive = location.pathname === item.path;
+                        const isComingSoon = item.status === 'coming_soon';
+
                         if (isComingSoon) {
                             if (user.role === 'admin') {
                                 return (
