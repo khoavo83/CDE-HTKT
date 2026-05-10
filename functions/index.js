@@ -645,7 +645,7 @@ exports.uploadFileToDriveBase64 = onCall({ timeoutSeconds: 300 }, async (request
 // ==========================================
 // PHASE 4: GẮN VĂN BẢN VÀO NHÁNH (Mindmap Node)
 // ==========================================
-exports.attachDocumentToNode = onCall({ timeoutSeconds: 60 }, async (request) => {
+exports.attachDocumentToNode = onCall({ timeoutSeconds: 120 }, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để thực hiện thao tác này.");
     }
@@ -665,6 +665,7 @@ exports.attachDocumentToNode = onCall({ timeoutSeconds: 60 }, async (request) =>
         const nodeData = nodeDoc.data();
 
         let copiedFileId = null;
+        const attachmentShortcutIds = []; // Lưu ID các shortcut đính kèm
 
         // 3. Link file to Node's Drive Folder via Shortcut
         if (nodeData.driveFolderId && vbData.driveFileId_Original) {
@@ -680,6 +681,7 @@ exports.attachDocumentToNode = onCall({ timeoutSeconds: 60 }, async (request) =>
                 return { success: true, linkId: existingLinksQuery.docs[0].id, isDuplicate: true };
             }
 
+            // 3a. Tạo shortcut cho file chính
             try {
                 const res = await drive.files.create({
                     supportsAllDrives: true,
@@ -690,10 +692,58 @@ exports.attachDocumentToNode = onCall({ timeoutSeconds: 60 }, async (request) =>
                         parents: [nodeData.driveFolderId]
                     }
                 });
-                copiedFileId = res.data.id; // Lưu ID của shortcut vừa tạo, không phải ID file gốc
+                copiedFileId = res.data.id;
                 console.log(`Created shortcut ${copiedFileId} in Node Folder: ${nodeData.driveFolderId}`);
             } catch (err) {
                 console.error(`Error creating shortcut for node: ${err.message}`);
+            }
+
+            // 3b. Tạo shortcut cho các file đính kèm (attachments - có driveFileId)
+            if (vbData.attachments && Array.isArray(vbData.attachments)) {
+                for (const att of vbData.attachments) {
+                    if (att.driveFileId) {
+                        try {
+                            const attName = (att.fileName || att.originalName || "DinhKem") + " (Shortcut)";
+                            const attRes = await drive.files.create({
+                                supportsAllDrives: true,
+                                requestBody: {
+                                    name: attName,
+                                    mimeType: 'application/vnd.google-apps.shortcut',
+                                    shortcutDetails: { targetId: att.driveFileId },
+                                    parents: [nodeData.driveFolderId]
+                                }
+                            });
+                            attachmentShortcutIds.push(attRes.data.id);
+                            console.log(`[ATTACH] Created attachment shortcut: ${attName} -> ${attRes.data.id}`);
+                        } catch (err) {
+                            console.error(`[ATTACH] Error creating attachment shortcut for ${att.driveFileId}: ${err.message}`);
+                        }
+                    }
+                }
+            }
+
+            // 3c. Tạo shortcut cho các file đính kèm legacy (dinhKem - có driveFileId)
+            if (vbData.dinhKem && Array.isArray(vbData.dinhKem)) {
+                for (const dk of vbData.dinhKem) {
+                    if (dk.driveFileId) {
+                        try {
+                            const dkName = (dk.fileName || dk.name || "DinhKem_Legacy") + " (Shortcut)";
+                            const dkRes = await drive.files.create({
+                                supportsAllDrives: true,
+                                requestBody: {
+                                    name: dkName,
+                                    mimeType: 'application/vnd.google-apps.shortcut',
+                                    shortcutDetails: { targetId: dk.driveFileId },
+                                    parents: [nodeData.driveFolderId]
+                                }
+                            });
+                            attachmentShortcutIds.push(dkRes.data.id);
+                            console.log(`[ATTACH] Created dinhKem shortcut: ${dkName} -> ${dkRes.data.id}`);
+                        } catch (err) {
+                            console.error(`[ATTACH] Error creating dinhKem shortcut for ${dk.driveFileId}: ${err.message}`);
+                        }
+                    }
+                }
             }
         }
 
@@ -705,10 +755,14 @@ exports.attachDocumentToNode = onCall({ timeoutSeconds: 60 }, async (request) =>
             nodeId: nodeId,
             projectId: projectId,
             createdAt: new Date().toISOString(),
-            driveShortcutId: copiedFileId // Lưu ID của file gốc mà shortcut trỏ tới
+            driveShortcutId: copiedFileId, // Shortcut file chính
+            attachmentShortcutIds: attachmentShortcutIds // Shortcut các file đính kèm
         });
 
-        return { success: true, linkId: linkRef.id };
+        const totalShortcuts = (copiedFileId ? 1 : 0) + attachmentShortcutIds.length;
+        console.log(`[ATTACH] Done. Created ${totalShortcuts} shortcuts total (1 main + ${attachmentShortcutIds.length} attachments)`);
+
+        return { success: true, linkId: linkRef.id, shortcutsCreated: totalShortcuts };
 
     } catch (error) {
         console.error("attachDocumentToNode Error:", error);
@@ -717,9 +771,9 @@ exports.attachDocumentToNode = onCall({ timeoutSeconds: 60 }, async (request) =>
 });
 
 /**
- * Xóa liên kết văn bản với cấu trúc dự án và xóa Drive Shortcut tương ứng
+ * Xóa liên kết văn bản với cấu trúc dự án và xóa Drive Shortcut tương ứng (bao gồm cả đính kèm)
  */
-exports.removeDocumentLink = onCall({ timeoutSeconds: 60 }, async (request) => {
+exports.removeDocumentLink = onCall({ timeoutSeconds: 120 }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để thực hiện thao tác này.");
 
     try {
@@ -742,30 +796,45 @@ exports.removeDocumentLink = onCall({ timeoutSeconds: 60 }, async (request) => {
 
         const drive = await getDriveService();
         const driveFolderId = nodeSnap.exists ? nodeSnap.data().driveFolderId : null;
-        const targetFileId = vbSnap.exists ? vbSnap.data().driveFileId_Original : null;
+        const vbData = vbSnap.exists ? vbSnap.data() : null;
 
-        // 2. Dọn dẹp triệt để trên Drive
-        if (driveFolderId && targetFileId) {
-            try {
-                // Tìm tất cả shortcut trong thư mục này trỏ tới file gốc đó
-                const listRes = await drive.files.list({
-                    q: `'${driveFolderId}' in parents and mimeType = 'application/vnd.google-apps.shortcut' and trashed = false`,
-                    fields: 'files(id, shortcutDetails)',
-                    supportsAllDrives: true,
-                    includeItemsFromAllDrives: true
-                });
+        // 2. Dọn dẹp triệt để trên Drive (file chính + tất cả đính kèm)
+        if (driveFolderId && vbData) {
+            // Thu thập tất cả target file IDs cần xóa shortcut
+            const targetIds = new Set();
+            if (vbData.driveFileId_Original) targetIds.add(vbData.driveFileId_Original);
+            if (vbData.attachments && Array.isArray(vbData.attachments)) {
+                vbData.attachments.forEach(att => { if (att.driveFileId) targetIds.add(att.driveFileId); });
+            }
+            if (vbData.dinhKem && Array.isArray(vbData.dinhKem)) {
+                vbData.dinhKem.forEach(dk => { if (dk.driveFileId) targetIds.add(dk.driveFileId); });
+            }
 
-                const shortcutsToDelete = listRes.data.files.filter(f => f.shortcutDetails && f.shortcutDetails.targetId === targetFileId);
+            if (targetIds.size > 0) {
+                try {
+                    // Tìm tất cả shortcut trong thư mục này
+                    const listRes = await drive.files.list({
+                        q: `'${driveFolderId}' in parents and mimeType = 'application/vnd.google-apps.shortcut' and trashed = false`,
+                        fields: 'files(id, shortcutDetails)',
+                        supportsAllDrives: true,
+                        includeItemsFromAllDrives: true
+                    });
 
-                if (shortcutsToDelete.length > 0) {
-                    console.log(`[REMOVE LINK] Found ${shortcutsToDelete.length} shortcuts to cleanup in folder ${driveFolderId}`);
-                    await Promise.all(shortcutsToDelete.map(f =>
-                        drive.files.delete({ fileId: f.id, supportsAllDrives: true })
-                            .catch(e => console.error(`Failed to delete shortcut ${f.id}:`, e.message))
-                    ));
+                    // Lọc shortcut trỏ tới bất kỳ target nào (file chính hoặc đính kèm)
+                    const shortcutsToDelete = listRes.data.files.filter(f =>
+                        f.shortcutDetails && targetIds.has(f.shortcutDetails.targetId)
+                    );
+
+                    if (shortcutsToDelete.length > 0) {
+                        console.log(`[REMOVE LINK] Found ${shortcutsToDelete.length} shortcuts to cleanup (main + attachments) in folder ${driveFolderId}`);
+                        await Promise.all(shortcutsToDelete.map(f =>
+                            drive.files.delete({ fileId: f.id, supportsAllDrives: true })
+                                .catch(e => console.error(`Failed to delete shortcut ${f.id}:`, e.message))
+                        ));
+                    }
+                } catch (err) {
+                    console.error("[REMOVE LINK] Drive cleanup failed:", err.message);
                 }
-            } catch (err) {
-                console.error("[REMOVE LINK] Drive cleanup failed:", err.message);
             }
         }
 

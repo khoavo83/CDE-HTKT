@@ -195,7 +195,8 @@ export const Projects = () => {
             if ((result as any).data?.isDuplicate) {
                 toast.error("Văn bản này đã được đính kèm vào nhánh này từ trước!");
             } else {
-                toast.success("Đã đính kèm văn bản thành công.");
+                const shortcutsCreated = (result as any).data?.shortcutsCreated || 0;
+                toast.success(`Đã đính kèm văn bản thành công.${shortcutsCreated > 1 ? ` (${shortcutsCreated} lối tắt Drive gồm cả đính kèm)` : ''}`);
             }
 
             setIsAttachDocModalOpen(false);
