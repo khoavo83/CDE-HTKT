@@ -789,15 +789,15 @@ export const Projects = () => {
 
                                 {nodeLinksWithDocs.length > 0 ? (
                                     <div className="border border-gray-200 rounded-lg overflow-x-auto bg-white shadow-sm">
-                                        <table className="w-full text-left text-sm text-gray-600 table-fixed min-w-[500px]">
+                                        <table className="w-full text-left text-sm text-gray-600 table-auto min-w-[1000px]">
                                             <thead className="bg-gray-50 text-gray-700 font-medium border-b border-gray-200">
                                                 <tr>
                                                     <th className="px-3 py-2.5 w-12 text-center"></th>
                                                     <th className="px-4 py-2.5 whitespace-nowrap">Loại Văn bản</th>
                                                     <th className="px-4 py-2.5 whitespace-nowrap">Số Ký hiệu</th>
                                                     <th className="px-4 py-2.5 whitespace-nowrap">Ngày ban hành</th>
-                                                    <th className="px-4 py-2.5 whitespace-nowrap">Cơ quan ban hành</th>
-                                                    <th className="px-4 py-2.5 min-w-[200px]">Trích yếu nội dung</th>
+                                                    <th className="px-4 py-2.5 min-w-[150px]">Cơ quan ban hành</th>
+                                                    <th className="px-4 py-2.5 min-w-[300px]">Trích yếu nội dung</th>
                                                     <th className="px-4 py-2.5 whitespace-nowrap text-center">Số trang</th>
                                                     <th className="px-4 py-2.5 whitespace-nowrap text-center">Dung lượng</th>
                                                     <th className="px-3 py-2.5 w-16 text-center">Thao tác</th>
@@ -826,9 +826,9 @@ export const Projects = () => {
                                                             </td>
                                                             <td className="px-4 py-3 leading-relaxed text-gray-700 whitespace-nowrap" title={d.soKyHieu}>{d.soKyHieu || '--'}</td>
                                                             <td className="px-4 py-3 text-gray-600 font-medium whitespace-nowrap">{isoToVN(d.ngayBanHanh)}</td>
-                                                            <td className="px-4 py-3 leading-relaxed text-gray-700 whitespace-nowrap" title={d.coQuanBanHanh}>{d.coQuanBanHanh || '--'}</td>
-                                                            <td className="px-4 py-3 leading-relaxed text-gray-700" title={d.trichYeu}>
-                                                                <p className="line-clamp-2 text-sm">{d.trichYeu || '--'}</p>
+                                                            <td className="px-4 py-3 leading-relaxed text-gray-700 break-words" title={d.coQuanBanHanh}>{d.coQuanBanHanh || '--'}</td>
+                                                            <td className="px-4 py-3 leading-relaxed text-gray-700 break-words" title={d.trichYeu}>
+                                                                {d.trichYeu || '--'}
                                                             </td>
                                                             <td className="px-4 py-3 text-gray-500 text-center font-medium whitespace-nowrap">{d.soTrang || '--'}</td>
                                                             <td className="px-4 py-3 text-gray-500 text-center font-medium whitespace-nowrap">{formatBytes(d.fileSize)}</td>
