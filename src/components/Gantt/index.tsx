@@ -203,6 +203,55 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
         }
     };
 
+    const handleMoveTask = async (task: GanttTask, direction: 'up' | 'down') => {
+        try {
+            // Find siblings and sort them by current order, fallback to plannedStartDate
+            const siblings = flatTasks
+                .filter(t => t.parentId === task.parentId)
+                .sort((a, b) => {
+                    if (a.order !== b.order) return (a.order || 0) - (b.order || 0);
+                    const dateA = a.plannedStartDate ? new Date(a.plannedStartDate).getTime() : 0;
+                    const dateB = b.plannedStartDate ? new Date(b.plannedStartDate).getTime() : 0;
+                    if (dateA !== dateB) return dateA - dateB;
+                    return a.name.localeCompare(b.name);
+                });
+
+            const currentIndex = siblings.findIndex(t => t.id === task.id);
+            if (currentIndex === -1) return;
+
+            if (direction === 'up' && currentIndex > 0) {
+                // Assign index-based orders to all siblings to ensure no collisions
+                siblings.forEach((s, idx) => { s.order = idx; });
+                
+                // Swap
+                siblings[currentIndex].order = currentIndex - 1;
+                siblings[currentIndex - 1].order = currentIndex;
+
+                // Save all siblings sequentially (or in Promise.all)
+                await Promise.all(siblings.map(s => ganttService.saveTask(s)));
+                
+                // Update state by re-rolling up
+                setFlatTasks(rollupParentDates([...flatTasks]));
+                toast.success('Đã di chuyển lên');
+            } else if (direction === 'down' && currentIndex < siblings.length - 1) {
+                // Assign index-based orders
+                siblings.forEach((s, idx) => { s.order = idx; });
+                
+                // Swap
+                siblings[currentIndex].order = currentIndex + 1;
+                siblings[currentIndex + 1].order = currentIndex;
+
+                await Promise.all(siblings.map(s => ganttService.saveTask(s)));
+                
+                setFlatTasks(rollupParentDates([...flatTasks]));
+                toast.success('Đã di chuyển xuống');
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error('Có lỗi xảy ra khi di chuyển');
+        }
+    };
+
     // Compute timeline date range based on tasks and viewMode
     const { timelineStartDate, timelineEndDate, pixelsPerDay } = useMemo(() => {
         const allDates: Date[] = [];
@@ -357,6 +406,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
                     onAddTask={handleOpenAddTask}
                     onEditTask={handleOpenEditTask}
                     onToggleComplete={handleToggleComplete}
+                    onMoveTask={handleMoveTask}
                 />
                  <GanttTimeline 
                     timelineRef={timelineRef}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { GanttTask } from './types';
 import { VisibleGanttTask } from './utils';
-import { ChevronRight, ChevronDown, AlignLeft, Plus, Edit2, PlusCircle, CheckCircle2, Circle } from 'lucide-react';
+import { ChevronRight, ChevronDown, AlignLeft, Plus, Edit2, PlusCircle, CheckCircle2, Circle, ArrowUp, ArrowDown } from 'lucide-react';
 import { isAfter, isBefore, differenceInDays } from 'date-fns';
 
 interface GanttSidebarProps {
@@ -11,9 +11,10 @@ interface GanttSidebarProps {
     onAddTask: (parentId?: string | null) => void;
     onEditTask: (task: GanttTask) => void;
     onToggleComplete: (task: GanttTask) => void;
+    onMoveTask: (task: GanttTask, direction: 'up' | 'down') => void;
 }
 
-export const GanttSidebar: React.FC<GanttSidebarProps> = ({ tasks, expandedIds, onToggleExpand, onAddTask, onEditTask, onToggleComplete }) => {
+export const GanttSidebar: React.FC<GanttSidebarProps> = ({ tasks, expandedIds, onToggleExpand, onAddTask, onEditTask, onToggleComplete, onMoveTask }) => {
     const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
 
     const renderTaskRow = (task: VisibleGanttTask) => {
@@ -115,6 +116,20 @@ export const GanttSidebar: React.FC<GanttSidebarProps> = ({ tasks, expandedIds, 
                 {/* Action buttons (shown on hover) */}
                 {isHovered && (
                     <div className="task-actions absolute right-2 flex items-center gap-1 bg-white/90 px-1 rounded shadow-sm border border-indigo-100">
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onMoveTask(task, 'up'); }}
+                            className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                            title="Di chuyển lên"
+                        >
+                            <ArrowUp size={13} />
+                        </button>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onMoveTask(task, 'down'); }}
+                            className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                            title="Di chuyển xuống"
+                        >
+                            <ArrowDown size={13} />
+                        </button>
                         <button 
                             onClick={(e) => { e.stopPropagation(); onAddTask(task.id); }}
                             className="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
