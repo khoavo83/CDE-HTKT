@@ -497,7 +497,6 @@ exports.onDocumentStatusUpdate = onDocumentUpdated("vanban/{docId}", async (even
 
             if (newValue.driveFileId_Original) {
                 await moveFile(newValue.driveFileId_Original, newFileName, targetFolderId);
-                await event.data.after.ref.update({ fileNameStandardized: newFileName });
             }
 
             // 2. Move & Auto-Rename Attachments (Legacy dinhKem and New attachments)
@@ -545,15 +544,22 @@ exports.onDocumentStatusUpdate = onDocumentUpdated("vanban/{docId}", async (even
 
             // Xử lý cả 2 mảng (cũ và mới)
             const updatedDinhKem = await handleAttachments(newValue.dinhKem, 'dinhKem');
-            if (updatedDinhKem) {
-                await event.data.after.ref.update({ dinhKem: newValue.dinhKem });
-            }
-
             const updatedAttachments = await handleAttachments(newValue.attachments, 'attachments');
-            if (updatedAttachments) {
-                await event.data.after.ref.update({ attachments: newValue.attachments });
-            }
 
+            // [FIX] Gộp tất cả writes ngược vào 1 lần update duy nhất → tránh trigger thừa
+            const updatePayload = {};
+            if (newValue.driveFileId_Original) {
+                updatePayload.fileNameStandardized = newFileName;
+            }
+            if (updatedDinhKem) {
+                updatePayload.dinhKem = newValue.dinhKem;
+            }
+            if (updatedAttachments) {
+                updatePayload.attachments = newValue.attachments;
+            }
+            if (Object.keys(updatePayload).length > 0) {
+                await event.data.after.ref.update(updatePayload);
+            }
 
             console.log(`Auto-Processed Main File ${newValue.driveFileId_Original} by moving directly to target folder.`);
         } catch (error) {
@@ -1338,29 +1344,34 @@ exports.updateNodeColorOnTaskChange = onDocumentWritten("tasks/{taskId}", async 
 
     try {
         const tasksSnap = await db.collection("tasks").where("lienKetNodeId", "==", nodeId).get();
-        if (tasksSnap.empty) {
-            // Không còn Task nào -> trả về màu trắng mặc định
-            await db.collection("project_nodes").doc(nodeId).update({ mauSac: "#ffffff" });
-            return { success: true, color: "#ffffff" };
-        }
-
-        let doneCount = 0;
-        let totalCount = 0;
-
-        tasksSnap.forEach(doc => {
-            totalCount++;
-            if (doc.data().trangThai === "DONE") doneCount++;
-        });
 
         let newColor = "#ffffff";
-        if (doneCount === totalCount && totalCount > 0) {
-            newColor = "#bbf7d0"; // Xanh lá mạ (Đã xong 100%)
-        } else if (doneCount > 0) {
-            newColor = "#fef08a"; // Vàng nhạt (Đang tiến hành)
+        if (!tasksSnap.empty) {
+            let doneCount = 0;
+            let totalCount = 0;
+            tasksSnap.forEach(doc => {
+                totalCount++;
+                if (doc.data().trangThai === "DONE") doneCount++;
+            });
+
+            if (doneCount === totalCount && totalCount > 0) {
+                newColor = "#bbf7d0"; // Xanh lá mạ (Đã xong 100%)
+            } else if (doneCount > 0) {
+                newColor = "#fef08a"; // Vàng nhạt (Đang tiến hành)
+            }
+        }
+
+        // [FIX] Kiểm tra mauSac hiện tại trước khi update - tránh trigger thừa
+        const nodeDoc = await db.collection("project_nodes").doc(nodeId).get();
+        if (!nodeDoc.exists) return null;
+        const currentColor = nodeDoc.data().mauSac || "#ffffff";
+        if (currentColor === newColor) {
+            console.log(`[SKIP] Node ${nodeId} color already ${newColor}, skipping update`);
+            return { success: true, color: newColor, skipped: true };
         }
 
         await db.collection("project_nodes").doc(nodeId).update({ mauSac: newColor });
-        console.log(`Updated Node ${nodeId} color to ${newColor} (Progress: ${doneCount}/${totalCount})`);
+        console.log(`Updated Node ${nodeId} color to ${newColor}`);
 
         return { success: true, color: newColor };
     } catch (e) {
@@ -1511,97 +1522,87 @@ exports.onProjectNodeCreated = onDocumentCreated("project_nodes/{nodeId}", async
     }
 });
 
-// 2. Chỉnh sửa Node -> Đổi tên Folder trên Drive (bao gồm khi thay đổi vị trí/thứ tự)
-exports.onProjectNodeUpdated = onDocumentUpdated("project_nodes/{nodeId}", async (event) => {
+// 2. Chỉnh sửa Node -> Đổi tên Folder trên Drive
+// [FIX VÒNG LẶP] Chỉ xử lý khi name hoặc parentId thay đổi thực sự.
+// KHÔNG rename siblings để tránh cascade trigger vô hạn.
+// Số thứ tự Drive sẽ chỉ cập nhật khi chạy syncDriveStructure thủ công.
+exports.onProjectNodeUpdated = onDocumentUpdated({
+    document: "project_nodes/{nodeId}",
+    memory: "512MiB"
+}, async (event) => {
     const newValue = event.data.after.data();
     const previousValue = event.data.before.data();
     const nodeId = event.params.nodeId;
 
-    const nameChanged = newValue.name !== previousValue.name;
-    const orderChanged = newValue.order !== previousValue.order;
-    const parentChanged = newValue.parentId !== previousValue.parentId;
-
-    // Bỏ qua các thao tác dành cho TASK (Vì không có Folder Drive)
+    // Bỏ qua TASK (không có Folder Drive)
     if (newValue.type === 'TASK') return;
 
-    // Chỉ xử lý khi có thay đổi liên quan đến tên/vị trí
-    if (!nameChanged && !orderChanged && !parentChanged) return;
+    // [GUARD] Chỉ xử lý khi name hoặc parentId thay đổi thực sự
+    // Bỏ qua: order, mauSac, driveFolderId, driveFolderLink, mindmapLayout, status, description...
+    const nameChanged = newValue.name !== previousValue.name;
+    const parentChanged = newValue.parentId !== previousValue.parentId;
+
+    if (!nameChanged && !parentChanged) {
+        console.log(`[SKIP] onProjectNodeUpdated ${nodeId}: no name/parent change`);
+        return;
+    }
+
+    console.log(`[RUN] onProjectNodeUpdated ${nodeId}: nameChanged=${nameChanged}, parentChanged=${parentChanged}`);
 
     try {
         const drive = await getDriveService();
 
-        // Hàm helper đổi tên 1 node trên Drive
-        const renameNodeOnDrive = async (nId, nName, nDriveFolderId) => {
-            if (!nDriveFolderId) return;
+        // Chỉ rename chính node này (KHÔNG rename siblings)
+        if (nameChanged && newValue.driveFolderId) {
             try {
-                const expected = await getNumberedNodeName(nId, nName);
+                const expected = await getNumberedNodeName(nodeId, newValue.name);
                 await drive.files.update({
-                    fileId: nDriveFolderId,
+                    fileId: newValue.driveFolderId,
                     resource: { name: expected }
                 });
-                // [MỚI ĐÃ XÓA] Đảm bảo Admin có quyền sau khi đổi tên (Master Admin mặc định)
-                // await ensureAdminPermission(drive, nDriveFolderId);
-                console.log(`Đã đồng bộ tên Drive cho Node ${nId}: ${expected}`);
+                console.log(`Đã đồng bộ tên Drive cho Node ${nodeId}: ${expected}`);
             } catch (err) {
-                console.error(`Lỗi đổi tên Drive Node ${nId}:`, err.message);
+                console.error(`Lỗi đổi tên Drive Node ${nodeId}:`, err.message);
             }
-        };
+        }
 
-        // 1. Đổi tên chính node hiện tại
-        await renameNodeOnDrive(nodeId, newValue.name, newValue.driveFolderId);
-
-        // 2. Nếu thứ tự hoặc vị trí cha thay đổi -> đồng bộ tất cả anh em cùng cấp
-        if (orderChanged || parentChanged) {
-            const nodesSnap = await db.collection("project_nodes").get();
-            const allNodes = nodesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-            // Tìm tất cả siblings (cùng parentId với node mới)
-            const currentParentId = newValue.parentId || null;
-            const siblings = allNodes.filter(n =>
-                n.id !== nodeId && (n.parentId || null) === currentParentId && n.driveFolderId
-            );
-
-            for (const sib of siblings) {
-                await renameNodeOnDrive(sib.id, sib.name, sib.driveFolderId);
-            }
-
-            // Nếu đổi cha (di chuyển), cũng phải cập nhật siblings ở vị trí cha cũ
-            if (parentChanged) {
-                const oldParentId = previousValue.parentId || null;
-                const oldSiblings = allNodes.filter(n =>
-                    n.id !== nodeId && (n.parentId || null) === oldParentId && n.driveFolderId
-                );
-                for (const sib of oldSiblings) {
-                    await renameNodeOnDrive(sib.id, sib.name, sib.driveFolderId);
+        // Nếu đổi cha → di chuyển folder trên Drive + rename chính nó
+        if (parentChanged && newValue.driveFolderId) {
+            // Rename lại chính nó (vì số thứ tự thay đổi khi đổi parent)
+            if (!nameChanged) {
+                try {
+                    const expected = await getNumberedNodeName(nodeId, newValue.name);
+                    await drive.files.update({
+                        fileId: newValue.driveFolderId,
+                        resource: { name: expected }
+                    });
+                    console.log(`Đã đồng bộ tên Drive cho Node ${nodeId}: ${expected}`);
+                } catch (err) {
+                    console.error(`Lỗi đổi tên Drive Node ${nodeId}:`, err.message);
                 }
+            }
 
-                // Di chuyển folder trên Drive sang thư mục cha mới
-                if (newValue.driveFolderId) {
-                    let newParentDriveId = await getProjectsRootFolderId();
-                    if (newValue.parentId) {
-                        const parentDoc = await db.collection("project_nodes").doc(newValue.parentId).get();
-                        if (parentDoc.exists && parentDoc.data().driveFolderId) {
-                            newParentDriveId = parentDoc.data().driveFolderId;
-                        }
-                    }
-                    if (newParentDriveId) {
-                        try {
-                            // Lấy parent hiện tại trên Drive
-                            const file = await drive.files.get({ fileId: newValue.driveFolderId, fields: 'parents' });
-                            const previousParents = (file.data.parents || []).join(',');
-                            await drive.files.update({
-                                fileId: newValue.driveFolderId,
-                                addParents: newParentDriveId,
-                                removeParents: previousParents,
-                                fields: 'id, parents'
-                            });
-                            // [MỚI ĐÃ XÓA] Đảm bảo Admin có quyền sau khi di chuyển thư mục cha
-                            // await ensureAdminPermission(drive, newValue.driveFolderId);
-                            console.log(`Đã di chuyển folder Drive ${newValue.driveFolderId} sang cha mới ${newParentDriveId}`);
-                        } catch (moveErr) {
-                            console.error("Lỗi di chuyển folder Drive:", moveErr.message);
-                        }
-                    }
+            // Di chuyển folder sang thư mục cha mới
+            let newParentDriveId = await getProjectsRootFolderId();
+            if (newValue.parentId) {
+                const parentDoc = await db.collection("project_nodes").doc(newValue.parentId).get();
+                if (parentDoc.exists && parentDoc.data().driveFolderId) {
+                    newParentDriveId = parentDoc.data().driveFolderId;
+                }
+            }
+            if (newParentDriveId) {
+                try {
+                    const file = await drive.files.get({ fileId: newValue.driveFolderId, fields: 'parents' });
+                    const previousParents = (file.data.parents || []).join(',');
+                    await drive.files.update({
+                        fileId: newValue.driveFolderId,
+                        addParents: newParentDriveId,
+                        removeParents: previousParents,
+                        fields: 'id, parents'
+                    });
+                    console.log(`Đã di chuyển folder Drive ${newValue.driveFolderId} sang cha mới ${newParentDriveId}`);
+                } catch (moveErr) {
+                    console.error("Lỗi di chuyển folder Drive:", moveErr.message);
                 }
             }
         }
@@ -1637,24 +1638,27 @@ exports.onVanBanUpdated = onDocumentUpdated("vanban/{vanBanId}", async (event) =
     const newVal = event.data.after.data();
     const oldVal = event.data.before.data();
 
-    // Nếu fileNameOriginal thay đổi
-    if (newVal.fileNameOriginal && newVal.fileNameOriginal !== oldVal.fileNameOriginal) {
-        try {
-            const drive = await getDriveService();
-            const fileId = newVal.driveFileId_Original || newVal.driveId || newVal.fileId;
-            if (fileId) {
-                // Rename file gốc
-                await drive.files.update({
-                    fileId: fileId,
-                    requestBody: {
-                        name: newVal.fileNameOriginal
-                    }
-                });
-                console.log(`Đổi tên file gốc Drive thành công: ${newVal.fileNameOriginal}`);
-            }
-        } catch (e) {
-            console.error("Lỗi cập nhật tên file vanban trên Drive:", e);
+    // [FIX] Bỏ qua nếu fileNameOriginal không thay đổi (tránh trigger thừa khi
+    // onDocumentStatusUpdate ghi ngược fileNameStandardized/dinhKem/attachments)
+    if (!newVal.fileNameOriginal || newVal.fileNameOriginal === oldVal.fileNameOriginal) {
+        return;
+    }
+
+    try {
+        const drive = await getDriveService();
+        const fileId = newVal.driveFileId_Original || newVal.driveId || newVal.fileId;
+        if (fileId) {
+            // Rename file gốc
+            await drive.files.update({
+                fileId: fileId,
+                requestBody: {
+                    name: newVal.fileNameOriginal
+                }
+            });
+            console.log(`Đổi tên file gốc Drive thành công: ${newVal.fileNameOriginal}`);
         }
+    } catch (e) {
+        console.error("Lỗi cập nhật tên file vanban trên Drive:", e);
     }
 });
 
