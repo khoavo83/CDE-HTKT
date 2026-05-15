@@ -397,8 +397,6 @@ exports.processDocumentOCR = onCall({ region: 'asia-southeast1', timeoutSeconds:
             docId: targetDocId,
             data: documentData
         };
-
-        return { success: true, docId: newDocId, data: documentData };
     } catch (error) {
         console.error("processDocumentOCR Error:", error);
         throw new HttpsError("internal", error.message);
@@ -1139,7 +1137,7 @@ exports.syncDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) => 
         let count = 0;
         const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-        const syncNodeRecursive = async (parentId, driveParentId, level = 0, prefix = "") => {
+        const syncNodeRecursive = async (parentId, driveParentId, level = 0, prefix = '') => {
             // Lọc con và sắp xếp theo order/createdAt để nhất quán với Frontend
             const children = nodes.filter(n => {
                 const pId = n.parentId === "" ? null : (n.parentId || null);
@@ -1206,14 +1204,14 @@ exports.syncDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) => 
 
                 // Tiếp tục đệ quy cho các con - RESET prefix nếu đây là cấp Dự án gốc (level 0)
                 if (currentDriveId) {
-                    const isRoot = !prefix; // Trong code này, prefix "" tương ứng cấp 0
-                    await syncNodeRecursive(node.id, currentDriveId, isRoot ? "" : currentPrefix);
+                    // Truyền đúng 4 tham số: parentId, driveParentId, level, prefix
+                    await syncNodeRecursive(node.id, currentDriveId, level + 1, level === 0 ? '' : currentPrefix);
                 }
             }
         };
 
         // Gọi hàm đệ quy để bắt đầu tạo/cập nhật cấu trúc
-        await syncNodeRecursive(null, folders.projectsRootId);
+        await syncNodeRecursive(null, folders.projectsRootId, 0, '');
 
         // 3. Đồng bộ Tệp tin Văn bản (SỬ DỤNG LINK - MULTI-PARENT)
         const docsSnap = await db.collection("vanban").get();
