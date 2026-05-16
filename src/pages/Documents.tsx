@@ -61,7 +61,7 @@ export const Documents = () => {
     const navigate = useNavigate();
     const [docs, setDocs] = useState<any[]>([]);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-    const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
+    const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>({ key: 'ngayBanHanh', direction: 'desc' });
     const [activeTab, setActiveTab] = useState<'ALL' | 'INCOMING' | 'OUTGOING' | 'UNSORTED' | 'SORTED' | 'PROCESSING'>('ALL');
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
