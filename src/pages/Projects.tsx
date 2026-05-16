@@ -14,6 +14,7 @@ import { moveToTrash } from '../utils/trashUtils';
 import { isoToVN, formatBytes } from '../utils/formatVN';
 import { GenericConfirmModal } from '../components/GenericConfirmModal';
 import ExcelJS from 'exceljs';
+import { DocumentPreviewModal } from '../components/DocumentPreviewModal';
 
 
 interface ProjectNode {
@@ -912,8 +913,8 @@ export const Projects = () => {
             </div>
 
             <div className="flex-1 flex flex-col md:flex-row gap-3 md:gap-6 min-h-0">
-                {/* Left Pane: Tree View - full width on mobile, 1/3 on desktop */}
-                <div className={`${selectedNodeId ? 'hidden md:flex' : 'flex'} md:w-1/3 md:min-w-[300px] bg-white rounded-xl shadow-sm border border-gray-200 flex-col overflow-hidden`}>
+                {/* Left Pane: Tree View - full width on mobile, 1/4 on md, 1/3 on lg */}
+                <div className={`${selectedNodeId ? 'hidden md:flex' : 'flex'} md:w-1/4 md:min-w-[240px] lg:w-1/3 lg:min-w-[300px] xl:w-1/4 bg-white rounded-xl shadow-sm border border-gray-200 flex-col overflow-hidden`}>
                     <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between shrink-0">
                         <h2 className="font-semibold text-gray-800">Cây Thư mục</h2>
                     </div>
@@ -940,28 +941,28 @@ export const Projects = () => {
                                 <ArrowLeft className="w-4 h-4" />
                                 Quay lại cây thư mục
                             </button>
-                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 md:gap-4 mb-4 md:mb-6">
-                                <div className="flex items-center gap-3 min-w-0">
-                                    <div className="p-2 md:p-3 bg-blue-50 rounded-lg shrink-0">
+                            <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4 mb-4 md:mb-6">
+                                <div className="flex items-start md:items-center gap-3 min-w-0 flex-1">
+                                    <div className="p-2 md:p-3 bg-blue-50 rounded-lg shrink-0 mt-1 md:mt-0">
                                         {getTypeIcon(selectedNode.type)}
                                     </div>
-                                    <div className="min-w-0">
-                                        <h2 className="text-lg md:text-2xl font-bold text-gray-900 truncate">{selectedNode.name}</h2>
+                                    <div className="min-w-0 flex-1">
+                                        <h2 className="text-lg md:text-2xl font-bold text-gray-900 truncate" title={selectedNode.name}>{selectedNode.name}</h2>
                                         <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                            <span className="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+                                            <span className="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 whitespace-nowrap">
                                                 {getTypeName(selectedNode.type)}
                                             </span>
                                             {selectedNode.status === 'ACTIVE' ? (
-                                                <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600">
+                                                <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 whitespace-nowrap">
                                                     <CheckCircle className="w-3.5 h-3.5" /> <span className="hidden md:inline">Đang hoạt động</span>
                                                 </span>
                                             ) : (
-                                                <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500">
+                                                <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 whitespace-nowrap">
                                                     <Clock className="w-3.5 h-3.5" /> <span className="hidden md:inline">{selectedNode.status === 'COMPLETED' ? 'Đã hoàn thành' : 'Tạm dừng'}</span>
                                                 </span>
                                             )}
                                             <span className="hidden md:inline text-gray-300 mx-0.5">|</span>
-                                            <span className="hidden md:inline-flex items-center gap-1 text-xs text-gray-500">
+                                            <span className="hidden md:inline-flex items-center gap-1 text-xs text-gray-500 whitespace-nowrap">
                                                 <Calendar className="w-3 h-3" /> {selectedNode.startDate ? selectedNode.startDate.split('-').reverse().join('/') : '--'} → {selectedNode.endDate ? selectedNode.endDate.split('-').reverse().join('/') : '--'}
                                             </span>
                                         </div>
@@ -970,7 +971,7 @@ export const Projects = () => {
                                 <div className="flex flex-wrap gap-2 shrink-0">
                                     <Link
                                         to={`/gantt/${selectedNode.id}`}
-                                        className="flex items-center gap-2 bg-indigo-50 text-indigo-700 font-medium px-3 md:px-4 py-2 rounded-md hover:bg-indigo-100 transition-colors text-sm"
+                                        className="flex items-center gap-2 bg-indigo-50 text-indigo-700 font-medium px-3 md:px-4 py-2 rounded-md hover:bg-indigo-100 transition-colors text-sm whitespace-nowrap"
                                         title="Sơ đồ Gantt"
                                     >
                                         <BarChart3 className="w-4 h-4" />
@@ -981,7 +982,7 @@ export const Projects = () => {
                                             href={selectedNode.driveFolderLink}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="flex items-center gap-2 bg-emerald-50 text-emerald-700 font-medium px-3 md:px-4 py-2 rounded-md hover:bg-emerald-100 transition-colors text-sm"
+                                            className="flex items-center gap-2 bg-emerald-50 text-emerald-700 font-medium px-3 md:px-4 py-2 rounded-md hover:bg-emerald-100 transition-colors text-sm whitespace-nowrap"
                                             title="Mở trên Drive"
                                         >
                                             <HardDrive className="w-4 h-4" />
@@ -991,7 +992,7 @@ export const Projects = () => {
                                     {isAdminOrManager && (
                                         <button
                                             onClick={(e) => handleAddNode(e, selectedNode.id)}
-                                            className="flex items-center gap-2 bg-blue-50 text-blue-700 font-medium px-3 md:px-4 py-2 rounded-md hover:bg-blue-100 transition-colors text-sm"
+                                            className="flex items-center gap-2 bg-blue-50 text-blue-700 font-medium px-3 md:px-4 py-2 rounded-md hover:bg-blue-100 transition-colors text-sm whitespace-nowrap"
                                             title="Tạo mục con"
                                         >
                                             <Plus className="w-4 h-4" />
@@ -1000,7 +1001,7 @@ export const Projects = () => {
                                     )}
                                     <button
                                         onClick={handleExportExcel}
-                                        className="flex items-center gap-2 bg-green-50 text-green-700 font-medium px-3 md:px-4 py-2 rounded-md hover:bg-green-100 transition-colors text-sm"
+                                        className="flex items-center gap-2 bg-green-50 text-green-700 font-medium px-3 md:px-4 py-2 rounded-md hover:bg-green-100 transition-colors text-sm whitespace-nowrap"
                                         title="Xuất Excel"
                                     >
                                         <Download className="w-4 h-4" />
@@ -1021,7 +1022,7 @@ export const Projects = () => {
                                     <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
                                         <h3 className="text-lg font-semibold text-gray-900">Danh sách Thư mục con <span className="ml-2 text-sm font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{childNodes.length}</span></h3>
                                     </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                                         {childNodes.map((child, index) => (
                                             <div 
                                                 key={child.id} 
@@ -1093,27 +1094,29 @@ export const Projects = () => {
 
                             {/* Danh sách Văn bản */}
                             <div className="mb-8">
-                                <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
+                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4 border-b border-gray-100 pb-2">
                                     <h3 className="text-lg font-semibold text-gray-900">Danh sách Văn bản <span className="ml-2 text-sm font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{nodeLinksWithDocs.length}</span></h3>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
                                         <button
                                             onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-                                            className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 font-medium px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors text-sm shadow-sm"
+                                            className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 font-medium px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors text-sm shadow-sm whitespace-nowrap shrink-0"
                                             title="Sắp xếp theo ngày ban hành"
                                         >
-                                            <ArrowUpDown className="w-3.5 h-3.5" /> Sắp xếp {sortOrder === 'asc' ? 'cũ nhất' : 'mới nhất'}
+                                            <ArrowUpDown className="w-3.5 h-3.5 shrink-0" /> Sắp xếp {sortOrder === 'asc' ? 'cũ nhất' : 'mới nhất'}
                                         </button>
                                         <button
                                             onClick={() => setIsAttachDocModalOpen(true)}
-                                            className="flex items-center gap-1.5 bg-white border border-gray-200 text-blue-600 hover:text-blue-700 hover:border-blue-300 font-medium px-3 py-1.5 rounded-md hover:bg-blue-50 transition-colors text-sm shadow-sm"
+                                            className="flex items-center gap-1.5 bg-white border border-gray-200 text-blue-600 hover:text-blue-700 hover:border-blue-300 font-medium px-3 py-1.5 rounded-md hover:bg-blue-50 transition-colors text-sm shadow-sm whitespace-nowrap shrink-0"
                                         >
-                                            <LinkIcon className="w-3.5 h-3.5" /> Đính kèm Văn bản
+                                            <LinkIcon className="w-3.5 h-3.5 shrink-0" /> Đính kèm Văn bản
                                         </button>
                                     </div>
                                 </div>
 
                                 {nodeLinksWithDocs.length > 0 ? (
-                                    <div className="border border-gray-200 rounded-lg overflow-x-auto bg-white shadow-sm">
+                                    <>
+                                    {/* Màn hình lớn: Bảng dữ liệu */}
+                                    <div className="hidden lg:block border border-gray-200 rounded-lg overflow-x-auto bg-white shadow-sm">
                                         <table className="w-full text-left text-sm text-gray-600 table-auto min-w-[1000px]">
                                             <thead className="bg-gray-50 text-gray-700 font-medium border-b border-gray-200">
                                                 <tr>
@@ -1224,6 +1227,102 @@ export const Projects = () => {
                                             </tbody>
                                         </table>
                                     </div>
+
+                                    {/* Màn hình nhỏ: Dạng Card (Larkbase style) */}
+                                    <div className="lg:hidden flex flex-col gap-4">
+                                        {nodeLinksWithDocs.map(d => {
+                                            const { Icon, bg, color } = getDocIconConfig(d);
+                                            const attCount = (d.attachments?.length || 0) + (d.dinhKem?.length || 0);
+                                            return (
+                                                <div key={`card-${d.linkId}`} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:border-blue-400 transition-colors relative">
+                                                    {/* Header card */}
+                                                    <div className="flex items-start justify-between gap-3 mb-3">
+                                                        <div className="flex items-start gap-3 min-w-0">
+                                                            <button
+                                                                onClick={() => setPreviewDocId(d.id)}
+                                                                className={`shrink-0 flex items-center justify-center w-10 h-10 rounded-lg ${bg} ${color} shadow-sm`}
+                                                                title="Xem nội dung văn bản"
+                                                            >
+                                                                <Icon className="w-5 h-5" />
+                                                            </button>
+                                                            <div className="min-w-0">
+                                                                <h4 
+                                                                    className="font-bold text-gray-900 text-sm leading-tight mb-1 line-clamp-2" 
+                                                                    title={d.trichYeu}
+                                                                >
+                                                                    {d.trichYeu || 'Không có trích yếu'}
+                                                                </h4>
+                                                                <div className="flex items-center gap-2 flex-wrap text-[11px] text-gray-500">
+                                                                    <span className="font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">Số: {d.soKyHieu || '--'}</span>
+                                                                    <span>Ngày: {isoToVN(d.ngayBanHanh)}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => handleRemoveDocLink(d.linkId)}
+                                                            disabled={!!isRemovingId}
+                                                            className="shrink-0 text-gray-400 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 disabled:opacity-50"
+                                                            title="Gỡ văn bản khỏi mục này"
+                                                        >
+                                                            {isRemovingId === d.linkId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
+                                                        </button>
+                                                    </div>
+                                                    
+                                                    {/* Nội dung phụ */}
+                                                    <div className="grid grid-cols-2 gap-2 text-xs mb-3 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                                        <div className="min-w-0">
+                                                            <span className="text-gray-400 block mb-0.5 text-[10px] uppercase font-semibold">Loại văn bản</span>
+                                                            <div className="font-medium text-gray-700 flex items-center gap-1 truncate" title={d.loaiVanBan}>
+                                                                {d.phanLoaiVanBan === 'OUTGOING' && <ArrowUp className={`w-3 h-3 shrink-0 ${d.mucDoKhan === 'KHAN' ? 'text-red-600' : 'text-green-600'}`} />}
+                                                                {d.phanLoaiVanBan === 'INCOMING' && <ArrowDown className={`w-3 h-3 shrink-0 ${d.mucDoKhan === 'KHAN' ? 'text-red-600' : 'text-blue-600'}`} />}
+                                                                <span className="truncate">{d.loaiVanBan || '--'}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <span className="text-gray-400 block mb-0.5 text-[10px] uppercase font-semibold">Cơ quan BH</span>
+                                                            <span className="font-medium text-gray-700 truncate block" title={d.coQuanBanHanh}>{d.coQuanBanHanh || '--'}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Tệp đính kèm */}
+                                                    {attCount > 0 && (
+                                                        <div className="border-t border-gray-100 pt-3">
+                                                            <div className="flex items-center gap-1.5 mb-2">
+                                                                <Paperclip className="w-3.5 h-3.5 text-blue-500" />
+                                                                <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">Tệp đính kèm ({attCount})</span>
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {d.attachments?.map((att: any, idx: number) => (
+                                                                    <a
+                                                                        key={`att-m-${idx}`}
+                                                                        href={att.webViewLink}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="inline-flex items-center gap-1 text-[11px] text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-md border border-blue-200/60 max-w-full"
+                                                                        title={att.fileName || att.originalName}
+                                                                    >
+                                                                        <FileText className="w-3 h-3 shrink-0" />
+                                                                        <span className="truncate">{att.fileName || att.originalName}</span>
+                                                                    </a>
+                                                                ))}
+                                                                {d.dinhKem?.map((att: any, idx: number) => (
+                                                                    <div
+                                                                        key={`dk-m-${idx}`}
+                                                                        className="inline-flex items-center gap-1 text-[11px] text-gray-600 bg-gray-100 px-2 py-1 rounded-md border border-gray-200/60 max-w-full"
+                                                                        title={att.fileName || att.name}
+                                                                    >
+                                                                        <FileText className="w-3 h-3 shrink-0" />
+                                                                        <span className="truncate">{att.fileName || att.name}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    </>
                                 ) : (
                                     <div className="text-center py-8 bg-gray-50 border border-dashed border-gray-200 rounded-lg text-gray-500 text-sm flex flex-col items-center">
                                         <FileText className="w-8 h-8 text-gray-300 mb-2" />
@@ -1454,167 +1553,13 @@ export const Projects = () => {
                 )
             }
 
-            {/* Document Preview Modal */}
-            {
-                previewDocId && (
-                    <div
-                        className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/70 backdrop-blur-sm"
-                        onClick={(e) => { if (e.target === e.currentTarget) setPreviewDocId(null); }}
-                    >
-                        <div className="bg-white rounded-none md:rounded-2xl shadow-2xl w-full md:max-w-6xl h-full md:h-[92vh] md:mx-4 flex flex-col overflow-hidden">
-
-                            {/* Header */}
-                            <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 bg-gray-50 shrink-0">
-                                <div className="flex items-center gap-3 min-w-0">
-                                    {previewDoc && (() => {
-                                        const { Icon, bg, color } = getDocIconConfig(previewDoc);
-                                        return (
-                                            <span className={`w - 9 h - 9 rounded - lg ${bg} ${color} flex items - center justify - center shrink - 0`}>
-                                                <Icon className="w-5 h-5" />
-                                            </span>
-                                        );
-                                    })()}
-                                    <div className="min-w-0">
-                                        <h3 className="font-bold text-gray-900 truncate">
-                                            {previewDoc?.loaiVanBan || ''} {previewDoc?.soKyHieu || previewDoc?.fileNameOriginal || 'Văn bản'}
-                                        </h3>
-                                        <p className="text-xs text-gray-500 truncate">
-                                            {previewDoc?.coQuanBanHanh && <span>{previewDoc.coQuanBanHanh}</span>}
-                                            {previewDoc?.ngayBanHanh && <span> • {previewDoc.ngayBanHanh.split('-').reverse().join('/')}</span>}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0 ml-4">
-                                    {previewDoc?.storageUrl ? (
-                                        <a
-                                            href={previewDoc.storageUrl} target="_blank" rel="noopener noreferrer"
-                                            className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 border border-blue-200 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors font-medium"
-                                        >
-                                            <ExternalLink className="w-3.5 h-3.5" /> Mở gốc
-                                        </a>
-                                    ) : previewDoc?.driveFileId_Original ? (
-                                        <a
-                                            href={"https://drive.google.com/file/d/" + previewDoc.driveFileId_Original + "/view"} target="_blank" rel="noopener noreferrer"
-                                            className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 border border-blue-200 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors font-medium"
-                                        >
-                                            <ExternalLink className="w-3.5 h-3.5" /> Mở gốc
-                                        </a>
-                                    ) : null}
-                                    <button
-                                        onClick={() => setPreviewDocId(null)}
-                                        className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-                                        title="Đóng"
-                                    >
-                                        <X className="w-5 h-5 text-gray-500" />
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Body: Meta Left + Preview Right */}
-                            <div className="flex flex-1 overflow-hidden">
-
-                                {/* Left: Metadata - hidden on mobile */}
-                                <div className="hidden md:block w-72 shrink-0 border-r border-gray-200 overflow-y-auto p-5 space-y-4 bg-white">
-                                    {[
-                                        { label: 'Loại Văn bản', value: previewDoc?.loaiVanBan },
-                                        { label: 'Số Ký hiệu', value: previewDoc?.soKyHieu },
-                                        { label: 'Ngày ban hành', value: previewDoc?.ngayBanHanh },
-                                        { label: 'Cơ quan BH', value: previewDoc?.coQuanBanHanh },
-                                        { label: 'Người ký', value: previewDoc?.nguoiKy },
-                                        { label: 'Số trang', value: previewDoc?.soTrang },
-                                    ].map(({ label, value }) => value ? (
-                                        <div key={label}>
-                                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">{label}</p>
-                                            <p className="text-sm text-gray-800 font-medium">{value}</p>
-                                        </div>
-                                    ) : null)}
-                                    {previewDoc?.trichYeu && (
-                                        <div className="pt-3 border-t border-gray-100">
-                                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Trích yếu</p>
-                                            <p className="text-sm text-gray-700 leading-relaxed">{previewDoc.trichYeu}</p>
-                                        </div>
-                                    )}
-                                    {/* Tệp đính kèm */}
-                                    {((previewDoc?.attachments?.length || 0) + (previewDoc?.dinhKem?.length || 0)) > 0 && (
-                                        <div className="pt-3 border-t border-gray-100">
-                                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                                                <Paperclip className="w-3 h-3" />
-                                                Tệp đính kèm ({(previewDoc?.attachments?.length || 0) + (previewDoc?.dinhKem?.length || 0)})
-                                            </p>
-                                            <div className="space-y-1.5">
-                                                {previewDoc?.attachments?.map((att: any, idx: number) => (
-                                                    <a
-                                                        key={`prev-att-${idx}`}
-                                                        href={att.webViewLink}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="flex items-center gap-2 text-xs text-blue-600 hover:bg-blue-50 px-2 py-1.5 rounded-lg transition-colors border border-transparent hover:border-blue-200"
-                                                        title={att.fileName || att.originalName}
-                                                    >
-                                                        <FileText className="w-3.5 h-3.5 shrink-0 text-blue-500" />
-                                                        <span className="truncate flex-1">{att.fileName || att.originalName}</span>
-                                                        {att.fileSize && <span className="text-[10px] text-blue-400 shrink-0">{(att.fileSize / 1024).toFixed(0)} KB</span>}
-                                                    </a>
-                                                ))}
-                                                {previewDoc?.dinhKem?.map((att: any, idx: number) => (
-                                                    <div
-                                                        key={`prev-dk-${idx}`}
-                                                        className="flex items-center gap-2 text-xs text-gray-600 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
-                                                        title={att.fileName || att.name}
-                                                    >
-                                                        <FileText className="w-3.5 h-3.5 shrink-0 text-gray-400" />
-                                                        <span className="truncate flex-1">{att.fileName || att.name}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Right: File Preview */}
-                                <div className="flex-1 flex flex-col bg-gray-100 overflow-hidden">
-                                    {(() => {
-                                        const previewUrl = previewDoc?.storageUrl || null;
-                                        const drivePreviewUrl = previewDoc?.driveFileId_Original
-                                            ? `https://drive.google.com/file/d/${previewDoc.driveFileId_Original}/preview`
-                                            : null;
-
-                                        if (previewUrl) {
-                                            if (previewDoc?.fileNameOriginal?.toLowerCase().endsWith('.pdf')) {
-                                                return <iframe src={previewUrl} className="flex-1 border-none w-full h-full" title="PDF Preview" />;
-                                            }
-                                            return (
-                                                <div className="flex-1 flex items-center justify-center p-6 overflow-auto">
-                                                    <img src={previewUrl} alt="Xem trước" className="max-w-full max-h-full object-contain shadow-lg rounded-lg" />
-                                                </div>
-                                            );
-                                        }
-                                        if (drivePreviewUrl) {
-                                            return (
-                                                <iframe
-                                                    src={drivePreviewUrl}
-                                                    className="w-full h-full flex-1 border-none"
-                                                    allow="autoplay"
-                                                    title="Google Drive Preview"
-                                                />
-                                            );
-                                        }
-                                        return (
-                                            <div className="flex-1 flex flex-col items-center justify-center gap-4 text-gray-500">
-                                                <FileText className="w-16 h-16 text-gray-300" />
-                                                <div className="text-center">
-                                                    <p className="font-semibold text-gray-700">{previewDoc?.fileNameOriginal || 'Không rõ tên file'}</p>
-                                                    <p className="text-sm text-gray-400 mt-1">Văn bản này chưa có tệp đính kèm để xem trước</p>
-                                                </div>
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
+            {/* Document Preview Modal - sử dụng Component chung */}
+            {previewDoc && (
+                <DocumentPreviewModal
+                    doc={previewDoc}
+                    onClose={() => setPreviewDocId(null)}
+                />
+            )}
             {/* isReportModalOpen and taskToReport related logic removed as per instruction */}
 
             <DeleteConfirmModal

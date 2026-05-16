@@ -1,5 +1,6 @@
 import React from 'react';
-import { X, FileText, ExternalLink, Paperclip } from 'lucide-react';
+import { X, FileText, ExternalLink, Paperclip, Edit } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { getDocIconConfig, getDocFormattedTitle } from '../utils/docUtils';
 
 interface DocumentPreviewModalProps {
@@ -16,12 +17,18 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ doc:
         ? `https://drive.google.com/file/d/${previewDoc.driveFileId_Original}/preview`
         : null;
 
+    // Gom cả attachments và dinhKem thành 1 danh sách
+    const allAttachments = [
+        ...(previewDoc.attachments || []),
+        ...(previewDoc.dinhKem || []),
+    ];
+
     return (
         <div
             className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/70 backdrop-blur-sm"
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[92vh] mx-4 flex flex-col overflow-hidden">
+            <div className="bg-white rounded-none md:rounded-2xl shadow-2xl w-full md:max-w-6xl h-full md:h-[92vh] md:mx-4 flex flex-col overflow-hidden">
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 bg-gray-50 shrink-0">
                     <div className="flex items-center gap-3 min-w-0">
@@ -49,7 +56,11 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ doc:
                                 <ExternalLink className="w-3.5 h-3.5" /> Mở gốc
                             </a>
                         ) : null}
-                        <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-lg transition-colors">
+                        <Link to={`/documents/${previewDoc.id}`}
+                            className="flex items-center gap-1.5 text-sm text-indigo-600 border border-indigo-200 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors font-medium">
+                            <Edit className="w-3.5 h-3.5" /> Chỉnh sửa
+                        </Link>
+                        <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-lg transition-colors ml-1">
                             <X className="w-5 h-5 text-gray-500" />
                         </button>
                     </div>
@@ -57,8 +68,8 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ doc:
 
                 {/* Body */}
                 <div className="flex flex-1 overflow-hidden">
-                    {/* Left: Metadata */}
-                    <div className="w-72 shrink-0 border-r border-gray-200 overflow-y-auto p-5 space-y-4 bg-white">
+                    {/* Left: Metadata - hidden on mobile */}
+                    <div className="hidden md:block w-72 shrink-0 border-r border-gray-200 overflow-y-auto p-5 space-y-4 bg-white">
                         {[
                             { label: 'Loại Văn bản', value: previewDoc.loaiVanBan },
                             { label: 'Số Ký hiệu', value: previewDoc.soKyHieu },
@@ -79,35 +90,53 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ doc:
                             </div>
                         )}
 
-                        {/* Tệp đính kèm (Attachments) */}
-                        {previewDoc.attachments && previewDoc.attachments.length > 0 && (
+                        {/* Tệp đính kèm (Attachments + dinhKem) */}
+                        {allAttachments.length > 0 && (
                             <div className="pt-4 border-t border-gray-100">
                                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                                    <Paperclip className="w-3 h-3 text-gray-500" /> Tệp đính kèm ({previewDoc.attachments.length})
+                                    <Paperclip className="w-3 h-3 text-gray-500" /> Tệp đính kèm ({allAttachments.length})
                                 </p>
                                 <div className="space-y-2">
-                                    {previewDoc.attachments.map((file: any) => (
-                                        <a
-                                            key={file.id || file.driveFileId}
-                                            href={file.webViewLink || file.storageUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100 hover:bg-blue-50 hover:border-blue-200 hover:shadow-sm transition-all group"
-                                        >
-                                            <div className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center shrink-0 group-hover:border-blue-100 shadow-sm">
-                                                <FileText className="w-4 h-4 text-blue-500" />
+                                    {allAttachments.map((file: any, idx: number) => {
+                                        const fileUrl = file.webViewLink || file.storageUrl;
+                                        const fileName = file.originalName || file.fileName || file.name || 'Tệp đính kèm';
+                                        return fileUrl ? (
+                                            <a
+                                                key={file.id || file.driveFileId || `att-${idx}`}
+                                                href={fileUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100 hover:bg-blue-50 hover:border-blue-200 hover:shadow-sm transition-all group"
+                                            >
+                                                <div className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center shrink-0 group-hover:border-blue-100 shadow-sm">
+                                                    <FileText className="w-4 h-4 text-blue-500" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-[11px] text-gray-700 font-bold truncate group-hover:text-blue-700" title={fileName}>
+                                                        {fileName}
+                                                    </p>
+                                                    {file.fileSize && (
+                                                        <p className="text-[9px] text-gray-400 mt-0.5">{(file.fileSize / 1024).toFixed(0)} KB</p>
+                                                    )}
+                                                </div>
+                                                <ExternalLink className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-400 shrink-0" />
+                                            </a>
+                                        ) : (
+                                            <div
+                                                key={`dk-${idx}`}
+                                                className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100"
+                                            >
+                                                <div className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center shrink-0 shadow-sm">
+                                                    <FileText className="w-4 h-4 text-gray-400" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-[11px] text-gray-600 font-bold truncate" title={fileName}>
+                                                        {fileName}
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <div className="min-w-0 flex-1">
-                                                <p className="text-[11px] text-gray-700 font-bold truncate group-hover:text-blue-700" title={file.originalName || file.fileName}>
-                                                    {file.originalName || file.fileName}
-                                                </p>
-                                                {file.fileSize && (
-                                                    <p className="text-[9px] text-gray-400 mt-0.5">{(file.fileSize / 1024).toFixed(0)} KB</p>
-                                                )}
-                                            </div>
-                                            <ExternalLink className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-400 shrink-0" />
-                                        </a>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
