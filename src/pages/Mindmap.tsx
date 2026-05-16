@@ -17,7 +17,7 @@ import 'reactflow/dist/style.css';
 import dagre from 'dagre';
 import { db } from '../firebase/config';
 import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
-import { Loader2, X, FileText, FileCheck, FileSpreadsheet, FileImage, Layers, ExternalLink, ChevronDown, Plus, Send, ArrowLeft, ZoomIn, ZoomOut, Maximize2, Clock, Search, Briefcase, FileSignature, Target, MessageSquare, Maximize, Filter } from 'lucide-react';
+import { Loader2, X, FileText, FileCheck, FileSpreadsheet, FileImage, Layers, ExternalLink, ChevronDown, Plus, Send, ArrowLeft, ZoomIn, ZoomOut, Maximize2, Clock, Search, Briefcase, FileSignature, Target, MessageSquare, Maximize, Filter, Settings } from 'lucide-react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 import { useAppSettingsStore } from '../store/useAppSettingsStore';
@@ -298,7 +298,7 @@ export const Mindmap = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    const [showDocuments, setShowDocuments] = useState(false);
+    const [showDocsForNodes, setShowDocsForNodes] = useState<Set<string>>(new Set());
     const [showTasks, setShowTasks] = useState(true);
 
     const [searchParams] = useSearchParams();
@@ -594,7 +594,7 @@ export const Mindmap = () => {
                 if (expandedIds.has(child.id)) {
                     traverse(child.id);
 
-                    if (showDocuments) {
+                    if (showDocsForNodes.has(child.id)) {
                         // Thêm Document nodes thuộc nhánh child này
                         const docs = Array.from(loadedDocsRef.current.values())
                             .filter(d => d.parentId === child.id)
@@ -614,7 +614,7 @@ export const Mindmap = () => {
         traverse(null);
 
         // Thêm Document nodes thuộc nhánh system-root (nếu có)
-        if (expandedIds.has('system-root') && showDocuments) {
+        if (expandedIds.has('system-root') && showDocsForNodes.has('system-root')) {
             const rootDocs = Array.from(loadedDocsRef.current.values())
                 .filter(d => d.parentId === 'system-root' || !d.parentId)
                 .sort((a, b) => {
@@ -632,7 +632,7 @@ export const Mindmap = () => {
         const { nodes: laidNodes, edges: laidEdges } = computeRecursiveLayout(rfNodes, rfEdges, nodeLayouts, direction);
         setNodes(laidNodes);
         setEdges(laidEdges);
-    }, [expandedIds, loadingChildrenIds, nodeLayouts, targetNodeId, setNodes, setEdges, getPrefix, settings.appName, docRevision, searchResultIds, showTasks, showDocuments]);
+    }, [expandedIds, loadingChildrenIds, nodeLayouts, targetNodeId, setNodes, setEdges, getPrefix, settings.appName, docRevision, searchResultIds, showTasks, showDocsForNodes]);
 
     // ===== Toggle Expand =====
     const handleToggleExpand = useCallback(async (nodeId: string) => {
@@ -953,38 +953,7 @@ export const Mindmap = () => {
                     </div>
                 </div>
 
-                {/* Control Toolbar */}
-                <div className="absolute top-4 right-4 z-30 flex flex-col gap-2">
-                    <button onClick={() => rfInstance?.fitView({ duration: 800, padding: 0.1 })} className="p-2 bg-white/95 backdrop-blur-sm shadow-md rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center justify-center text-gray-600 transition-all" title="Căn giữa sơ đồ (Fit View)">
-                        <Maximize className="w-5 h-5" />
-                    </button>
-                    <div className="bg-white/95 backdrop-blur-sm shadow-md rounded-lg border border-gray-200 p-2 flex flex-col gap-2 w-44">
-                        <button onClick={() => {
-                            const allNodeIds = new Set(loadedNodesRef.current.keys());
-                            allNodeIds.add('system-root');
-                            setExpandedIds(allNodeIds);
-                        }} className="text-xs font-medium text-blue-600 hover:bg-blue-50 py-1.5 px-2 rounded w-full text-left transition-colors flex items-center gap-2">
-                            <Plus className="w-3.5 h-3.5" /> Mở rộng tất cả
-                        </button>
-                        <button onClick={() => {
-                            const initialExpanded = new Set<string>();
-                            Array.from(loadedNodesRef.current.values()).filter(n => !n.parentId).forEach(r => initialExpanded.add(r.id));
-                            initialExpanded.add('system-root');
-                            setExpandedIds(initialExpanded);
-                        }} className="text-xs font-medium text-gray-600 hover:bg-gray-100 py-1.5 px-2 rounded w-full text-left transition-colors flex items-center gap-2">
-                            <ChevronDown className="w-3.5 h-3.5" /> Thu gọn tất cả
-                        </button>
-                        <div className="h-px bg-gray-200 my-1"></div>
-                        <label className="flex items-center gap-2 cursor-pointer p-1.5 hover:bg-gray-50 rounded group">
-                            <input type="checkbox" checked={showTasks} onChange={e => setShowTasks(e.target.checked)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5" />
-                            <span className="text-xs text-gray-700 font-medium group-hover:text-blue-600 transition-colors">Hiện Công việc</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer p-1.5 hover:bg-gray-50 rounded group">
-                            <input type="checkbox" checked={showDocuments} onChange={e => setShowDocuments(e.target.checked)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5" />
-                            <span className="text-xs text-gray-700 font-medium group-hover:text-blue-600 transition-colors">Hiện Văn bản</span>
-                        </label>
-                    </div>
-                </div>
+                {/* Control Toolbar Removed as it was moved to Sidebar */}
 
                 {loading && (
                     <div className="absolute inset-0 z-50 bg-white/50 backdrop-blur-sm flex items-center justify-center">
@@ -1022,34 +991,64 @@ export const Mindmap = () => {
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4">
-                        {/* Chọn loại bản đồ */}
-                        <div className="mb-8 p-3 bg-blue-50/50 rounded-xl border border-blue-100">
+                        {/* Điều khiển Sơ đồ */}
+                        <div className="mb-8 p-3 bg-blue-50/50 rounded-xl border border-blue-100 shadow-sm">
                             <h4 className="font-semibold text-blue-800 flex items-center gap-2 mb-3">
-                                <Layers className="w-4 h-4" /> Loại Sơ đồ (Map Type)
+                                <Settings className="w-4 h-4" /> Điều khiển Sơ đồ
                             </h4>
-                            <div className="grid grid-cols-2 gap-2">
-                                {[
-                                    { id: 'LR', label: 'Radial Map', desc: 'Tỏa Phải' },
-                                    { id: 'TIMELINE', label: 'Timeline', desc: 'Dọc ngang (Dự án)' },
-                                    { id: 'TB', label: 'Tree Map', desc: 'Dọc (Cây)' },
-                                    { id: 'RL', label: 'Left Map', desc: 'Tỏa Trái' },
-                                    { id: 'BT', label: 'Org-Chart', desc: 'Từ dưới lên' },
-                                ].map(type => (
-                                    <button
-                                        key={type.id}
-                                        onClick={() => handleUpdateLayoutType(type.id)}
-                                        className={`p-2 rounded-lg border text-left transition-all ${(nodeLayouts[selectedNode?.id || ''] || 'LR') === type.id
-                                            ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
-                                            : 'bg-white border-gray-200 text-gray-700 hover:border-blue-400'
-                                            }`}
-                                    >
-                                        <div className="text-xs font-bold uppercase">{type.label}</div>
-                                        <div className={`text-[10px] ${(nodeLayouts[selectedNode?.id || ''] || 'LR') === type.id ? 'text-blue-100' : 'text-gray-400'}`}>{type.desc}</div>
-                                    </button>
-                                ))}
-                            </div>
-                            <div className="mt-3 text-[10px] text-blue-500 italic">
-                                * Loại sơ đồ áp dụng cho toàn bộ đồ thị.
+                            <div className="flex flex-col gap-2">
+                                <button onClick={() => {
+                                    const allNodeIds = new Set(loadedNodesRef.current.keys());
+                                    allNodeIds.add('system-root');
+                                    setExpandedIds(allNodeIds);
+                                }} className="text-sm font-medium text-blue-600 hover:bg-blue-100 py-2 px-3 rounded-lg bg-white border border-blue-200 text-left transition-colors flex items-center gap-2 shadow-sm">
+                                    <Plus className="w-4 h-4" /> Mở rộng toàn bộ Sơ đồ
+                                </button>
+                                <button onClick={() => {
+                                    const initialExpanded = new Set<string>();
+                                    Array.from(loadedNodesRef.current.values()).filter(n => !n.parentId).forEach(r => initialExpanded.add(r.id));
+                                    initialExpanded.add('system-root');
+                                    setExpandedIds(initialExpanded);
+                                }} className="text-sm font-medium text-gray-700 hover:bg-gray-100 py-2 px-3 rounded-lg bg-white border border-gray-200 text-left transition-colors flex items-center gap-2 shadow-sm">
+                                    <ChevronDown className="w-4 h-4" /> Thu gọn toàn bộ Sơ đồ
+                                </button>
+                                <button onClick={() => rfInstance?.fitView({ duration: 800, padding: 0.1 })} className="text-sm font-medium text-gray-700 hover:bg-gray-100 py-2 px-3 rounded-lg bg-white border border-gray-200 text-left transition-colors flex items-center gap-2 shadow-sm">
+                                    <Maximize className="w-4 h-4" /> Căn giữa sơ đồ (Fit View)
+                                </button>
+                                
+                                <div className="h-px bg-blue-200 my-2"></div>
+                                
+                                <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-white rounded-lg border border-transparent hover:border-blue-200 transition-all">
+                                    <input type="checkbox" checked={showTasks} onChange={e => setShowTasks(e.target.checked)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4" />
+                                    <span className="text-sm text-gray-700 font-medium">Hiện toàn bộ Công việc (Tasks)</span>
+                                </label>
+                                
+                                {selectedNode && (
+                                    <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border hover:bg-green-100 border-green-200 bg-green-50 transition-all mt-1 shadow-sm">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={showDocsForNodes.has(selectedNode.id)} 
+                                            onChange={e => {
+                                                setShowDocsForNodes(prev => {
+                                                    const next = new Set(prev);
+                                                    if (e.target.checked) next.add(selectedNode.id);
+                                                    else next.delete(selectedNode.id);
+                                                    return next;
+                                                });
+                                                // Expand the node to show the documents immediately
+                                                if (e.target.checked) {
+                                                    setExpandedIds(prev => {
+                                                        const next = new Set(prev);
+                                                        next.add(selectedNode.id);
+                                                        return next;
+                                                    });
+                                                }
+                                            }} 
+                                            className="rounded border-green-500 text-green-600 focus:ring-green-500 w-4 h-4" 
+                                        />
+                                        <span className="text-sm text-green-800 font-semibold">Hiện Văn bản mục này lên Sơ đồ</span>
+                                    </label>
+                                )}
                             </div>
                         </div>
 
