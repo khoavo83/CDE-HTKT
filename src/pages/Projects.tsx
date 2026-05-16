@@ -107,7 +107,7 @@ export const Projects = () => {
     const [previewDocId, setPreviewDocId] = useState<string | null>(null);
 
     // State sắp xếp và gỡ văn bản
-    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [removeModalOpen, setRemoveModalOpen] = useState(false);
     const [linkToRemove, setLinkToRemove] = useState<string | null>(null);
 

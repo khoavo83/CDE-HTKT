@@ -18,6 +18,65 @@ const db = admin.firestore();
 // [MỚI] Cấu hình email Admin sẽ được toàn quyền trên Drive
 const DRIVE_ADMIN_EMAIL = "khoa.bqldsdt@gmail.com";
 
+// ==========================================
+// 🛡️ HỆ THỐNG PHÒNG THỦ CHỐNG VÒNG LẶP VÔ HẠN
+// ==========================================
+
+/**
+ * [DEFENSE 1] Global Invocation Counter
+ * Theo dõi số lần mỗi trigger function được gọi trong 1 phút.
+ * Nếu vượt ngưỡng MAX_INVOCATIONS_PER_MINUTE → tự động SKIP để chặn vòng lặp.
+ * Counter tự reset mỗi 60 giây.
+ */
+const MAX_INVOCATIONS_PER_MINUTE = 50;
+const invocationCounters = {}; // { functionName: { count, resetAt } }
+
+function checkInvocationLimit(functionName) {
+    const now = Date.now();
+    if (!invocationCounters[functionName] || now > invocationCounters[functionName].resetAt) {
+        invocationCounters[functionName] = { count: 0, resetAt: now + 60000 };
+    }
+    invocationCounters[functionName].count++;
+    const count = invocationCounters[functionName].count;
+
+    if (count > MAX_INVOCATIONS_PER_MINUTE) {
+        console.error(`🚨 [CIRCUIT BREAKER] ${functionName} đã chạy ${count} lần/phút! CHẶN để tránh vòng lặp vô hạn.`);
+        return false; // Chặn execution
+    }
+    if (count > MAX_INVOCATIONS_PER_MINUTE * 0.7) {
+        console.warn(`⚠️ [WARNING] ${functionName} đã chạy ${count}/${MAX_INVOCATIONS_PER_MINUTE} lần/phút. Gần ngưỡng giới hạn.`);
+    }
+    return true; // Cho phép execution
+}
+
+/**
+ * [DEFENSE 2] Server Write Marker
+ * Khi Cloud Functions ghi ngược vào Firestore, đánh dấu _serverUpdate = true.
+ * Các trigger khác sẽ kiểm tra field này và SKIP nếu là server-side write.
+ * Field này sẽ được xóa tự động sau khi ghi.
+ */
+const SERVER_MARKER_FIELD = '_serverUpdate';
+
+function isServerWrite(data) {
+    return data && data[SERVER_MARKER_FIELD] === true;
+}
+
+/**
+ * [DEFENSE 3] Deep Equal Check
+ * So sánh chỉ các field quan trọng để tránh trigger khi không có thay đổi thực sự.
+ */
+function hasFieldChanged(before, after, fieldName) {
+    const oldVal = before[fieldName];
+    const newVal = after[fieldName];
+    // Handle undefined/null
+    if (oldVal === undefined && newVal === undefined) return false;
+    if (oldVal === null && newVal === null) return false;
+    // Simple comparison for primitives
+    if (typeof oldVal !== 'object' || typeof newVal !== 'object') return oldVal !== newVal;
+    // JSON comparison for objects/arrays
+    return JSON.stringify(oldVal) !== JSON.stringify(newVal);
+}
+
 /**
  * Hàm hỗ trợ: Cấp quyền 'writer' cho Admin trên một file/folder cụ thể.
  * Giúp Admin có quyền xóa/sửa file dù do Service Account hay User khác tạo.
@@ -408,8 +467,17 @@ exports.processDocumentOCR = onCall({ region: 'asia-southeast1', timeoutSeconds:
 // Bước 3: Auto-Rename & Move (Khi nhấn Lưu trên WebApp -> State -> COMPLETED)
 // ==========================================
 exports.onDocumentStatusUpdate = onDocumentUpdated("vanban/{docId}", async (event) => {
+    // 🛡️ [DEFENSE] Circuit breaker
+    if (!checkInvocationLimit('onDocumentStatusUpdate')) return;
+
     const newValue = event.data.after.data();
     const previousValue = event.data.before.data();
+
+    // 🛡️ [DEFENSE] Bỏ qua server-side writes
+    if (isServerWrite(newValue)) {
+        console.log('[SKIP] onDocumentStatusUpdate: server-side write detected');
+        return;
+    }
 
     // Chỉ kích hoạt khi trạng thái chuyển từ REVIEWING -> COMPLETED
     if (previousValue.trangThaiDuLieu === "REVIEWING" && newValue.trangThaiDuLieu === "COMPLETED") {
@@ -556,7 +624,11 @@ exports.onDocumentStatusUpdate = onDocumentUpdated("vanban/{docId}", async (even
                 updatePayload.attachments = newValue.attachments;
             }
             if (Object.keys(updatePayload).length > 0) {
+                // 🛡️ [DEFENSE] Đánh dấu server-side write để trigger khác bỏ qua
+                updatePayload[SERVER_MARKER_FIELD] = true;
                 await event.data.after.ref.update(updatePayload);
+                // Xóa marker ngay sau đó (không trigger lại vì chỉ xóa 1 field)
+                await event.data.after.ref.update({ [SERVER_MARKER_FIELD]: admin.firestore.FieldValue.delete() });
             }
 
             console.log(`Auto-Processed Main File ${newValue.driveFileId_Original} by moving directly to target folder.`);
@@ -1335,6 +1407,9 @@ exports.syncDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) => 
 // PHASE 5: MINDMAP COLOR CODING (TỰ ĐỘNG ĐỔI MÀU NHÁNH THEO TASK)
 // ==========================================
 exports.updateNodeColorOnTaskChange = onDocumentWritten("tasks/{taskId}", async (event) => {
+    // 🛡️ [DEFENSE] Circuit breaker
+    if (!checkInvocationLimit('updateNodeColorOnTaskChange')) return null;
+
     // Lấy nodeId từ dữ liệu mới (hoặc dữ liệu cũ nếu bị xóa)
     const data = event.data.after.exists ? event.data.after.data() : event.data.before.data();
     const nodeId = data.lienKetNodeId;
@@ -1368,7 +1443,15 @@ exports.updateNodeColorOnTaskChange = onDocumentWritten("tasks/{taskId}", async 
             return { success: true, color: newColor, skipped: true };
         }
 
-        await db.collection("project_nodes").doc(nodeId).update({ mauSac: newColor });
+        // 🛡️ [DEFENSE] Đánh dấu server-side write
+        await db.collection("project_nodes").doc(nodeId).update({
+            mauSac: newColor,
+            [SERVER_MARKER_FIELD]: true
+        });
+        // Xóa marker
+        await db.collection("project_nodes").doc(nodeId).update({
+            [SERVER_MARKER_FIELD]: admin.firestore.FieldValue.delete()
+        });
         console.log(`Updated Node ${nodeId} color to ${newColor}`);
 
         return { success: true, color: newColor };
@@ -1439,15 +1522,20 @@ async function getProjectsRootFolderId() {
 }
 
 // Helper Function: Tính toán Tên phân cấp (Ví dụ: "1.2. Mở rộng")
+// 🛡️ [OPTIMIZED] Chỉ query các node cần thiết thay vì full-collection scan
 async function getNumberedNodeName(nodeId, nodeName) {
-    const nodesSnap = await db.collection("project_nodes").get();
-    const nodes = nodesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
+    // Bước 1: Đi ngược lên cây từ node hiện tại, chỉ fetch từng node cha
     let pathIds = [];
     let curr = nodeId;
+    const nodeCache = {}; // Cache node data trong hàm
+    
     while (curr) {
         pathIds.unshift(curr);
-        const node = nodes.find(n => n.id === curr);
+        if (!nodeCache[curr]) {
+            const snap = await db.collection("project_nodes").doc(curr).get();
+            nodeCache[curr] = snap.exists ? { id: curr, ...snap.data() } : null;
+        }
+        const node = nodeCache[curr];
         curr = node && node.parentId ? node.parentId : null;
     }
 
@@ -1455,14 +1543,28 @@ async function getNumberedNodeName(nodeId, nodeName) {
     // Bỏ qua cấp dự án gốc (Level 0 - index 0)
     for (let i = 1; i < pathIds.length; i++) {
         const pId = pathIds[i];
-        const node = nodes.find(n => n.id === pId);
+        const node = nodeCache[pId];
         if (!node) continue;
         const parentId = node.parentId || null;
 
-        const children = nodes.filter(n => (n.parentId || null) === parentId)
-            .sort((a, b) => (a.order ?? a.createdAt) - (b.order ?? b.createdAt));
+        // Bước 2: Chỉ query siblings (cùng parent) thay vì toàn bộ collection
+        let siblings;
+        if (parentId) {
+            const siblingsSnap = await db.collection("project_nodes")
+                .where("parentId", "==", parentId)
+                .orderBy("order", "asc")
+                .get();
+            siblings = siblingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        } else {
+            // Root level nodes - query where parentId is null or empty
+            const siblingsSnap = await db.collection("project_nodes")
+                .where("parentId", "==", null)
+                .orderBy("order", "asc")
+                .get();
+            siblings = siblingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
 
-        const index = children.findIndex(n => n.id === pId);
+        const index = siblings.findIndex(n => n.id === pId);
         if (index !== -1) {
             prefix = prefix ? `${prefix}${index + 1}.` : `${index + 1}.`;
         }
@@ -1473,6 +1575,9 @@ async function getNumberedNodeName(nodeId, nodeName) {
 
 // 1. Tạo Node -> Tạo Folder trên Drive
 exports.onProjectNodeCreated = onDocumentCreated("project_nodes/{nodeId}", async (event) => {
+    // 🛡️ [DEFENSE] Circuit breaker
+    if (!checkInvocationLimit('onProjectNodeCreated')) return;
+
     const data = event.data.data();
     const nodeId = event.params.nodeId;
     if (!data.name || data.type === 'TASK') return;
@@ -1507,10 +1612,13 @@ exports.onProjectNodeCreated = onDocumentCreated("project_nodes/{nodeId}", async
         });
 
         // Cập nhật lại vào Document ở Firestore
+        // 🛡️ [DEFENSE] Đánh dấu server-side write
         await event.data.ref.update({
             driveFolderId: folder.data.id,
-            driveFolderLink: folder.data.webViewLink
+            driveFolderLink: folder.data.webViewLink,
+            [SERVER_MARKER_FIELD]: true
         });
+        await event.data.ref.update({ [SERVER_MARKER_FIELD]: admin.firestore.FieldValue.delete() });
 
         // Không cần ensureAdminPermission vì file đã được tạo bởi Master Admin
 
@@ -1528,17 +1636,26 @@ exports.onProjectNodeUpdated = onDocumentUpdated({
     document: "project_nodes/{nodeId}",
     memory: "512MiB"
 }, async (event) => {
+    // 🛡️ [DEFENSE] Circuit breaker
+    if (!checkInvocationLimit('onProjectNodeUpdated')) return;
+
     const newValue = event.data.after.data();
     const previousValue = event.data.before.data();
     const nodeId = event.params.nodeId;
+
+    // 🛡️ [DEFENSE] Bỏ qua server-side writes (từ onProjectNodeCreated, updateNodeColor...)
+    if (isServerWrite(newValue)) {
+        console.log(`[SKIP] onProjectNodeUpdated ${nodeId}: server-side write detected`);
+        return;
+    }
 
     // Bỏ qua TASK (không có Folder Drive)
     if (newValue.type === 'TASK') return;
 
     // [GUARD] Chỉ xử lý khi name hoặc parentId thay đổi thực sự
     // Bỏ qua: order, mauSac, driveFolderId, driveFolderLink, mindmapLayout, status, description...
-    const nameChanged = newValue.name !== previousValue.name;
-    const parentChanged = newValue.parentId !== previousValue.parentId;
+    const nameChanged = hasFieldChanged(previousValue, newValue, 'name');
+    const parentChanged = hasFieldChanged(previousValue, newValue, 'parentId');
 
     if (!nameChanged && !parentChanged) {
         console.log(`[SKIP] onProjectNodeUpdated ${nodeId}: no name/parent change`);
@@ -1611,6 +1728,9 @@ exports.onProjectNodeUpdated = onDocumentUpdated({
 
 // 3. Xoá Node -> Xoá (hoặc Đưa vào Thùng Rác) Folder trên Drive
 exports.onProjectNodeDeleted = onDocumentDeleted("project_nodes/{nodeId}", async (event) => {
+    // 🛡️ [DEFENSE] Circuit breaker
+    if (!checkInvocationLimit('onProjectNodeDeleted')) return;
+
     const data = event.data.data();
     const nodeId = event.params.nodeId;
 
@@ -1633,12 +1753,21 @@ exports.onProjectNodeDeleted = onDocumentDeleted("project_nodes/{nodeId}", async
 
 // 4. Khi Đổi tên FIle Văn bản -> Đổi trên trên Drive
 exports.onVanBanUpdated = onDocumentUpdated("vanban/{vanBanId}", async (event) => {
+    // 🛡️ [DEFENSE] Circuit breaker
+    if (!checkInvocationLimit('onVanBanUpdated')) return;
+
     const newVal = event.data.after.data();
     const oldVal = event.data.before.data();
 
+    // 🛡️ [DEFENSE] Bỏ qua server-side writes
+    if (isServerWrite(newVal)) {
+        console.log('[SKIP] onVanBanUpdated: server-side write detected');
+        return;
+    }
+
     // [FIX] Bỏ qua nếu fileNameOriginal không thay đổi (tránh trigger thừa khi
     // onDocumentStatusUpdate ghi ngược fileNameStandardized/dinhKem/attachments)
-    if (!newVal.fileNameOriginal || newVal.fileNameOriginal === oldVal.fileNameOriginal) {
+    if (!newVal.fileNameOriginal || !hasFieldChanged(oldVal, newVal, 'fileNameOriginal')) {
         return;
     }
 
