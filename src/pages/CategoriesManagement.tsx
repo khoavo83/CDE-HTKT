@@ -522,7 +522,7 @@ export const CategoriesManagement = () => {
 
     return (
         <div className="p-4 md:p-6 w-full mx-auto">
-            <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-200">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8 pb-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
                         <ListTree className="w-6 h-6 text-blue-600" />
@@ -632,7 +632,7 @@ export const CategoriesManagement = () => {
             {/* ===================== TAB: MENU CONFIG ===================== */}
             {activeTab === 'menuConfig' && user?.role === 'admin' && (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                    <div className="flex justify-between items-center mb-4">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                         <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">DANH SÁCH MỤC MENU SIDEBAR</div>
                         <button
                             onClick={handleOpenAddMenu}
@@ -968,11 +968,11 @@ export const CategoriesManagement = () => {
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        <div className="flex justify-between items-center mb-4">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                             <div className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                                 DANH SÁCH CHI TIẾT
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                                 <button
                                     onClick={() => setSortMode(prev => prev === 'order' ? 'name' : 'order')}
                                     className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm border
@@ -1420,7 +1420,7 @@ const AppSettingsTab = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                         Hình nền màn hình Đăng nhập
                     </label>
-                    <div className="flex items-start gap-4">
+                    <div className="flex flex-col sm:flex-row items-start gap-4">
                         {localSettings.loginBgUrl ? (
                             <div className="relative w-48 h-28 rounded-lg overflow-hidden border border-gray-200 shadow-sm bg-gray-100 flex-shrink-0">
                                 <img src={localSettings.loginBgUrl} alt="Login Background" className="w-full h-full object-cover" />

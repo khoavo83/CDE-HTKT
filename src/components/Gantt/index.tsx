@@ -327,7 +327,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
                 <div className="flex items-center gap-3">
                     <button 
                         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                        className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors md:block hidden"
+                        className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors lg:block hidden"
                         title="Ẩn/Hiện Danh sách Hạng mục"
                     >
                         <Menu className="w-5 h-5" />
@@ -358,8 +358,8 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
                 </div>
             </div>
 
-            {/* Mobile Card View for Gantt */}
-            <div className="md:hidden flex-1 overflow-auto p-3 space-y-2">
+            {/* Mobile/Tablet Card View for Gantt */}
+            <div className="lg:hidden flex-1 overflow-auto p-3 space-y-2">
                 {visibleTasks.length === 0 && !isLoading && (
                     <div className="p-8 text-center text-gray-500">Chưa có công việc nào.</div>
                 )}
@@ -411,7 +411,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({ projectId, tasks: initia
             </div>
 
             {/* Desktop: Main Gantt Area (Sidebar + Timeline) */}
-            <div className="hidden md:flex flex-1 overflow-hidden relative group/gantt">
+            <div className="hidden lg:flex flex-1 overflow-hidden relative group/gantt">
                 {isSidebarOpen && (
                     <GanttSidebar 
                         tasks={visibleTasks} 

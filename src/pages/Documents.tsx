@@ -367,12 +367,12 @@ export const Documents = () => {
 
     return (
         <div className="p-4 md:p-6 lg:p-8">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <div>
                     <h1 className="text-xl md:text-2xl font-bold text-gray-900">Quản lý Văn bản</h1>
                     <p className="text-sm text-gray-500 mt-1 hidden md:block">Hệ thống xử lý văn bản AI OCR tự động + Đính kèm</p>
                 </div>
-                <div className="flex items-center gap-2 md:gap-3">
+                <div className="flex flex-wrap items-center gap-2 md:gap-3">
                     {activeTab === 'PROCESSING' && user?.role !== 'viewer' && (
                         <button
                             onClick={() => setIsAssignModalOpen(true)}
@@ -405,8 +405,8 @@ export const Documents = () => {
             </div>
 
             {/* Tabs Controller & Search */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg w-fit border border-gray-200 shadow-sm overflow-x-auto scrollbar-hide">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg w-full md:w-fit border border-gray-200 shadow-sm overflow-x-auto scrollbar-hide">
                     <button
                         onClick={() => setActiveTab('ALL')}
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-colors shrink-0 ${activeTab === 'ALL' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
@@ -485,8 +485,8 @@ export const Documents = () => {
 
             {activeTab === 'PROCESSING' ? (
                 <>
-                {/* Mobile Card View */}
-                <div className="md:hidden space-y-3">
+                {/* Mobile/Tablet Card View */}
+                <div className="lg:hidden space-y-4">
                     {loadingTasks ? (
                         <div className="p-8 text-center text-gray-500">Đang tải dữ liệu...</div>
                     ) : filteredTasks.length === 0 ? (
@@ -538,7 +538,7 @@ export const Documents = () => {
                     )}
                 </div>
                 {/* Desktop Table */}
-                <div className="hidden md:block overflow-x-auto table-responsive">
+                <div className="hidden lg:block overflow-x-auto table-responsive">
                 <table className="w-full text-left border-collapse min-w-[900px]">
                     <thead>
                         <tr className="bg-gray-50 border-b border-gray-200 text-sm font-medium text-gray-500">
@@ -682,8 +682,8 @@ export const Documents = () => {
             
             ) : (
                 <>
-                {/* Mobile Card View for Documents */}
-                <div className="md:hidden space-y-3">
+                {/* Mobile/Tablet Card View for Documents */}
+                <div className="lg:hidden space-y-4">
                     {paginatedDocs.length === 0 ? (
                         <div className="p-8 text-center text-gray-500">Không tìm thấy văn bản phù hợp...</div>
                     ) : (
@@ -720,7 +720,7 @@ export const Documents = () => {
                     )}
                 </div>
                 {/* Desktop Table */}
-                <div className="hidden md:block overflow-x-auto table-responsive">
+                <div className="hidden lg:block overflow-x-auto table-responsive">
                 <table className="w-full text-left border-collapse table-auto min-w-[900px]">
                     <thead>
                         <tr className="bg-gray-50 border-b border-gray-200 text-sm font-medium text-gray-500">
