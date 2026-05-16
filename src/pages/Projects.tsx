@@ -1016,7 +1016,7 @@ export const Projects = () => {
                                 </p>
                             </div>
 
-                            {childNodes.length > 0 ? (
+                            {childNodes.length > 0 && (
                                 <div className="mb-8">
                                     <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
                                         <h3 className="text-lg font-semibold text-gray-900">Danh sách Thư mục con <span className="ml-2 text-sm font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{childNodes.length}</span></h3>
@@ -1050,8 +1050,8 @@ export const Projects = () => {
                                         ))}
                                     </div>
                                 </div>
-                            ) : (
-                                <>
+                            )}
+
                             {/* ======== THỜI GIAN THỰC HIỆN (tính từ Văn bản đính kèm) ======== */}
                             {(() => {
                                 const nodeDocs = allLinks.filter(l => l.nodeId === selectedNodeId).map(link => allDocs.find(d => d.id === link.vanBanId)).filter(Boolean);
@@ -1220,7 +1220,8 @@ export const Projects = () => {
                                                         )}
                                                         </React.Fragment>
                                                     );
-                                                })}                                            </tbody>
+                                                })}
+                                            </tbody>
                                         </table>
                                     </div>
                                 ) : (
@@ -1230,9 +1231,6 @@ export const Projects = () => {
                                     </div>
                                 )}
                             </div>
-                                </>
-                            )}
-
                             {/* Footer */}
                             <div className="flex items-center justify-between pt-4 border-t border-gray-100 mt-6">
                                 <div className="text-[10px] text-gray-400">
