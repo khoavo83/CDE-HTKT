@@ -17,7 +17,7 @@ import 'reactflow/dist/style.css';
 import dagre from 'dagre';
 import { db } from '../firebase/config';
 import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
-import { Loader2, X, FileText, FileCheck, FileSpreadsheet, FileImage, Layers, ExternalLink, ChevronDown, Plus, Send, ArrowLeft, ZoomIn, ZoomOut, Maximize2, Clock, Search, Briefcase, FileSignature, Target, MessageSquare } from 'lucide-react';
+import { Loader2, X, FileText, FileCheck, FileSpreadsheet, FileImage, Layers, ExternalLink, ChevronDown, Plus, Send, ArrowLeft, ZoomIn, ZoomOut, Maximize2, Clock, Search, Briefcase, FileSignature, Target, MessageSquare, Maximize, Filter } from 'lucide-react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 import { useAppSettingsStore } from '../store/useAppSettingsStore';
@@ -139,7 +139,13 @@ const computeRecursiveLayout = (
     const resultNodes: Node[] = [];
 
     // Hàm layout đệ quy cho từng nhánh (Bottom-up)
-    const layoutSubtree = (nodeId: string, inheritedLayout?: string): { nodes: Node[], minX: number, minY: number, maxX: number, maxY: number, width: number, height: number } => {
+    const layoutSubtree = (nodeId: string, inheritedLayout?: string, visited = new Set<string>()): { nodes: Node[], minX: number, minY: number, maxX: number, maxY: number, width: number, height: number } => {
+        if (visited.has(nodeId)) {
+            console.warn(`Circular reference detected at node ${nodeId}. Breaking loop.`);
+            return { nodes: [], minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 };
+        }
+        const newVisited = new Set(visited).add(nodeId);
+
         let layoutType = nodeLayouts[nodeId] || inheritedLayout || globalLayoutDir;
         let effectiveLayout = layoutType;
         let passDownLayout = layoutType;
@@ -155,7 +161,7 @@ const computeRecursiveLayout = (
         const nW = nodeWidth;
         const nH = Math.max(46, Math.ceil(labelLen / 30) * 22 + 20);
 
-        const childLayouts = children.map(childId => layoutSubtree(childId, passDownLayout));
+        const childLayouts = children.map(childId => layoutSubtree(childId, passDownLayout, newVisited));
 
         const localNodes: Node[] = [];
 
@@ -207,9 +213,9 @@ const computeRecursiveLayout = (
             const g = new dagre.graphlib.Graph();
             g.setGraph({
                 rankdir: effectiveLayout,
-                nodesep: 20,
-                ranksep: 120,
-                edgesep: 14,
+                nodesep: 40,
+                ranksep: 160,
+                edgesep: 20,
             });
             g.setDefaultEdgeLabel(() => ({}));
 
@@ -232,10 +238,10 @@ const computeRecursiveLayout = (
                 let childRootX = subOut.x - rootOut.x - (cLayout.minX + cLayout.maxX) / 2;
                 let childRootY = subOut.y - rootOut.y - (cLayout.minY + cLayout.maxY) / 2;
 
-                if (effectiveLayout === 'LR') childRootX = nW + 120 - cLayout.minX; // 120 là ranksep
-                else if (effectiveLayout === 'RL') childRootX = -nW - 120 - cLayout.maxX;
-                else if (effectiveLayout === 'TB') childRootY = nH + 120 - cLayout.minY;
-                else if (effectiveLayout === 'BT') childRootY = -nH - 120 - cLayout.maxY;
+                if (effectiveLayout === 'LR') childRootX = nW + 160 - cLayout.minX; // 160 là ranksep
+                else if (effectiveLayout === 'RL') childRootX = -nW - 160 - cLayout.maxX;
+                else if (effectiveLayout === 'TB') childRootY = nH + 160 - cLayout.minY;
+                else if (effectiveLayout === 'BT') childRootY = -nH - 160 - cLayout.maxY;
 
                 cLayout.nodes.forEach(cn => {
                     localNodes.push({
@@ -292,6 +298,8 @@ export const Mindmap = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
+    const [showDocuments, setShowDocuments] = useState(false);
+    const [showTasks, setShowTasks] = useState(true);
 
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -580,22 +588,25 @@ export const Mindmap = () => {
                 .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
             children.forEach(child => {
+                if (!showTasks && child.type === 'TASK') return;
                 addNodeToGraph(child);
 
                 if (expandedIds.has(child.id)) {
                     traverse(child.id);
 
-                    // Thêm Document nodes thuộc nhánh child này
-                    const docs = Array.from(loadedDocsRef.current.values())
-                        .filter(d => d.parentId === child.id)
-                        .sort((a, b) => {
-                            const dateA = a.ngayBanHanh ? new Date(a.ngayBanHanh).getTime() : 0;
-                            const dateB = b.ngayBanHanh ? new Date(b.ngayBanHanh).getTime() : 0;
-                            return dateA - dateB;
+                    if (showDocuments) {
+                        // Thêm Document nodes thuộc nhánh child này
+                        const docs = Array.from(loadedDocsRef.current.values())
+                            .filter(d => d.parentId === child.id)
+                            .sort((a, b) => {
+                                const dateA = a.ngayBanHanh ? new Date(a.ngayBanHanh).getTime() : 0;
+                                const dateB = b.ngayBanHanh ? new Date(b.ngayBanHanh).getTime() : 0;
+                                return dateA - dateB;
+                            });
+                        docs.forEach(doc => {
+                            addNodeToGraph(doc);
                         });
-                    docs.forEach(doc => {
-                        addNodeToGraph(doc);
-                    });
+                    }
                 }
             });
         };
@@ -603,7 +614,7 @@ export const Mindmap = () => {
         traverse(null);
 
         // Thêm Document nodes thuộc nhánh system-root (nếu có)
-        if (expandedIds.has('system-root')) {
+        if (expandedIds.has('system-root') && showDocuments) {
             const rootDocs = Array.from(loadedDocsRef.current.values())
                 .filter(d => d.parentId === 'system-root' || !d.parentId)
                 .sort((a, b) => {
@@ -621,7 +632,7 @@ export const Mindmap = () => {
         const { nodes: laidNodes, edges: laidEdges } = computeRecursiveLayout(rfNodes, rfEdges, nodeLayouts, direction);
         setNodes(laidNodes);
         setEdges(laidEdges);
-    }, [expandedIds, loadingChildrenIds, nodeLayouts, targetNodeId, setNodes, setEdges, getPrefix, settings.appName, docRevision, searchResultIds]);
+    }, [expandedIds, loadingChildrenIds, nodeLayouts, targetNodeId, setNodes, setEdges, getPrefix, settings.appName, docRevision, searchResultIds, showTasks, showDocuments]);
 
     // ===== Toggle Expand =====
     const handleToggleExpand = useCallback(async (nodeId: string) => {
@@ -686,9 +697,9 @@ export const Mindmap = () => {
                                     const vbDoc = await getDocFn(docRef(db, 'vanban', link.vanBanId));
                                     if (vbDoc.exists()) {
                                         const docObj = {
-                                            id: `doclink_${link.id}`,
                                             vanBanId: vbDoc.id,
                                             ...vbDoc.data(),
+                                            id: `doclink_${link.id}`,
                                             _linkId: link.id,
                                             parentId: link.nodeId,
                                             _realNodeId: link.nodeId,
@@ -740,14 +751,12 @@ export const Mindmap = () => {
                 const roots = nonTaskNodes.filter(n => !n.parentId || !loadedNodesRef.current.has(n.parentId));
                 roots.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-                // Expand everything by default as requested
                 const initialExpanded = new Set<string>();
-                nonTaskNodes.forEach(n => {
-                    initialExpanded.add(n.id);
-                });
                 roots.forEach(r => {
                     r.parentId = null; // Normalize
+                    initialExpanded.add(r.id); // Expand roots only
                 });
+                initialExpanded.add('system-root'); // Expand main system node
 
                 // 2. Đếm con (thư mục) từ dữ liệu local để hiển thị nút +/-
                 const localCounts: Record<string, number> = {};
@@ -800,9 +809,9 @@ export const Mindmap = () => {
 
                         // [BUGFIX] Nạp luôn vào loadedDocsRef để hiển thị ngay lần đầu do thư mục mặc định đã được Expand
                         loadedDocsRef.current.set(`doclink_${d.id}`, {
-                            id: `doclink_${d.id}`,
                             vanBanId: data.vanBanId,
                             ...docData,
+                            id: `doclink_${d.id}`,
                             _linkId: d.id,
                             parentId: targetNodeId,
                             _realNodeId: linkNodeId,
@@ -941,6 +950,39 @@ export const Mindmap = () => {
                                 </button>
                             </div>
                         )}
+                    </div>
+                </div>
+
+                {/* Control Toolbar */}
+                <div className="absolute top-4 right-4 z-30 flex flex-col gap-2">
+                    <button onClick={() => rfInstance?.fitView({ duration: 800, padding: 0.1 })} className="p-2 bg-white/95 backdrop-blur-sm shadow-md rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center justify-center text-gray-600 transition-all" title="Căn giữa sơ đồ (Fit View)">
+                        <Maximize className="w-5 h-5" />
+                    </button>
+                    <div className="bg-white/95 backdrop-blur-sm shadow-md rounded-lg border border-gray-200 p-2 flex flex-col gap-2 w-44">
+                        <button onClick={() => {
+                            const allNodeIds = new Set(loadedNodesRef.current.keys());
+                            allNodeIds.add('system-root');
+                            setExpandedIds(allNodeIds);
+                        }} className="text-xs font-medium text-blue-600 hover:bg-blue-50 py-1.5 px-2 rounded w-full text-left transition-colors flex items-center gap-2">
+                            <Plus className="w-3.5 h-3.5" /> Mở rộng tất cả
+                        </button>
+                        <button onClick={() => {
+                            const initialExpanded = new Set<string>();
+                            Array.from(loadedNodesRef.current.values()).filter(n => !n.parentId).forEach(r => initialExpanded.add(r.id));
+                            initialExpanded.add('system-root');
+                            setExpandedIds(initialExpanded);
+                        }} className="text-xs font-medium text-gray-600 hover:bg-gray-100 py-1.5 px-2 rounded w-full text-left transition-colors flex items-center gap-2">
+                            <ChevronDown className="w-3.5 h-3.5" /> Thu gọn tất cả
+                        </button>
+                        <div className="h-px bg-gray-200 my-1"></div>
+                        <label className="flex items-center gap-2 cursor-pointer p-1.5 hover:bg-gray-50 rounded group">
+                            <input type="checkbox" checked={showTasks} onChange={e => setShowTasks(e.target.checked)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5" />
+                            <span className="text-xs text-gray-700 font-medium group-hover:text-blue-600 transition-colors">Hiện Công việc</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer p-1.5 hover:bg-gray-50 rounded group">
+                            <input type="checkbox" checked={showDocuments} onChange={e => setShowDocuments(e.target.checked)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5" />
+                            <span className="text-xs text-gray-700 font-medium group-hover:text-blue-600 transition-colors">Hiện Văn bản</span>
+                        </label>
                     </div>
                 </div>
 
