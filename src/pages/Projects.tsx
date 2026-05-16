@@ -3,7 +3,7 @@ import { collection, query, onSnapshot, doc, setDoc, deleteDoc, updateDoc } from
 import { db, appFunctions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { Link } from 'react-router-dom';
-import { FolderTree, Folder, FileCheck, Layers, Plus, Edit2, Trash2, ChevronRight, ChevronDown, CheckCircle, Clock, ArrowUp, ArrowDown, FileText, FileImage, FileSpreadsheet, X, Link as LinkIcon, Unlink, ExternalLink, HardDrive, Search, Calendar, Loader2, ArrowUpDown, AlertTriangle, Download, BarChart3, ArrowLeft, Paperclip } from 'lucide-react';
+import { FolderTree, Folder, FileCheck, Layers, Plus, Edit2, Trash2, ChevronRight, ChevronDown, CheckCircle, Clock, ArrowUp, ArrowDown, FileText, FileImage, FileSpreadsheet, X, Link as LinkIcon, Unlink, ExternalLink, HardDrive, Search, Calendar, Loader2, ArrowUpDown, AlertTriangle, Download, BarChart3, ArrowLeft, Paperclip, ArrowRightLeft } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useAuthStore } from '../store/useAuthStore';
 import { canEditOrDeleteData } from '../utils/authUtils';
@@ -86,6 +86,11 @@ export const Projects = () => {
     const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
     const [users, setUsers] = useState<any[]>([]);
     const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+
+    // Di chuyển Node State
+    const [moveModalOpen, setMoveModalOpen] = useState(false);
+    const [nodeToMove, setNodeToMove] = useState<ProjectNode | null>(null);
+    const [selectedMoveTargetId, setSelectedMoveTargetId] = useState<string | null>(null);
 
 
     const { user } = useAuthStore();
@@ -458,6 +463,52 @@ export const Projects = () => {
         }
     };
 
+    const handleOpenMoveModal = (e: React.MouseEvent, node: ProjectNode) => {
+        e.stopPropagation();
+        setNodeToMove(node);
+        setSelectedMoveTargetId(node.parentId);
+        setMoveModalOpen(true);
+    };
+
+    const isInvalidMoveTarget = (targetId: string, nodeToMoveId: string): boolean => {
+        if (targetId === nodeToMoveId) return true;
+        const targetNode = allNodes.find(n => n.id === targetId);
+        if (!targetNode || !targetNode.parentId) return false;
+        return isInvalidMoveTarget(targetNode.parentId, nodeToMoveId);
+    };
+
+    const executeMoveNode = async () => {
+        if (!nodeToMove) return;
+        try {
+            await updateDoc(doc(db, 'project_nodes', nodeToMove.id), {
+                parentId: selectedMoveTargetId,
+                order: Date.now() // Cập nhật thứ tự để xuất hiện ở dưới cùng của thư mục đích
+            });
+            toast.success('Đã di chuyển thư mục thành công.');
+            setMoveModalOpen(false);
+            setNodeToMove(null);
+            setSelectedMoveTargetId(null);
+            if (selectedMoveTargetId) {
+                setExpandedKeys(prev => new Set(prev).add(selectedMoveTargetId));
+            }
+        } catch (error) {
+            console.error('Lỗi khi di chuyển:', error);
+            toast.error('Lỗi khi di chuyển thư mục.');
+        }
+    };
+
+    const getFlattenedNodes = () => {
+        const result: { node: ProjectNode, level: number }[] = [];
+        const processNode = (nodes: NodeTreeItem[], level: number) => {
+            nodes.forEach(n => {
+                result.push({ node: n, level });
+                processNode(n.children, level + 1);
+            });
+        };
+        processNode(treeData, 0);
+        return result;
+    };
+
 
     const onSubmit = async (data: Omit<ProjectNode, 'id' | 'createdAt'>) => {
         try {
@@ -544,6 +595,9 @@ export const Projects = () => {
                                     <>
                                         <button onClick={(e) => handleEditNode(e, item)} className="p-1 text-gray-400 hover:text-blue-600" title="Chỉnh sửa">
                                             <Edit2 className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button onClick={(e) => handleOpenMoveModal(e, item)} className="p-1 text-gray-400 hover:text-indigo-600" title="Di chuyển">
+                                            <ArrowRightLeft className="w-3.5 h-3.5" />
                                         </button>
                                         <button onClick={(e) => handleDeleteNode(e, item)} className="p-1 text-gray-400 hover:text-red-600" title="Xóa">
                                             <Trash2 className="w-3.5 h-3.5" />
@@ -1609,6 +1663,83 @@ export const Projects = () => {
                     </div>
                 )
             }
+
+            {/* Modal Di chuyển Thư mục (Move Node) */}
+            {moveModalOpen && nodeToMove && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center shrink-0">
+                            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                                <ArrowRightLeft className="w-5 h-5 text-indigo-600" />
+                                Di chuyển mục
+                            </h3>
+                            <button onClick={() => setMoveModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-4 overflow-y-auto flex-1">
+                            <p className="text-sm text-gray-600 mb-4">
+                                Chọn vị trí mới cho mục <strong className="text-gray-900">{nodeToMove.name}</strong>:
+                            </p>
+                            <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                                <div
+                                    className={`flex items-center px-3 py-2 cursor-pointer border-b border-gray-100 transition-colors ${selectedMoveTargetId === null ? 'bg-indigo-50 border-indigo-200' : 'hover:bg-gray-50'}`}
+                                    onClick={() => setSelectedMoveTargetId(null)}
+                                >
+                                    <div className="w-5 h-5 mr-2 flex items-center justify-center">
+                                        <FolderTree className="w-4 h-4 text-blue-600" />
+                                    </div>
+                                    <span className={`text-sm font-medium flex-1 ${selectedMoveTargetId === null ? 'text-indigo-700' : 'text-gray-900'}`}>
+                                        [Dự án gốc / Cấp cao nhất]
+                                    </span>
+                                    {selectedMoveTargetId === null && <CheckCircle className="w-4 h-4 text-indigo-600 flex-shrink-0" />}
+                                </div>
+                                {getFlattenedNodes().map(({ node, level }) => {
+                                    const isInvalid = isInvalidMoveTarget(node.id, nodeToMove.id);
+                                    const isSelected = selectedMoveTargetId === node.id;
+                                    return (
+                                        <div
+                                            key={node.id}
+                                            className={`flex items-center px-3 py-2 border-b border-gray-100 last:border-b-0 transition-colors
+                                                ${isInvalid ? 'opacity-40 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:bg-gray-50'}
+                                                ${isSelected ? 'bg-indigo-50 border-indigo-200' : ''}
+                                            `}
+                                            style={{ paddingLeft: `${(level + 1) * 20 + 12}px` }}
+                                            onClick={() => {
+                                                if (!isInvalid) setSelectedMoveTargetId(node.id);
+                                            }}
+                                        >
+                                            <div className="w-5 h-5 mr-2 flex-shrink-0 flex items-center justify-center">
+                                                {getTypeIcon(node.type)}
+                                            </div>
+                                            <span className={`text-sm truncate flex-1 ${isInvalid ? 'text-gray-500 line-through' : (isSelected ? 'text-indigo-700 font-medium' : 'text-gray-700')}`}>
+                                                {node.name}
+                                            </span>
+                                            {isSelected && <CheckCircle className="w-4 h-4 text-indigo-600 flex-shrink-0 ml-2" />}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3 shrink-0">
+                            <button
+                                onClick={() => setMoveModalOpen(false)}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                                Hủy bỏ
+                            </button>
+                            <button
+                                onClick={executeMoveNode}
+                                disabled={selectedMoveTargetId === nodeToMove.parentId}
+                                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm"
+                            >
+                                <CheckCircle className="w-4 h-4" />
+                                Xác nhận chuyển
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modal Xác nhận Đính kèm Văn bản */}
             {
