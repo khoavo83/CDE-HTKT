@@ -62,13 +62,8 @@ export const MainLayout = () => {
             if (menuItems.length === 0) {
                 seedMenuConfig();
             } else {
-                // Kiểm tra xem đã có mục Sổ công văn, Lịch họp hoặc Góp ý chưa, nếu chưa thì seed thêm
-                const hasInternalDocs = menuItems.some(item => item.key === 'internal_docs');
-                const hasMeetings = menuItems.some(item => item.key === 'meetings');
-                const hasFeedbacks = menuItems.some(item => item.key === 'feedbacks');
-                const hasTrash = menuItems.some(item => item.key === 'trash');
-                const hasTasks = menuItems.some(item => item.key === 'tasks');
-                if (!hasInternalDocs || !hasMeetings || !hasFeedbacks || !hasTrash || !hasTasks) {
+                const hasDocuments = menuItems.some(item => item.key === 'documents');
+                if (!hasDocuments) {
                     seedMenuConfig();
                 }
             }

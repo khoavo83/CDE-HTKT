@@ -29,7 +29,10 @@ import { TasksManagement } from './pages/TasksManagement';
 import { GanttTestPage } from './pages/GanttTestPage';
 import { GanttPage } from './pages/GanttPage';
 
-
+import { ProjectLayout } from './layout/ProjectLayout';
+import { DocumentLayout } from './layout/DocumentLayout';
+import { BimGisLayout } from './layout/BimGisLayout';
+import { AdminLayout } from './layout/AdminLayout';
 function App() {
     const { setUser, setLoading, isLoading } = useAuthStore();
     const { fetchSettings } = useAppSettingsStore();
@@ -82,21 +85,32 @@ function App() {
 
                     <Route element={<MainLayout />}>
                         <Route path="/" element={<Dashboard />} />
-                        <Route path="/projects" element={<Projects />} />
-                        <Route path="/gantt" element={<GanttPage />} />
                         <Route path="/gantt/:projectId" element={<GanttPage />} />
-                        <Route path="/tasks" element={<TasksManagement />} />
-                        <Route path="/mindmap" element={<Mindmap />} />
-                        <Route path="/documents" element={<Documents />} />
                         <Route path="/documents/:id" element={<DocumentReview />} />
-                        <Route path="/bim" element={<BimViewer />} />
-                        <Route path="/map" element={<MapViewer />} />
-                        <Route path="/internal-docs" element={<InternalDocRegister />} />
-                        <Route path="/meetings" element={<MeetingCalendar />} />
-                        <Route path="/users" element={<UsersManagement />} />
-                        <Route path="/categories" element={<CategoriesManagement />} />
-                        <Route path="/feedbacks" element={<FeedbackManagement />} />
-                        <Route path="/trash" element={<TrashManagement />} />
+                        
+                        <Route path="/projects" element={<ProjectLayout />}>
+                            <Route index element={<Projects />} />
+                            <Route path="tasks" element={<TasksManagement />} />
+                            <Route path="mindmap" element={<Mindmap />} />
+                            <Route path="meetings" element={<MeetingCalendar />} />
+                        </Route>
+
+                        <Route path="/documents" element={<DocumentLayout />}>
+                            <Route index element={<Documents />} />
+                            <Route path="internal-docs" element={<InternalDocRegister />} />
+                        </Route>
+
+                        <Route path="/bim-gis" element={<BimGisLayout />}>
+                            <Route path="bim" element={<BimViewer />} />
+                            <Route path="map" element={<MapViewer />} />
+                        </Route>
+
+                        <Route path="/admin" element={<AdminLayout />}>
+                            <Route path="categories" element={<CategoriesManagement />} />
+                            <Route path="users" element={<UsersManagement />} />
+                            <Route path="feedbacks" element={<FeedbackManagement />} />
+                            <Route path="trash" element={<TrashManagement />} />
+                        </Route>
                     </Route>
                 </Routes>
             </ErrorBoundary>

@@ -19,18 +19,9 @@ export interface MenuConfigItem {
 export const DEFAULT_MENU_ITEMS: Omit<MenuConfigItem, 'id'>[] = [
     { key: 'dashboard', name: 'Tổng quan', path: '/', icon: 'LayoutDashboard', order: 1, status: 'active', adminOnly: false },
     { key: 'projects', name: 'Quản lý Dự án', path: '/projects', icon: 'FolderTree', order: 2, status: 'active', adminOnly: false },
-    { key: 'gantt', name: 'Sơ đồ Gantt', path: '/gantt', icon: 'BarChart2', order: 2.2, status: 'active', adminOnly: false },
-    { key: 'tasks', name: 'Quản lý công việc', path: '/tasks', icon: 'ListChecks', order: 2.5, status: 'active', adminOnly: false },
-    { key: 'mindmap', name: 'Sơ đồ Mindmap', path: '/mindmap', icon: 'Share2', order: 3, status: 'active', adminOnly: false },
-    { key: 'documents', name: 'Văn bản & Hồ sơ', path: '/documents', icon: 'FileText', order: 4, status: 'active', adminOnly: false },
-    { key: 'internal_docs', name: 'Sổ Công văn Nội bộ', path: '/internal-docs', icon: 'BookOpen', order: 5, status: 'active', adminOnly: false },
-    { key: 'meetings', name: 'Lịch họp & Điều hành', path: '/meetings', icon: 'Calendar', order: 6, status: 'active', adminOnly: true },
-    { key: 'bim', name: 'Mô hình BIM 3D', path: '/bim', icon: 'Box', order: 7, status: 'coming_soon', adminOnly: false },
-    { key: 'map', name: 'Bản đồ Số (GIS)', path: '/map', icon: 'Map', order: 8, status: 'active', adminOnly: false },
-    { key: 'users', name: 'Quản lý Người dùng', path: '/users', icon: 'Users', order: 9, status: 'active', adminOnly: true },
-    { key: 'categories', name: 'Danh mục Hệ thống', path: '/categories', icon: 'Settings', order: 10, status: 'active', adminOnly: false },
-    { key: 'feedbacks', name: 'Quản lý Góp ý', path: '/feedbacks', icon: 'MessageSquare', order: 11, status: 'active', adminOnly: true },
-    { key: 'trash', name: 'Thùng rác Dữ liệu', path: '/trash', icon: 'Trash', order: 12, status: 'active', adminOnly: true },
+    { key: 'documents', name: 'Quản lý Văn bản', path: '/documents', icon: 'FileText', order: 3, status: 'active', adminOnly: false },
+    { key: 'bim_gis', name: 'Quản lý BIM - GIS', path: '/bim-gis/bim', icon: 'Map', order: 4, status: 'active', adminOnly: false },
+    { key: 'admin', name: 'Quản trị Hệ thống', path: '/admin/categories', icon: 'Settings', order: 5, status: 'active', adminOnly: true },
 ];
 
 interface MenuConfigState {
@@ -53,13 +44,8 @@ export const useMenuConfigStore = create<MenuConfigState>((set, get) => ({
         const q = query(collection(db, 'menu_config'), orderBy('order', 'asc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const list: MenuConfigItem[] = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MenuConfigItem));
-            const hasInternalDocs = list.some(item => item.key === 'internal_docs');
-            const hasMeetings = list.some(item => item.key === 'meetings');
-            const hasFeedbacks = list.some(item => item.key === 'feedbacks');
-            const hasTrash = list.some(item => item.key === 'trash');
-            const hasTasks = list.some(item => item.key === 'tasks');
-            const hasGantt = list.some(item => item.key === 'gantt');
-            if (!hasInternalDocs || !hasMeetings || !hasFeedbacks || !hasTrash || !hasTasks || !hasGantt) {
+            const hasDocuments = list.some(item => item.key === 'documents');
+            if (!hasDocuments) {
                 get().seedMenuConfig();
             }
             set({ menuItems: list, isLoading: false });
