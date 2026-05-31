@@ -446,8 +446,8 @@ export const DocumentReview = () => {
                 fileNameOriginal: docData.fileNameOriginal,
             });
 
-            if (result.data) {
-                const newData = result.data;
+            if (result.data && result.data.success) {
+                const newData = result.data.data;
                 // Cập nhật các trường vào form nếu trường đó đang trống hoặc muốn ghi đè
                 if (newData.soKyHieu) setValue('soKyHieu', newData.soKyHieu);
                 if (newData.ngayBanHanh) setValue('ngayBanHanh', newData.ngayBanHanh);

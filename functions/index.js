@@ -162,14 +162,14 @@ async function getDriveService() {
 // PHASE 5: TRUNG TÂM KIỂM SOÁT VĂN BẢN
 // ==========================================
 
-// HTTP Callable Function: Nhận base64Data từ client, tạo form rỗng
+// HTTP Callable Function: Nhận base64Data từ client, chạy OCR
 exports.processDocumentOCR = onCall({ region: 'asia-southeast1', timeoutSeconds: 300, memory: '1GiB' }, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để thực hiện thao tác này.");
     }
     try {
-        const { base64Data, mimeType, driveFileId: inputDriveFileId, fileNameOriginal, totalSizeBytes, dinhKem, folderId, nodeId, docId } = request.data;
-        console.log(`[DEBUG] processDocumentOCR start: docId=${docId}, driveFileId=${inputDriveFileId}, mimeType=${mimeType}, fileName=${fileNameOriginal}`);
+        const { base64Data, mimeType, driveFileId: inputDriveFileId, fileNameOriginal, totalSizeBytes, dinhKem, folderId, nodeId, docId, skipUpload } = request.data;
+        console.log(`[DEBUG] processDocumentOCR start: docId=${docId}, driveFileId=${inputDriveFileId}, mimeType=${mimeType}, fileName=${fileNameOriginal}, skipUpload=${!!skipUpload}`);
 
         let fileMimeType = mimeType || 'application/pdf';
         let fileName = fileNameOriginal || `document_${Date.now()}.pdf`;
@@ -185,7 +185,7 @@ exports.processDocumentOCR = onCall({ region: 'asia-southeast1', timeoutSeconds:
         // Ưu tiên folderId được truyền lên từ Cây thư mục (Mindmap), nếu không dùng rootId
         const targetParentId = folderId || driveFolders.rootId;
 
-        // 2. Upload sang Google Drive (Nếu client chưa upload)
+        // 2. Upload sang Google Drive (Nếu client chưa upload VÀ không skipUpload)
         let driveFileId = inputDriveFileId || request.data.driveFileId;
         let webViewLink = request.data.webViewLink;
         let base64Content = "";
@@ -206,7 +206,7 @@ exports.processDocumentOCR = onCall({ region: 'asia-southeast1', timeoutSeconds:
         oauth2Client.setCredentials({ refresh_token: refreshToken });
         const drive = google.drive({ version: "v3", auth: oauth2Client });
 
-        if (!driveFileId) {
+        if (!driveFileId && !skipUpload) {
             if (!base64Data) {
                 throw new Error("Thiếu dữ liệu tệp (base64Data) và không có driveFileId để xử lý.");
             }
@@ -257,6 +257,15 @@ exports.processDocumentOCR = onCall({ region: 'asia-southeast1', timeoutSeconds:
             // Không cần ensureAdminPermission vì file đã được upload bởi Master Admin
             // await ensureAdminPermission(drive, driveFileId);
 
+        } else if (skipUpload && !driveFileId) {
+            // Chế độ skipUpload: Chỉ chạy OCR, không upload file lên Drive
+            // Client sẽ tự upload sau khi user review và chuẩn hóa tên file
+            console.log(`[DEBUG] skipUpload=true: Bỏ qua upload Drive, chỉ chạy OCR`);
+            if (base64Data) {
+                base64Content = base64Data.split(',').pop() || base64Data;
+            } else {
+                throw new Error("Thiếu dữ liệu tệp (base64Data) để chạy OCR.");
+            }
         } else {
             console.log(`[DEBUG] Đang xử lý file đã có trên Drive: ${driveFileId}`);
             if (base64Data) {
@@ -547,7 +556,7 @@ exports.onDocumentStatusUpdate = onDocumentUpdated("vanban/{docId}", async (even
             let newFileName = newValue.fileNameStandardized;
 
             if (!newFileName) {
-                const safeSoKyHieu = (newValue.soKyHieu || "NOSO").replace(/\//g, "_");
+                const safeSoKyHieu = (newValue.soKyHieu || "NOSO").replace(/\//g, "_").replace(/\\/g, "_");
                 const safeTrichYeu = (newValue.trichYeu || "KhongTrichYeu")
                     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                     .replace(/[^a-zA-Z0-9 ]/g, "")
@@ -996,6 +1005,244 @@ exports.backfillMissingFileSize = onCall({ timeoutSeconds: 540 }, async (request
 // ==========================================
 // PHASE 1/4: Khởi tạo Hệ thống Folder trên Drive
 // ==========================================
+
+// ==========================================
+// BATCH RENAME: Đổi tên hàng loạt file trên Drive theo chuẩn
+// Cấu trúc: {yyyy-mm-dd}_{Số_ký_hiệu}.pdf
+// Đính kèm:  {yyyy-mm-dd}_{Số_ký_hiệu}_DinhKem_01.ext
+// ==========================================
+exports.batchRenameFiles = onCall({ timeoutSeconds: 540, memory: '1GiB', region: 'asia-southeast1' }, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để thực hiện thao tác này.");
+    }
+
+    // Kiểm tra quyền admin
+    const userDoc = await db.collection("users").doc(request.auth.uid).get();
+    if (!userDoc.exists || userDoc.data().role !== 'admin') {
+        throw new HttpsError("permission-denied", "Chỉ Admin mới có quyền thực hiện thao tác này.");
+    }
+
+    const { dryRun = true } = request.data || {};
+    console.log(`[BATCH_RENAME] Bắt đầu. dryRun=${dryRun}`);
+
+    try {
+        const drive = await getDriveService();
+        const vanbanSnapshot = await db.collection("vanban").get();
+
+        const results = {
+            total: vanbanSnapshot.size,
+            mainRenamed: 0,
+            mainSkipped: 0,
+            mainErrors: 0,
+            attachRenamed: 0,
+            attachSkipped: 0,
+            attachErrors: 0,
+            details: []
+        };
+
+        for (const docSnap of vanbanSnapshot.docs) {
+            const data = docSnap.data();
+            const docId = docSnap.id;
+
+            const soKyHieu = data.soKyHieu || "";
+            const ngayBanHanh = data.ngayBanHanh || "";
+            const driveFileId = data.driveFileId_Original || data.driveFileId;
+
+            if (!driveFileId || !soKyHieu) {
+                results.mainSkipped++;
+                continue;
+            }
+
+            // === XỬ LÝ FILE CHÍNH ===
+            const safeSoKyHieu = soKyHieu.replace(/\//g, "_").replace(/\\/g, "_");
+            const dateStr = ngayBanHanh || "NODATE";
+            let correctMainName = `${dateStr}_${safeSoKyHieu}`;
+
+            // Thêm đuôi .pdf nếu file gốc là PDF
+            const originalName = data.fileNameOriginal || "";
+            if (originalName.toLowerCase().endsWith('.pdf') && !correctMainName.toLowerCase().endsWith('.pdf')) {
+                correctMainName += '.pdf';
+            } else if (!correctMainName.includes('.')) {
+                // Nếu không có đuôi, mặc định .pdf
+                correctMainName += '.pdf';
+            }
+
+            try {
+                // Lấy tên hiện tại trên Drive
+                const fileMeta = await drive.files.get({
+                    fileId: driveFileId,
+                    fields: 'name',
+                    supportsAllDrives: true
+                });
+
+                const currentName = fileMeta.data.name;
+
+                if (currentName === correctMainName) {
+                    results.mainSkipped++;
+                    results.details.push({
+                        docId, soKyHieu,
+                        type: 'main',
+                        status: 'skip',
+                        currentName,
+                        reason: 'Tên đã đúng'
+                    });
+                } else {
+                    if (!dryRun) {
+                        await drive.files.update({
+                            fileId: driveFileId,
+                            resource: { name: correctMainName },
+                            supportsAllDrives: true
+                        });
+
+                        // Cập nhật fileNameStandardized trong Firestore
+                        await db.collection("vanban").doc(docId).update({
+                            fileNameStandardized: correctMainName,
+                            _serverUpdate: true
+                        });
+                        // Xóa marker
+                        await db.collection("vanban").doc(docId).update({
+                            _serverUpdate: admin.firestore.FieldValue.delete()
+                        });
+                    }
+
+                    results.mainRenamed++;
+                    results.details.push({
+                        docId, soKyHieu,
+                        type: 'main',
+                        status: dryRun ? 'will_rename' : 'renamed',
+                        currentName,
+                        newName: correctMainName
+                    });
+                }
+            } catch (err) {
+                results.mainErrors++;
+                results.details.push({
+                    docId, soKyHieu,
+                    type: 'main',
+                    status: 'error',
+                    error: err.message
+                });
+            }
+
+            // === XỬ LÝ FILE ĐÍNH KÈM ===
+            // Lấy tên cơ sở (bỏ đuôi .pdf)
+            let baseMainName = correctMainName;
+            if (baseMainName.toLowerCase().endsWith('.pdf')) {
+                baseMainName = baseMainName.substring(0, baseMainName.length - 4);
+            }
+
+            const allAttachments = [
+                ...(data.attachments || []).map((a, i) => ({ ...a, source: 'attachments', index: i })),
+                ...(data.dinhKem || []).map((a, i) => ({ ...a, source: 'dinhKem', index: i }))
+            ];
+
+            let attachIndex = 1;
+            let attachmentsUpdated = false;
+            let dinhKemUpdated = false;
+
+            for (const att of allAttachments) {
+                const attFileId = att.driveFileId;
+                if (!attFileId) {
+                    results.attachSkipped++;
+                    continue;
+                }
+
+                // Xác định đuôi file
+                const attOriginalName = att.originalName || att.fileName || att.name || "file";
+                const extMatch = attOriginalName.match(/\.[0-9a-z]+$/i);
+                const ext = extMatch ? extMatch[0] : '';
+
+                const correctAttName = `${baseMainName}_DinhKem_${attachIndex.toString().padStart(2, '0')}${ext}`;
+                attachIndex++;
+
+                try {
+                    const attMeta = await drive.files.get({
+                        fileId: attFileId,
+                        fields: 'name',
+                        supportsAllDrives: true
+                    });
+
+                    const currentAttName = attMeta.data.name;
+
+                    if (currentAttName === correctAttName) {
+                        results.attachSkipped++;
+                    } else {
+                        if (!dryRun) {
+                            await drive.files.update({
+                                fileId: attFileId,
+                                resource: { name: correctAttName },
+                                supportsAllDrives: true
+                            });
+
+                            // Cập nhật tên trong array Firestore
+                            if (att.source === 'attachments' && data.attachments) {
+                                data.attachments[att.index].fileName = correctAttName;
+                                attachmentsUpdated = true;
+                            } else if (att.source === 'dinhKem' && data.dinhKem) {
+                                if (data.dinhKem[att.index].fileName !== undefined) {
+                                    data.dinhKem[att.index].fileName = correctAttName;
+                                } else {
+                                    data.dinhKem[att.index].name = correctAttName;
+                                }
+                                dinhKemUpdated = true;
+                            }
+                        }
+
+                        results.attachRenamed++;
+                        results.details.push({
+                            docId, soKyHieu,
+                            type: 'attachment',
+                            status: dryRun ? 'will_rename' : 'renamed',
+                            currentName: currentAttName,
+                            newName: correctAttName
+                        });
+                    }
+                } catch (err) {
+                    results.attachErrors++;
+                    results.details.push({
+                        docId, soKyHieu,
+                        type: 'attachment',
+                        status: 'error',
+                        error: err.message
+                    });
+                }
+            }
+
+            // Ghi lại mảng attachments/dinhKem đã cập nhật vào Firestore
+            if (!dryRun && (attachmentsUpdated || dinhKemUpdated)) {
+                const updateData = { _serverUpdate: true };
+                if (attachmentsUpdated) updateData.attachments = data.attachments;
+                if (dinhKemUpdated) updateData.dinhKem = data.dinhKem;
+
+                await db.collection("vanban").doc(docId).update(updateData);
+                await db.collection("vanban").doc(docId).update({
+                    _serverUpdate: admin.firestore.FieldValue.delete()
+                });
+            }
+        }
+
+        console.log(`[BATCH_RENAME] Hoàn tất. Main: ${results.mainRenamed} renamed, ${results.mainSkipped} skipped, ${results.mainErrors} errors. Attach: ${results.attachRenamed} renamed, ${results.attachSkipped} skipped, ${results.attachErrors} errors.`);
+
+        return {
+            success: true,
+            dryRun,
+            summary: {
+                total: results.total,
+                mainRenamed: results.mainRenamed,
+                mainSkipped: results.mainSkipped,
+                mainErrors: results.mainErrors,
+                attachRenamed: results.attachRenamed,
+                attachSkipped: results.attachSkipped,
+                attachErrors: results.attachErrors
+            },
+            details: results.details
+        };
+    } catch (error) {
+        console.error("[BATCH_RENAME] Error:", error);
+        throw new HttpsError("internal", error.message);
+    }
+});
+
 
 // ==========================================
 // PHASE 1/4: Reset & Làm sạch Drive (NUCLEAR OPTION)

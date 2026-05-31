@@ -96,7 +96,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
     // Tự động điền tên file chuẩn hóa
     useEffect(() => {
         if (!isFileNameManuallyEdited) {
-            const safeSoKyHieu = (ocrData.soKyHieu || "NOSO").replace(/\//g, "-").replace(/\\/g, "-");
+            const safeSoKyHieu = (ocrData.soKyHieu || "NOSO").replace(/\//g, "_").replace(/\\/g, "_");
             const ngayBanHanhStr = ocrData.ngayBanHanh || format(new Date(), 'yyyy-MM-dd');
             const newName = `${ngayBanHanhStr}_${safeSoKyHieu}`;
             
@@ -123,7 +123,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
 
             setUploadStatus('Đang chuẩn bị dữ liệu và upload lên hệ thống lưu trữ tập trung...');
 
-            setUploadStatus('AI Gemini đang đọc văn bản và lưu hồ sơ gốc...');
+            setUploadStatus('AI Gemini đang đọc văn bản...');
             const processOCR = httpsCallable(appFunctions, 'processDocumentOCR');
 
             const ocrResult: any = await processOCR({
@@ -131,7 +131,8 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                 mimeType: mainFile.type,
                 fileNameOriginal: mainFile.name,
                 totalSizeBytes: mainFile.size,
-                dinhKem: [] // Tạm thời để trống
+                dinhKem: [], // Tạm thời để trống
+                skipUpload: true // Chỉ chạy OCR, không upload file lên Drive
             });
 
             if (!ocrResult.data.success) {
@@ -141,7 +142,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
             const data = ocrResult.data.data;
             const newDocId = ocrResult.data.docId;
 
-            const safeSoKyHieu = (data.soKyHieu || "NOSO").replace(/\//g, "-").replace(/\\/g, "-");
+            const safeSoKyHieu = (data.soKyHieu || "NOSO").replace(/\//g, "_").replace(/\\/g, "_");
             const ngayBanHanhStr = data.ngayBanHanh || format(new Date(), 'yyyy-MM-dd'); // Fallback lấy ngày hiện tại nếu AI không đọc được
 
             const attachmentResults: any[] = [];
@@ -236,7 +237,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
             const user = JSON.parse(localStorage.getItem('user_cde') || '{}');
             const uploadFn = httpsCallable<{ fileName: string, mimeType: string, base64Data: string; targetParentId?: string }, any>(appFunctions, 'uploadFileToDriveBase64');
 
-            const safeSoKyHieu = (ocrData.soKyHieu || "NOSO").replace(/\//g, "-").replace(/\\/g, "-");
+            const safeSoKyHieu = (ocrData.soKyHieu || "NOSO").replace(/\//g, "_").replace(/\\/g, "_");
             const ngayBanHanhStr = ocrData.ngayBanHanh || format(new Date(), 'yyyy-MM-dd');
             let safeTrichYeu = (ocrData.trichYeu || "KhongTrichYeu").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9 -]/g, "").replace(/\s+/g, "_").substring(0, 50);
 
@@ -248,8 +249,10 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                 fileNameStandardized += '.pdf';
             }
 
-            if (!targetDocId && mainFile) {
-                setUploadStatus('Đang tải lên Văn bản chính...');
+            // Upload file lên Drive (cả khi đã qua AI hoặc upload thủ công)
+            // File luôn được upload ở bước Lưu để đảm bảo dùng tên chuẩn hóa
+            if (mainFile && !driveFileId_Original) {
+                setUploadStatus('Đang tải lên Văn bản chính với tên chuẩn hóa...');
                 const base64Data = await fileToBase64(mainFile);
 
                 const uploadedMain = await uploadFn({
@@ -260,8 +263,11 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
 
                 driveFileId_Original = uploadedMain.data.file.id;
                 webViewLink = uploadedMain.data.file.webViewLink;
-                targetDocId = doc(collection(db, 'vanban')).id;
-                setDocId(targetDocId);
+
+                if (!targetDocId) {
+                    targetDocId = doc(collection(db, 'vanban')).id;
+                    setDocId(targetDocId);
+                }
             }
 
             let finalAttachments = [...(ocrData.attachments || [])];

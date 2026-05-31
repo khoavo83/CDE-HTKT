@@ -83,6 +83,10 @@ export const CategoriesManagement = () => {
     const [driveConfig, setDriveConfig] = useState<any>(null);
     const [isSyncing, setIsSyncing] = useState(false);
 
+    // Batch Rename State
+    const [isBatchRenaming, setIsBatchRenaming] = useState(false);
+    const [batchRenameResult, setBatchRenameResult] = useState<any>(null);
+
     useEffect(() => {
         if (!user || user.role === 'viewer' || user.role === 'pending') return;
 
@@ -205,6 +209,27 @@ export const CategoriesManagement = () => {
                 }
             }
         });
+    };
+
+    const handleBatchRename = async (dryRun: boolean) => {
+        setIsBatchRenaming(true);
+        setBatchRenameResult(null);
+        const toastId = toast.loading(dryRun ? 'Đang quét danh sách file cần đổi tên...' : 'Đang đổi tên file trên Drive...');
+        try {
+            const batchFn = httpsCallable(appFunctions, 'batchRenameFiles', { timeout: 540000 });
+            const result: any = await batchFn({ dryRun });
+            setBatchRenameResult(result.data);
+            if (dryRun) {
+                toast.success(`Tìm thấy ${result.data.summary.mainRenamed} file chính & ${result.data.summary.attachRenamed} đính kèm cần đổi tên`, { id: toastId });
+            } else {
+                toast.success(`Đã đổi tên ${result.data.summary.mainRenamed} file chính & ${result.data.summary.attachRenamed} đính kèm thành công!`, { id: toastId });
+            }
+        } catch (error: any) {
+            console.error('Batch Rename Error:', error);
+            toast.error('Lỗi: ' + error.message, { id: toastId });
+        } finally {
+            setIsBatchRenaming(false);
+        }
     };
 
     const handleResetAllNodesDrive = async () => {
@@ -899,6 +924,83 @@ export const CategoriesManagement = () => {
                                     >
                                         Reset & Làm sạch DRIVE
                                     </button>
+                                </div>
+
+                                {/* Batch Rename */}
+                                <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div>
+                                            <p className="text-sm font-bold text-indigo-800">🔄 Đổi tên hàng loạt file trên Drive</p>
+                                            <p className="text-xs text-indigo-600 mt-1">Chuẩn hóa tên file theo cấu trúc: <code className="bg-indigo-100 px-1 rounded">yyyy-mm-dd_SốKýHiệu.pdf</code></p>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handleBatchRename(true)}
+                                                disabled={isBatchRenaming}
+                                                className="px-3 py-2 bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-200 disabled:opacity-50 transition-colors border border-indigo-200"
+                                            >
+                                                {isBatchRenaming ? '⏳ Đang quét...' : '👁️ Xem trước'}
+                                            </button>
+                                            <button
+                                                onClick={() => handleBatchRename(false)}
+                                                disabled={isBatchRenaming}
+                                                className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-md"
+                                            >
+                                                🚀 Đổi tên ngay
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {batchRenameResult && (
+                                        <div className="mt-3 space-y-3">
+                                            {/* Summary */}
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <div className="bg-white p-2 rounded-lg text-center border border-gray-100">
+                                                    <p className="text-lg font-bold text-indigo-600">{batchRenameResult.summary.mainRenamed}</p>
+                                                    <p className="text-[10px] text-gray-500">File chính {batchRenameResult.dryRun ? 'cần đổi' : 'đã đổi'}</p>
+                                                </div>
+                                                <div className="bg-white p-2 rounded-lg text-center border border-gray-100">
+                                                    <p className="text-lg font-bold text-amber-600">{batchRenameResult.summary.attachRenamed}</p>
+                                                    <p className="text-[10px] text-gray-500">Đính kèm {batchRenameResult.dryRun ? 'cần đổi' : 'đã đổi'}</p>
+                                                </div>
+                                                <div className="bg-white p-2 rounded-lg text-center border border-gray-100">
+                                                    <p className="text-lg font-bold text-gray-400">{batchRenameResult.summary.mainSkipped + batchRenameResult.summary.attachSkipped}</p>
+                                                    <p className="text-[10px] text-gray-500">Đã đúng / bỏ qua</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Chi tiết các file cần đổi tên */}
+                                            {batchRenameResult.details.filter((d: any) => d.status !== 'skip').length > 0 && (
+                                                <div className="max-h-60 overflow-y-auto bg-white rounded-lg border border-gray-100 divide-y divide-gray-50">
+                                                    {batchRenameResult.details.filter((d: any) => d.status !== 'skip').map((d: any, i: number) => (
+                                                        <div key={i} className="px-3 py-2 text-xs flex items-start gap-2">
+                                                            <span className={`shrink-0 mt-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold ${
+                                                                d.status === 'error' ? 'bg-red-100 text-red-600' :
+                                                                d.status === 'renamed' ? 'bg-green-100 text-green-600' :
+                                                                'bg-indigo-100 text-indigo-600'
+                                                            }`}>
+                                                                {d.status === 'error' ? '✕' : d.status === 'renamed' ? '✓' : '→'}
+                                                            </span>
+                                                            <div className="min-w-0 flex-1">
+                                                                <span className="font-bold text-gray-700">{d.soKyHieu}</span>
+                                                                <span className={`ml-1.5 text-[10px] px-1 py-0.5 rounded ${d.type === 'main' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
+                                                                    {d.type === 'main' ? 'Chính' : 'Đính kèm'}
+                                                                </span>
+                                                                {d.error ? (
+                                                                    <p className="text-red-500 mt-0.5 truncate">{d.error}</p>
+                                                                ) : (
+                                                                    <>
+                                                                        <p className="text-gray-400 mt-0.5 truncate" title={d.currentName}>❌ {d.currentName}</p>
+                                                                        <p className="text-green-600 truncate" title={d.newName}>✅ {d.newName}</p>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
