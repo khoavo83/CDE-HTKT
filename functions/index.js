@@ -2739,7 +2739,8 @@ Cấu trúc JSON:
                 await db.collection("vanban").doc(docId).set({
                     id: docId,
                     trangThaiDuLieu: "REVIEWING",
-                    loaiVanBan: loaiVanBan,
+                    loaiVanBan: ocrResult.loaiVanBan || "",
+                    phanLoaiVanBan: loaiVanBan === "DEN" ? "INCOMING" : (loaiVanBan === "DI" ? "OUTGOING" : ""),
                     soKyHieu: ocrResult.soKyHieu || "",
                     ngayBanHanh: ocrResult.ngayBanHanh || "",
                     coQuanBanHanh: ocrResult.coQuanBanHanh || "",
@@ -2750,7 +2751,7 @@ Cấu trúc JSON:
                     ngayHop: ocrResult.ngayHop || "",
                     thoiGianHop: ocrResult.thoiGianHop || "",
                     
-                    fileNameOriginal: mainFile.name,
+                    fileNameOriginal: correctMainName,
                     fileNameStandardized: correctMainName,
                     driveFileId_Original: mainFile.id,
                     webViewLink: mainFile.webViewLink || "",
