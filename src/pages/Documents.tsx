@@ -219,6 +219,18 @@ export const Documents = () => {
         }
     };
 
+    const handleQuickApprove = async (docId: string) => {
+        try {
+            await updateDoc(doc(db, 'vanban', docId), {
+                trangThaiDuLieu: 'COMPLETED'
+            });
+            toast.success('Đã duyệt văn bản thành công!');
+        } catch (err) {
+            console.error('Lỗi khi duyệt nhanh:', err);
+            toast.error('Lỗi khi duyệt văn bản.');
+        }
+    };
+
     const confirmDeleteTask = async () => {
         if (!deleteTaskModal.taskId) return;
         try {
@@ -812,6 +824,15 @@ export const Documents = () => {
                                 <td className="p-4 text-gray-500 text-center font-medium border-r border-gray-100">{formatBytes(doc.fileSize)}</td>
                                 <td className="p-4 text-center">
                                     <div className="flex items-center justify-center gap-1">
+                                        {activeTab === 'REVIEWING' && (
+                                            <button
+                                                onClick={() => handleQuickApprove(doc.id)}
+                                                className="text-emerald-500 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 p-2 rounded-lg transition-colors border border-emerald-100 shadow-sm"
+                                                title="Duyệt nhanh"
+                                            >
+                                                <CheckCircle2 className="w-4 h-4" />
+                                            </button>
+                                        )}
                                         <Link
                                             to={"/documents/" + doc.id}
                                             className="text-gray-400 hover:text-blue-600 bg-white hover:bg-blue-50 p-2 rounded-lg transition-colors border border-gray-100 shadow-sm"
