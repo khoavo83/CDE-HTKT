@@ -1011,7 +1011,7 @@ exports.backfillMissingFileSize = onCall({ timeoutSeconds: 540 }, async (request
 // Cấu trúc: {yyyy-mm-dd}_{Số_ký_hiệu}.pdf
 // Đính kèm:  {yyyy-mm-dd}_{Số_ký_hiệu}_DinhKem_01.ext
 // ==========================================
-exports.batchRenameFiles = onCall({ timeoutSeconds: 540, memory: '1GiB', region: 'asia-southeast1' }, async (request) => {
+exports.batchRenameFiles = onCall({ timeoutSeconds: 540, memory: '1GiB', region: 'asia-southeast1', cors: true }, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Bạn phải đăng nhập để thực hiện thao tác này.");
     }
