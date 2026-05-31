@@ -10,7 +10,7 @@ import { ICON_MAP } from '../layout/MainLayout';
 import {
     FolderTree, Plus, Edit2, Trash2, CheckCircle, XCircle, Save, X,
     ShieldAlert, Loader2, LayoutGrid, Zap, EyeOff, Eye, HardDrive, RefreshCw, Layers, Settings, AlertCircle, Upload, ArrowUpDown,
-    Folder, ChevronRight, ChevronDown, Layout, Menu, FileSpreadsheet, Download, AlertTriangle, ListTree
+    Folder, ChevronRight, ChevronDown, Layout, Menu, FileSpreadsheet, Download, AlertTriangle, ListTree, Sparkles
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { db, auth, appFunctions } from '../firebase/config';
