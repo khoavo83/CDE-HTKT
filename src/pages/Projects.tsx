@@ -1021,7 +1021,7 @@ export const Projects = () => {
                                 <ArrowLeft className="w-4 h-4" />
                                 Quay lại cây thư mục
                             </button>
-                            <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4 mb-4 md:mb-6">
+                            <div className="flex flex-col gap-4 mb-4 md:mb-6">
                                 <div className="flex items-start md:items-center gap-3 min-w-0 flex-1">
                                     <div className="p-2 md:p-3 bg-blue-50 rounded-lg shrink-0 mt-1 md:mt-0">
                                         {getTypeIcon(selectedNode.type)}
