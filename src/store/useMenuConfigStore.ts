@@ -22,7 +22,7 @@ export const DEFAULT_MENU_ITEMS: Omit<MenuConfigItem, 'id'>[] = [
     { key: 'documents', name: 'Quản lý Văn bản', path: '/documents', icon: 'FileText', order: 3, status: 'active', adminOnly: false },
     { key: 'bim_gis', name: 'Quản lý BIM - GIS', path: '/bim-gis/bim', icon: 'Map', order: 4, status: 'active', adminOnly: false },
     { key: 'settings', name: 'Cấu hình Admin', path: '/settings/users', icon: 'Settings', order: 5, status: 'active', adminOnly: true },
-    { key: 'admin', name: 'Quản trị Hệ thống', path: '/admin/categories', icon: 'ShieldAlert', order: 6, status: 'active', adminOnly: true },
+    { key: 'admin', name: 'Quản lý Danh mục', path: '/admin/categories', icon: 'ShieldAlert', order: 6, status: 'active', adminOnly: true },
 ];
 
 interface MenuConfigState {

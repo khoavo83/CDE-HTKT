@@ -5,7 +5,7 @@ import { FolderTree, MessageSquare, Trash2 } from 'lucide-react';
 export const AdminLayout = () => {
     return (
         <PageTabsLayout
-            title="Quản trị Hệ thống"
+            title="Quản lý Danh mục"
             tabs={[
                 { name: 'Danh mục Hệ thống', path: '/admin/categories', icon: FolderTree },
                 { name: 'Quản lý Góp ý', path: '/admin/feedbacks', icon: MessageSquare },

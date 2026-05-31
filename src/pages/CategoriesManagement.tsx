@@ -571,27 +571,6 @@ export function CategoriesManagement({ forcedTab, hideHeader }: { forcedTab?: st
 
     return (
         <div className={`w-full mx-auto ${hideHeader ? 'p-0' : 'p-4 md:p-6'}`}>
-            <div className={`flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8 pb-4 border-b border-gray-200 ${hideHeader ? 'hidden' : ''}`}>
-                <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                        <ListTree className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-800">Cấu hình Danh mục</h1>
-                        <p className="text-sm text-gray-500">Từ điển Dữ liệu dùng chung toàn Hệ thống</p>
-                    </div>
-                </div>
-                {activeTab === 'menuConfig' && user?.role === 'admin' && (
-                    <button
-                        onClick={seedMenuConfig}
-                        className="flex items-center gap-2 bg-amber-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors shadow-sm"
-                    >
-                        <LayoutGrid className="w-4 h-4" />
-                        Khởi tạo (Seed) Menu
-                    </button>
-                )}
-            </div>
-
             {/* Tabs Navigation */}
             <div className={`flex gap-4 mb-6 border-b border-gray-100 overflow-x-auto whitespace-nowrap scrollbar-hide font-bold ${hideHeader ? 'hidden' : ''}`}>
                 {tabs.map((tab) => (
@@ -620,50 +599,6 @@ export function CategoriesManagement({ forcedTab, hideHeader }: { forcedTab?: st
                     </button>
                 ))}
 
-
-                {/* Divider */}
-                {user?.role === 'admin' && (
-                    <>
-                        <div className="w-px h-6 bg-gray-200 my-auto ml-2 mr-0 shrink-0"></div>
-
-                        <button
-                            onClick={() => { setActiveTab('menuConfig'); handleCancel(); }}
-                            className={`pb-3 px-2 text-sm font-bold border-b-2 transition-colors shrink-0 ml-2 ${activeTab === 'menuConfig'
-                                ? 'border-gray-800 text-gray-800'
-                                : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
-                                }`}
-                        >
-                            <div className="flex items-center gap-1.5">
-                                <LayoutGrid className="w-4 h-4" />
-                                Menu Sidebar
-                            </div>
-                        </button>
-
-                        {/* Tab Cấu hình chung mới */}
-                        <button
-                            onClick={() => { setActiveTab('appSettings'); handleCancel(); }}
-                            className={`pb-3 px-2 text-sm font-bold border-b-2 transition-colors shrink-0 ml-2 ${activeTab === 'appSettings'
-                                ? 'border-indigo-600 text-indigo-700'
-                                : 'border-transparent text-gray-500 hover:text-indigo-600 hover:border-indigo-300'
-                                }`}
-                        >
-                            <div className="flex items-center gap-1.5">
-                                <Settings className="w-4 h-4" />
-                                Cấu hình chung
-                            </div>
-                        </button>
-
-                        <button
-                            onClick={() => { setActiveTab('driveConfig'); handleCancel(); }}
-                            className={`pb-3 px-2 text-sm font-bold border-b-2 transition-colors shrink-0 ml-2 ${activeTab === 'driveConfig'
-                                ? 'border-blue-600 text-blue-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
-                                }`}
-                        >
-                            ☁️ Cấu hình Drive
-                        </button>
-                    </>
-                )}
 
                 {/* Nút cộng thêm tab dạt vô lề phải */}
                 <div className="flex-1 min-w-[20px]"></div>

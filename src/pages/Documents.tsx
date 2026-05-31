@@ -492,7 +492,22 @@ export const Documents = () => {
                     </button>
                 </div>
 
-                {/* Removed Search Bar */}
+                <div className="flex flex-wrap items-center gap-3 flex-1 justify-end bg-white p-2 rounded-xl border border-gray-200 shadow-sm">
+                    <div className="flex items-center gap-2 text-gray-500 font-medium text-sm pl-2">
+                        <Filter className="w-4 h-4" />
+                        Lọc:
+                    </div>
+                    <input type="text" placeholder="Loại văn bản" className="w-32 px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={filters.loaiVanBan} onChange={e => setFilters({...filters, loaiVanBan: e.target.value})} />
+                    <input type="text" placeholder="Số ký hiệu" className="w-32 px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={filters.soKyHieu} onChange={e => setFilters({...filters, soKyHieu: e.target.value})} />
+                    <input type="text" placeholder="Ngày ban hành" className="w-32 px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={filters.ngayBanHanh} onChange={e => setFilters({...filters, ngayBanHanh: e.target.value})} />
+                    <input type="text" placeholder="Cơ quan" className="w-32 px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={filters.coQuanBanHanh} onChange={e => setFilters({...filters, coQuanBanHanh: e.target.value})} />
+                    <input type="text" placeholder="Trích yếu" className="flex-1 min-w-[200px] px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={filters.trichYeu} onChange={e => setFilters({...filters, trichYeu: e.target.value})} />
+                    {(filters.loaiVanBan || filters.soKyHieu || filters.ngayBanHanh || filters.coQuanBanHanh || filters.trichYeu) && (
+                        <button onClick={() => setFilters({loaiVanBan: '', soKyHieu: '', ngayBanHanh: '', coQuanBanHanh: '', trichYeu: ''})} className="flex items-center gap-1 text-sm text-red-600 hover:text-red-700 font-medium bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors border border-red-100">
+                            Xóa lọc
+                        </button>
+                    )}
+                </div>
             </div>
 
             <UploadDocumentModal
@@ -798,30 +813,7 @@ export const Documents = () => {
                                 <div onMouseDown={(e) => handleMouseDown(e, 'action')} className="absolute right-0 top-0 h-full w-2 cursor-col-resize hover:bg-primary-400 z-10 transition-colors" />
                             </th>
                         </tr>
-                        <tr className="bg-gray-50 border-b border-gray-200">
-                            <th className="p-2 border-r border-gray-200">
-                                <input type="text" placeholder="Lọc Loại văn bản..." className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 outline-none font-normal" value={filters.loaiVanBan} onChange={e => setFilters({...filters, loaiVanBan: e.target.value})} />
-                            </th>
-                            <th className="p-2 border-r border-gray-200">
-                                <input type="text" placeholder="Lọc Số ký hiệu..." className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 outline-none font-normal" value={filters.soKyHieu} onChange={e => setFilters({...filters, soKyHieu: e.target.value})} />
-                            </th>
-                            <th className="p-2 border-r border-gray-200">
-                                <input type="text" placeholder="Lọc Ngày ban hành..." className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 outline-none font-normal" value={filters.ngayBanHanh} onChange={e => setFilters({...filters, ngayBanHanh: e.target.value})} />
-                            </th>
-                            <th className="p-2 border-r border-gray-200">
-                                <input type="text" placeholder="Lọc Cơ quan..." className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 outline-none font-normal" value={filters.coQuanBanHanh} onChange={e => setFilters({...filters, coQuanBanHanh: e.target.value})} />
-                            </th>
-                            <th className="p-2 border-r border-gray-200">
-                                <input type="text" placeholder="Lọc Trích yếu..." className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 outline-none font-normal" value={filters.trichYeu} onChange={e => setFilters({...filters, trichYeu: e.target.value})} />
-                            </th>
-                            <th className="p-2 border-r border-gray-200"></th>
-                            <th className="p-2 border-r border-gray-200"></th>
-                            <th className="p-2">
-                                {(filters.loaiVanBan || filters.soKyHieu || filters.ngayBanHanh || filters.coQuanBanHanh || filters.trichYeu) && (
-                                    <button onClick={() => setFilters({loaiVanBan: '', soKyHieu: '', ngayBanHanh: '', coQuanBanHanh: '', trichYeu: ''})} className="text-xs text-red-500 hover:text-red-700 mx-auto block font-medium bg-red-50 px-2 py-1 rounded">Xóa lọc</button>
-                                )}
-                            </th>
-                        </tr>
+
                     </thead>
                     <tbody className="divide-y divide-gray-200 text-sm">
                         {paginatedDocs.map((doc) => (
