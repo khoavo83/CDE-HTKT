@@ -653,13 +653,29 @@ export const DocumentReview = () => {
 
                             {isEditing && (
                                 <button
+                                    type="button"
+                                    onClick={() => {
+                                        setValue('trangThaiDuLieu', 'COMPLETED', { shouldDirty: true });
+                                        handleSubmit(onSubmit)();
+                                    }}
+                                    disabled={isUploading || isChecking || confirmModal.isOpen}
+                                    className="flex items-center gap-2 bg-emerald-100 text-emerald-700 px-4 py-2 rounded-md hover:bg-emerald-200 transition font-medium disabled:opacity-50"
+                                    title="Duyệt và hoàn tất văn bản này ngay lập tức"
+                                >
+                                    <CheckCircle className="w-4 h-4" />
+                                    Duyệt nhanh
+                                </button>
+                            )}
+
+                            {isEditing && (
+                                <button
                                     type="submit"
                                     disabled={isUploading || isChecking || confirmModal.isOpen}
-                                    className="flex items-center gap-2 bg-green-100 text-green-700 px-4 py-2 rounded-md hover:bg-green-200 transition font-medium disabled:opacity-50"
-                                    title="Kiểm tra và Lưu cập nhật hệ thống"
+                                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition font-medium disabled:opacity-50"
+                                    title="Lưu cập nhật hệ thống (Nhưng không thay đổi trạng thái)"
                                 >
                                     {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                    {isUploading ? 'Đang lưu...' : 'Lưu'}
+                                    {isUploading ? 'Đang lưu...' : 'Lưu lại'}
                                 </button>
                             )}
                         </div>
