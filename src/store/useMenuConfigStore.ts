@@ -44,11 +44,26 @@ export const useMenuConfigStore = create<MenuConfigState>((set, get) => ({
         const q = query(collection(db, 'menu_config'), orderBy('order', 'asc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const list: MenuConfigItem[] = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MenuConfigItem));
+            
+            // ONE-TIME CLEANUP: Delete obsolete menu items from Firestore
+            const obsoleteKeys = ['gantt', 'tasks', 'mindmap', 'internal_docs', 'meetings', 'bim', 'map', 'users', 'categories', 'feedbacks', 'trash'];
+            obsoleteKeys.forEach(async (key) => {
+                const docRef = doc(db, 'menu_config', key);
+                try {
+                    await deleteDoc(docRef);
+                } catch (e) {
+                    // ignore
+                }
+            });
+
             const hasDocuments = list.some(item => item.key === 'documents');
             if (!hasDocuments) {
                 get().seedMenuConfig();
             }
-            set({ menuItems: list, isLoading: false });
+            
+            // Filter out obsolete keys just in case they haven't been deleted from DB yet
+            const filteredList = list.filter(item => !obsoleteKeys.includes(item.key));
+            set({ menuItems: filteredList, isLoading: false });
         }, (err) => {
             console.error('Lỗi load menu_config:', err);
             set({ isLoading: false });
