@@ -1030,6 +1030,14 @@ export const CategoriesManagement = () => {
                                             <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
                                             Hồ sơ Dự án: <span className="font-mono opacity-70 ml-auto">{driveConfig.projectsRootId}</span>
                                         </li>
+                                        <li className="flex items-center gap-2 text-indigo-700">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                                            INBOX - AI Đến: <span className="font-mono opacity-70 ml-auto">{driveConfig.aiInboxDenId || 'Chưa có'}</span>
+                                        </li>
+                                        <li className="flex items-center gap-2 text-indigo-700">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                                            INBOX - AI Đi: <span className="font-mono opacity-70 ml-auto">{driveConfig.aiInboxDiId || 'Chưa có'}</span>
+                                        </li>
                                     </ul>
                                 </div>
                             </div>

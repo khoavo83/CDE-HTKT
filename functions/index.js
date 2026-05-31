@@ -1,5 +1,6 @@
 const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentUpdated, onDocumentWritten, onDocumentCreated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 
 // Thiết lập vùng mặc định cho toàn bộ Functions là Singapore (gần Việt Nam và cùng vùng với DB của bạn)
@@ -1446,6 +1447,14 @@ exports.syncDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) => 
             const f = await createFolder("3. Hồ sơ Dự án", folders.rootId);
             folders.projectsRootId = f.id;
         }
+        if (!folders.aiInboxDenId) {
+            const f = await createFolder("INBOX - AI Văn Bản Đến", folders.rootId);
+            folders.aiInboxDenId = f.id;
+        }
+        if (!folders.aiInboxDiId) {
+            const f = await createFolder("INBOX - AI Văn Bản Đi", folders.rootId);
+            folders.aiInboxDiId = f.id;
+        }
 
         await db.collection("settings").doc("driveFolders").set({ ...folders, updatedAt: new Date().toISOString() });
 
@@ -2453,5 +2462,228 @@ exports.uploadToStorageBase64 = onCall({ region: 'asia-southeast1', timeoutSecon
     } catch (error) {
         console.error("uploadToStorageBase64 Error:", error);
         throw new HttpsError("internal", error.message);
+    }
+});
+
+// ==========================================
+// AUTO-SCAN INBOX & OCR
+// ==========================================
+exports.autoScanDriveAndOCR = onSchedule({
+    schedule: "*/15 8-17 * * 1-6",
+    timeZone: "Asia/Ho_Chi_Minh",
+    timeoutSeconds: 540,
+    memory: "1GiB",
+    region: 'asia-southeast1'
+}, async (event) => {
+    console.log("[AUTO-SCAN] Bắt đầu quét INBOX AI...");
+    try {
+        const drive = await getDriveService();
+        const settingsDoc = await db.collection("settings").doc("driveFolders").get();
+        if (!settingsDoc.exists) return;
+        const folders = settingsDoc.data();
+
+        const processInbox = async (inboxId, targetFolderId, loaiVanBan) => {
+            if (!inboxId || !targetFolderId) return;
+
+            const res = await drive.files.list({
+                q: `'${inboxId}' in parents and trashed = false`,
+                fields: "files(id, name, mimeType, size, webViewLink)",
+                spaces: "drive",
+                supportsAllDrives: true,
+                includeItemsFromAllDrives: true
+            });
+
+            const items = res.data.files || [];
+            if (items.length === 0) return;
+
+            console.log(`[AUTO-SCAN] INBOX ${loaiVanBan} có ${items.length} items.`);
+
+            for (const item of items) {
+                let mainFile = null;
+                let attachments = [];
+                let groupFolderId = null;
+
+                if (item.mimeType === "application/vnd.google-apps.folder") {
+                    groupFolderId = item.id;
+                    const childRes = await drive.files.list({
+                        q: `'${groupFolderId}' in parents and trashed = false`,
+                        fields: "files(id, name, mimeType, size, webViewLink)",
+                        supportsAllDrives: true,
+                        includeItemsFromAllDrives: true,
+                        orderBy: "folder, name"
+                    });
+                    const children = childRes.data.files || [];
+                    if (children.length === 0) {
+                        try { await drive.files.delete({ fileId: groupFolderId }); } catch(e){}
+                        continue;
+                    }
+                    mainFile = children.find(c => c.mimeType === "application/pdf") || children[0];
+                    attachments = children.filter(c => c.id !== mainFile.id);
+                } else {
+                    mainFile = item;
+                }
+
+                if (!mainFile) continue;
+
+                let base64Content = "";
+                try {
+                    const driveDownload = await drive.files.get(
+                        { fileId: mainFile.id, alt: 'media' },
+                        { responseType: 'arraybuffer' }
+                    );
+                    base64Content = Buffer.from(driveDownload.data).toString('base64');
+                } catch (e) {
+                    console.error(`[AUTO-SCAN] Lỗi tải file ${mainFile.id}:`, e);
+                    continue;
+                }
+
+                // --- GỌI GEMINI ---
+                const prompt = `Bạn là một chuyên gia hành chính văn phòng chuyên nghiệp. 
+Hãy đọc kỹ văn bản (PDF hoặc Ảnh) được cung cấp và trích xuất các thông tin sau đây chính xác nhất có thể.
+
+YÊU CẦU ĐỊNH DẠNG ĐẦU RA:
+Chỉ trả về DUY NHẤT một chuỗi JSON hợp lệ, không bao gồm bất kỳ văn bản giải thích nào khác ngoài khối mã JSON. 
+Nếu không tìm thấy thông tin cụ thể, hãy để giá trị là chuỗi rỗng "".
+
+Cấu trúc JSON:
+  "soKyHieu": "Số và ký hiệu văn bản (Ví dụ: 123/QĐ-UBND)",
+  "ngayBanHanh": "Ngày ban hành định dạng YYYY-MM-DD (Nếu chỉ có Ngày... tháng... năm... hãy chuyển sang số)",
+  "coQuanBanHanh": "Tên cơ quan ban hành văn bản. LƯU Ý: Nếu phần tiêu đề bên trái có nhiều dòng (ví dụ: dòng trên là cơ quan chủ quản, dòng dưới là cơ quan ban hành trực tiếp), hãy trích xuất dòng DƯỚI CÙNG (ngay sát trên phần Số...). Ví dụ: Dòng 1: UBND TP.HCM, Dòng 2: Ban Quản lý Đường sắt đô thị -> Lấy 'Ban Quản lý Đường sắt đô thị'.",
+  "loaiVanBan": "Loại văn bản (Quyết định, Công văn, Tờ trình, Thông báo, Giấy mời, v.v.)",
+  "trichYeu": "Trích yếu nội dung văn bản (không quá 200 ký tự)",
+  "nguoiKy": "Họ và tên người ký văn bản",
+  "soTrang": "Số trang của văn bản (Giá trị là số nguyên. Nếu không rõ hãy để là 1)",
+  "diaDiemHop": "Địa điểm họp (Nếu loại văn bản là Giấy mời/Thông báo họp)",
+  "ngayHop": "Ngày họp định dạng YYYY-MM-DD (Nếu loại văn bản là Giấy mời/Thông báo họp)",
+  "thoiGianHop": "Thời gian họp bổ sung (Giờ/Phút) (Nếu loại văn bản là Giấy mời/Thông báo/Lịch họp, ví dụ: '08:00' hoặc '14h30')"
+`;
+                require('dotenv').config();
+                const apiKey = process.env.GEMINI_API_KEY;
+                if (!apiKey) {
+                    console.error("[AUTO-SCAN] Missing GEMINI_API_KEY");
+                    continue;
+                }
+
+                const fetch = require('node-fetch');
+                const retryModels = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
+                let ocrResult = {};
+                let textResult = "";
+
+                for (const modelName of retryModels) {
+                    try {
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+                        let response = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{ parts: [ { text: prompt }, { inline_data: { mime_type: mainFile.mimeType || 'application/pdf', data: base64Content } } ] }],
+                                generationConfig: { responseMimeType: "application/json" }
+                            })
+                        });
+                        let data = await response.json();
+
+                        if (!response.ok && response.status === 400) {
+                            response = await fetch(url, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    contents: [{ parts: [ { text: prompt }, { inline_data: { mime_type: mainFile.mimeType || 'application/pdf', data: base64Content } } ] }]
+                                })
+                            });
+                            data = await response.json();
+                        }
+
+                        if (response.ok && data.candidates && data.candidates[0].content) {
+                            textResult = data.candidates[0].content.parts[0].text;
+                            break;
+                        }
+                    } catch (err) {
+                        console.error(`[AUTO-SCAN] Lỗi mô hình ${modelName}:`, err);
+                    }
+                }
+
+                if (textResult) {
+                    const jsonMatch = textResult.match(/[{\[][\s\S]*[}\]]/);
+                    if (jsonMatch) {
+                        try {
+                            const parsed = JSON.parse(jsonMatch[0]);
+                            ocrResult = Array.isArray(parsed) ? (parsed[0] || {}) : parsed;
+                        } catch (pe) { }
+                    }
+                }
+
+                const soKyHieuFormat = ocrResult.soKyHieu ? ocrResult.soKyHieu.replace(/[/\\]/g, "_") : `UNKNOWN_${Date.now()}`;
+                const ngay = ocrResult.ngayBanHanh || "YYYY-MM-DD";
+                const correctMainName = `${ngay}_${soKyHieuFormat}.pdf`;
+
+                await moveFile(mainFile.id, correctMainName, targetFolderId);
+
+                const processedAttachments = [];
+                let attachIndex = 1;
+                for (const att of attachments) {
+                    const extMatch = att.name.match(/\.[0-9a-z]+$/i);
+                    const ext = extMatch ? extMatch[0] : "";
+                    const attNewName = `${ngay}_${soKyHieuFormat}_DinhKem_${attachIndex.toString().padStart(2, '0')}${ext}`;
+                    await moveFile(att.id, attNewName, targetFolderId);
+                    
+                    processedAttachments.push({
+                        fileName: attNewName,
+                        originalName: att.name,
+                        driveFileId: att.id,
+                        fileSize: parseInt(att.size) || 0,
+                        webViewLink: att.webViewLink || "",
+                        uploadTime: new Date().toISOString()
+                    });
+                    attachIndex++;
+                }
+
+                const docId = db.collection("vanban").doc().id;
+                await db.collection("vanban").doc(docId).set({
+                    id: docId,
+                    trangThaiDuLieu: "REVIEWING",
+                    loaiVanBan: loaiVanBan,
+                    soKyHieu: ocrResult.soKyHieu || "",
+                    ngayBanHanh: ocrResult.ngayBanHanh || "",
+                    coQuanBanHanh: ocrResult.coQuanBanHanh || "",
+                    trichYeu: ocrResult.trichYeu || "",
+                    nguoiKy: ocrResult.nguoiKy || "",
+                    soTrang: ocrResult.soTrang || 1,
+                    diaDiemHop: ocrResult.diaDiemHop || "",
+                    ngayHop: ocrResult.ngayHop || "",
+                    thoiGianHop: ocrResult.thoiGianHop || "",
+                    
+                    fileNameOriginal: mainFile.name,
+                    fileNameStandardized: correctMainName,
+                    driveFileId_Original: mainFile.id,
+                    webViewLink: mainFile.webViewLink || "",
+                    fileSize: parseInt(mainFile.size) || 0,
+                    
+                    dinhKem: processedAttachments,
+                    attachments: [],
+                    
+                    createdAt: new Date().toISOString(),
+                    _serverUpdate: true,
+                    history: [{
+                        action: "AUTO_SCAN_OCR",
+                        userId: "system",
+                        email: "system@cde-htkt",
+                        timestamp: new Date().toISOString(),
+                        details: "Tự động nhận diện từ thư mục INBOX"
+                    }]
+                });
+
+                if (groupFolderId) {
+                    try { await drive.files.delete({ fileId: groupFolderId }); } catch(e){}
+                }
+                console.log(`[AUTO-SCAN] Đã xử lý xong văn bản: ${correctMainName}`);
+            }
+        };
+
+        await processInbox(folders.aiInboxDenId, folders.vanBanDenId, "DEN");
+        await processInbox(folders.aiInboxDiId, folders.vanBanDiId, "DI");
+
+        console.log("[AUTO-SCAN] Hoàn tất quét.");
+    } catch (e) {
+        console.error("[AUTO-SCAN] Lỗi tổng:", e);
     }
 });

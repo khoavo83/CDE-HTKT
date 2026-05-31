@@ -62,7 +62,7 @@ export const Documents = () => {
     const [docs, setDocs] = useState<any[]>([]);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>({ key: 'ngayBanHanh', direction: 'desc' });
-    const [activeTab, setActiveTab] = useState<'ALL' | 'INCOMING' | 'OUTGOING' | 'UNSORTED' | 'SORTED' | 'PROCESSING'>('ALL');
+    const [activeTab, setActiveTab] = useState<'ALL' | 'INCOMING' | 'OUTGOING' | 'UNSORTED' | 'SORTED' | 'PROCESSING' | 'REVIEWING'>('ALL');
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const pageSize = 10;
@@ -284,6 +284,8 @@ export const Documents = () => {
             result = result.filter(doc => sortedDocIds.has(doc.id)); // Đã sắp xếp
         } else if (activeTab === 'PROCESSING') {
             return []; // Hanled by filteredTasks
+        } else if (activeTab === 'REVIEWING') {
+            result = result.filter(doc => doc.trangThaiDuLieu === 'REVIEWING');
         } else {
             result = result.filter(doc => doc.phanLoaiVanBan === activeTab); // INCOMING hoặc OUTGOING
         }
@@ -450,6 +452,15 @@ export const Documents = () => {
                         Đã sắp xếp
                         <span className="ml-2 inline-flex items-center justify-center bg-teal-100 text-teal-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                             {docs.filter(d => sortedDocIds.has(d.id)).length}
+                        </span>
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('REVIEWING')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors shrink-0 ${activeTab === 'REVIEWING' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'} `}
+                    >
+                        Chờ duyệt (AI)
+                        <span className="ml-2 inline-flex items-center justify-center bg-yellow-100 text-yellow-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                            {docs.filter(d => d.trangThaiDuLieu === 'REVIEWING').length}
                         </span>
                     </button>
                     <button
