@@ -108,7 +108,7 @@ export const Projects = () => {
     const [previewDocId, setPreviewDocId] = useState<string | null>(null);
 
     // State sắp xếp và gỡ văn bản
-    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'custom'>('custom');
     const [removeModalOpen, setRemoveModalOpen] = useState(false);
     const [linkToRemove, setLinkToRemove] = useState<string | null>(null);
 
@@ -157,10 +157,17 @@ export const Projects = () => {
 
         const unsortedDocs = relevantLinks.map(link => {
             const docData = allDocs.find(d => d.id === link.vanBanId);
-            return docData ? { ...docData, linkId: link.id } : null;
+            return docData ? { 
+                ...docData, 
+                linkId: link.id, 
+                linkOrder: link.order ?? (link.createdAt?.seconds ? link.createdAt.seconds * 1000 : (typeof link.createdAt === 'number' ? link.createdAt : Date.now()))
+            } : null;
         }).filter((item): item is any => item !== null);
 
         return unsortedDocs.sort((a, b) => {
+            if (sortOrder === 'custom') {
+                return a.linkOrder - b.linkOrder;
+            }
             const dateA = a.ngayBanHanh ? new Date(a.ngayBanHanh).getTime() : 0;
             const dateB = b.ngayBanHanh ? new Date(b.ngayBanHanh).getTime() : 0;
             return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
@@ -243,6 +250,37 @@ export const Projects = () => {
         } finally {
             setIsRemovingId(null);
             setLinkToRemove(null);
+        }
+    };
+
+    const handleMoveDocLink = async (linkId: string, direction: 'up' | 'down') => {
+        if (!selectedNodeId || sortOrder !== 'custom') {
+            setSortOrder('custom');
+            toast.success("Đã chuyển sang chế độ Sắp xếp tùy chỉnh");
+            return;
+        }
+        
+        const currentIndex = nodeLinksWithDocs.findIndex(d => d.linkId === linkId);
+        if (currentIndex === -1) return;
+        if (direction === 'up' && currentIndex === 0) return;
+        if (direction === 'down' && currentIndex === nodeLinksWithDocs.length - 1) return;
+
+        const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+        const newSiblings = [...nodeLinksWithDocs];
+        const [movedItem] = newSiblings.splice(currentIndex, 1);
+        newSiblings.splice(targetIndex, 0, movedItem);
+
+        const promises = newSiblings.map((docItem, index) => {
+            const newOrder = Date.now() + index * 100;
+            return updateDoc(doc(db, 'vanban_node_links', docItem.linkId), { order: newOrder });
+        });
+
+        try {
+            await Promise.all(promises);
+            toast.success('Đã cập nhật thứ tự văn bản.');
+        } catch (error) {
+            console.error('Lỗi di chuyển:', error);
+            toast.error('Không thể cập nhật thứ tự!');
         }
     };
 
@@ -1098,11 +1136,11 @@ export const Projects = () => {
                                     <h3 className="text-lg font-semibold text-gray-900">Danh sách Văn bản <span className="ml-2 text-sm font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{nodeLinksWithDocs.length}</span></h3>
                                     <div className="flex flex-wrap items-center gap-2">
                                         <button
-                                            onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                                            onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : prev === 'asc' ? 'custom' : 'desc')}
                                             className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 font-medium px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors text-sm shadow-sm whitespace-nowrap shrink-0"
-                                            title="Sắp xếp theo ngày ban hành"
+                                            title="Đổi chế độ sắp xếp"
                                         >
-                                            <ArrowUpDown className="w-3.5 h-3.5 shrink-0" /> Sắp xếp {sortOrder === 'asc' ? 'cũ nhất' : 'mới nhất'}
+                                            <ArrowUpDown className="w-3.5 h-3.5 shrink-0" /> Sắp xếp: {sortOrder === 'desc' ? 'Mới nhất' : sortOrder === 'asc' ? 'Cũ nhất' : 'Tùy chỉnh'}
                                         </button>
                                         <button
                                             onClick={() => setIsAttachDocModalOpen(true)}
@@ -1170,18 +1208,26 @@ export const Projects = () => {
                                                                 )}
                                                             </td>
                                                             <td className="px-3 py-3 text-center">
-                                                                <button
-                                                                    onClick={() => handleRemoveDocLink(d.linkId)}
-                                                                    disabled={!!isRemovingId}
-                                                                    className="text-gray-400 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 transition-colors disabled:opacity-50"
-                                                                    title="Gỡ văn bản khỏi mục này"
-                                                                >
-                                                                    {isRemovingId === d.linkId ? (
-                                                                        <Loader2 className="w-4 h-4 animate-spin mx-auto" />
-                                                                    ) : (
-                                                                        <Unlink className="w-4 h-4 mx-auto" />
+                                                                <div className="flex items-center justify-center gap-1">
+                                                                    {sortOrder === 'custom' && (
+                                                                        <>
+                                                                            <button onClick={() => handleMoveDocLink(d.linkId, 'up')} className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 rounded-md" title="Đẩy lên"><ArrowUp className="w-4 h-4" /></button>
+                                                                            <button onClick={() => handleMoveDocLink(d.linkId, 'down')} className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 rounded-md" title="Đẩy xuống"><ArrowDown className="w-4 h-4" /></button>
+                                                                        </>
                                                                     )}
-                                                                </button>
+                                                                    <button
+                                                                        onClick={() => handleRemoveDocLink(d.linkId)}
+                                                                        disabled={!!isRemovingId}
+                                                                        className="text-gray-400 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 transition-colors disabled:opacity-50"
+                                                                        title="Gỡ văn bản khỏi mục này"
+                                                                    >
+                                                                        {isRemovingId === d.linkId ? (
+                                                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                                                        ) : (
+                                                                            <Unlink className="w-4 h-4" />
+                                                                        )}
+                                                                    </button>
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                         {/* Dòng phụ: Hiển thị file đính kèm */}
@@ -1258,14 +1304,22 @@ export const Projects = () => {
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        <button
-                                                            onClick={() => handleRemoveDocLink(d.linkId)}
-                                                            disabled={!!isRemovingId}
-                                                            className="shrink-0 text-gray-400 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 disabled:opacity-50"
-                                                            title="Gỡ văn bản khỏi mục này"
-                                                        >
-                                                            {isRemovingId === d.linkId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
-                                                        </button>
+                                                        <div className="flex items-center gap-1">
+                                                            {sortOrder === 'custom' && (
+                                                                <>
+                                                                    <button onClick={() => handleMoveDocLink(d.linkId, 'up')} className="shrink-0 text-gray-400 hover:bg-gray-100 hover:text-gray-700 p-1.5 rounded-md" title="Đẩy lên"><ArrowUp className="w-4 h-4" /></button>
+                                                                    <button onClick={() => handleMoveDocLink(d.linkId, 'down')} className="shrink-0 text-gray-400 hover:bg-gray-100 hover:text-gray-700 p-1.5 rounded-md" title="Đẩy xuống"><ArrowDown className="w-4 h-4" /></button>
+                                                                </>
+                                                            )}
+                                                            <button
+                                                                onClick={() => handleRemoveDocLink(d.linkId)}
+                                                                disabled={!!isRemovingId}
+                                                                className="shrink-0 text-gray-400 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 disabled:opacity-50"
+                                                                title="Gỡ văn bản khỏi mục này"
+                                                            >
+                                                                {isRemovingId === d.linkId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                     
                                                     {/* Nội dung phụ */}
