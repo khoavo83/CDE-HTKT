@@ -1542,48 +1542,8 @@ exports.syncDriveStructure = onCall({ timeoutSeconds: 540 }, async (request) => 
         // Gọi hàm đệ quy để bắt đầu tạo/cập nhật cấu trúc
         await syncNodeRecursive(null, folders.projectsRootId, 0, '');
 
-        // NEW: Dọn dẹp các thư mục mồ côi do SA tạo nhưng không có trong project_nodes
-        debugLogs.push("Bắt đầu dọn dẹp các thư mục mồ côi trên Drive...");
-        const validFolderIds = new Set(nodes.map(n => n.driveFolderId).filter(Boolean));
-        let cleanupCount = 0;
-        try {
-            let pageToken = null;
-            do {
-                const res = await drive.files.list({
-                    q: "trashed = false and 'me' in owners and mimeType = 'application/vnd.google-apps.folder'",
-                    fields: "nextPageToken, files(id, name, parents)",
-                    pageToken: pageToken,
-                    supportsAllDrives: true,
-                    includeItemsFromAllDrives: true
-                });
-                const files = res.data.files || [];
-                for (const file of files) {
-                    // Bỏ qua các thư mục gốc của hệ thống
-                    if (
-                        file.id === folders.rootId || 
-                        file.id === folders.projectsRootId || 
-                        file.id === folders.vanBanDenId || 
-                        file.id === folders.vanBanDiId || 
-                        file.id === folders.aiInboxDenId || 
-                        file.id === folders.aiInboxDiId
-                    ) continue;
-                    
-                    if (!validFolderIds.has(file.id)) {
-                        try {
-                            await drive.files.update({ fileId: file.id, requestBody: { trashed: true }, supportsAllDrives: true });
-                            debugLogs.push(`[CLEANUP] Đã xóa thư mục mồ côi: ${file.name} (${file.id})`);
-                            cleanupCount++;
-                        } catch(e) {
-                            debugLogs.push(`[CLEANUP] Lỗi xóa thư mục ${file.name}: ${e.message}`);
-                        }
-                    }
-                }
-                pageToken = res.data.nextPageToken;
-            } while (pageToken);
-        } catch (err) {
-            debugLogs.push(`[CLEANUP] Lỗi khi quét thư mục mồ côi: ${err.message}`);
-        }
-        debugLogs.push(`--- Đã dọn dẹp ${cleanupCount} thư mục rác ---`);
+        // [DANGEROUS CLEANUP REMOVED] - Trashed folders globally owned by user.
+        debugLogs.push("Đã bỏ qua dọn dẹp thư mục để đảm bảo an toàn cho Drive cá nhân.");
 
         // 3. Đồng bộ Tệp tin Văn bản (SỬ DỤNG LINK - MULTI-PARENT)
         const docsSnap = await db.collection("vanban").get();
