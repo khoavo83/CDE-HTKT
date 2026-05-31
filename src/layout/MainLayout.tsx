@@ -12,7 +12,6 @@ import { useThemeStore } from '../store/useThemeStore';
 import { doc, getDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { UserProfileModal } from '../components/UserProfileModal';
-import { DriveStorageStatus } from '../components/DriveStorageStatus';
 import { GlobalHeader } from '../components/GlobalHeader';
 import { GlobalFooter } from '../components/GlobalFooter';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -201,9 +200,6 @@ export const MainLayout = () => {
                     })}
                 </nav>
 
-                <div className={isDesktopMenuCollapsed ? 'hidden' : 'px-4 mb-2'}>
-                    <DriveStorageStatus />
-                </div>
 
                 {/* User profile & Logout */}
                 <div className={`p-4 border-t border-gray-200 mt-2 flex flex-col ${isDesktopMenuCollapsed ? 'items-center gap-4' : 'gap-3'}`}>
