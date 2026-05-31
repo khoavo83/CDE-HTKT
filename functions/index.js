@@ -2482,6 +2482,27 @@ exports.autoScanDriveAndOCR = onSchedule({
         if (!settingsDoc.exists) return;
         const folders = settingsDoc.data();
 
+        const moveFile = async (fileId, newName = null, newParentId = null) => {
+            if (!fileId) return;
+            let previousParentsStr = "";
+            try {
+                const fileMeta = await drive.files.get({ fileId: fileId, fields: 'parents' });
+                if (fileMeta.data.parents) previousParentsStr = fileMeta.data.parents.join(',');
+            } catch (e) { }
+
+            const params = {
+                fileId: fileId,
+                supportsAllDrives: true,
+                resource: {}
+            };
+            if (newName) params.resource.name = newName;
+            if (newParentId && previousParentsStr) {
+                params.addParents = newParentId;
+                params.removeParents = previousParentsStr;
+            }
+            await drive.files.update(params);
+        };
+
         const processInbox = async (inboxId, targetFolderId, loaiVanBan) => {
             if (!inboxId || !targetFolderId) return;
 
