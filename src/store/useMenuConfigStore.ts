@@ -21,7 +21,8 @@ export const DEFAULT_MENU_ITEMS: Omit<MenuConfigItem, 'id'>[] = [
     { key: 'projects', name: 'Quản lý Dự án', path: '/projects', icon: 'FolderTree', order: 2, status: 'active', adminOnly: false },
     { key: 'documents', name: 'Quản lý Văn bản', path: '/documents', icon: 'FileText', order: 3, status: 'active', adminOnly: false },
     { key: 'bim_gis', name: 'Quản lý BIM - GIS', path: '/bim-gis/bim', icon: 'Map', order: 4, status: 'active', adminOnly: false },
-    { key: 'admin', name: 'Quản trị Hệ thống', path: '/admin/categories', icon: 'Settings', order: 5, status: 'active', adminOnly: true },
+    { key: 'settings', name: 'Cấu hình Admin', path: '/settings/users', icon: 'Settings', order: 5, status: 'active', adminOnly: true },
+    { key: 'admin', name: 'Quản trị Hệ thống', path: '/admin/categories', icon: 'ShieldAlert', order: 6, status: 'active', adminOnly: true },
 ];
 
 interface MenuConfigState {
@@ -56,7 +57,7 @@ export const useMenuConfigStore = create<MenuConfigState>((set, get) => ({
                 }
             });
 
-            const requiredKeys = ['dashboard', 'projects', 'documents', 'bim_gis', 'admin'];
+            const requiredKeys = ['dashboard', 'projects', 'documents', 'bim_gis', 'settings', 'admin'];
             const hasAllRequired = requiredKeys.every(key => list.some(item => item.key === key));
             
             if (!hasAllRequired) {
