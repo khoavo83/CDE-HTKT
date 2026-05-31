@@ -2995,3 +2995,442 @@ const drive = await getDriveService();
 });
 
 
+// ==========================================
+// 🔄 SCHEDULED DRIVE SYNC — DELTA SYNC HÀNG NGÀY 1:00 AM
+// ==========================================
+
+/**
+ * Core sync logic — dùng chung cho scheduled, retry và manual trigger.
+ * Delta sync: chỉ xử lý nodes/vanban thay đổi kể từ lần sync cuối.
+ */
+async function _coreDriveDeltaSync(triggerType = 'scheduled') {
+    const debugLogs = [];
+    const startedAt = new Date().toISOString();
+    const stats = {
+        foldersCreated: 0,
+        foldersRenamed: 0,
+        foldersSkipped: 0,
+        foldersRecreated: 0,
+        shortcutsCreated: 0,
+        shortcutsSkipped: 0,
+        errors: 0
+    };
+    const errorDetails = [];
+
+    try {
+        // 1. Lấy thời điểm sync cuối cùng thành công
+        const lastSyncSnap = await db.collection("sync_logs")
+            .where("status", "in", ["completed", "partial"])
+            .orderBy("startedAt", "desc")
+            .limit(1)
+            .get();
+
+        let lastSyncAt = null;
+        if (!lastSyncSnap.empty) {
+            lastSyncAt = lastSyncSnap.docs[0].data().startedAt;
+        }
+        debugLogs.push(`[INFO] Trigger: ${triggerType}`);
+        debugLogs.push(`[INFO] Lần sync cuối: ${lastSyncAt || 'Chưa có (full sync lần đầu)'}`);
+
+        // 2. Kiểm tra Drive settings
+        const settingsDoc = await db.collection("settings").doc("driveFolders").get();
+        if (!settingsDoc.exists || !settingsDoc.data().rootId) {
+            debugLogs.push("[SKIP] Chưa thiết lập Drive. Bỏ qua.");
+            await _saveSyncLog(startedAt, 'skipped', triggerType, stats, debugLogs, errorDetails);
+            return { success: true, status: 'skipped', message: 'Chưa thiết lập Drive.' };
+        }
+        const folders = settingsDoc.data();
+
+        // 3. Khởi tạo Drive service
+        const drive = await getDriveService();
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        const createFolder = async (name, parentId = null) => {
+            const existing = await findExistingItem(drive, name, parentId, "application/vnd.google-apps.folder");
+            if (existing) return existing;
+            const folder = await drive.files.create({
+                requestBody: {
+                    name: name || "Chưa đặt tên",
+                    mimeType: "application/vnd.google-apps.folder",
+                    parents: parentId ? [parentId] : []
+                },
+                fields: "id, webViewLink"
+            });
+            return folder.data;
+        };
+
+        // ========================
+        // PHASE 1: DELTA SYNC THƯ MỤC DỰ ÁN
+        // ========================
+        debugLogs.push("--- PHASE 1: Đồng bộ thư mục dự án ---");
+
+        // Lấy TẤT CẢ nodes (cần cho cây đệ quy) nhưng chỉ XỬ LÝ nodes thay đổi
+        const allNodesSnap = await db.collection("project_nodes").get();
+        const allNodes = allNodesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        // Xác định nodes cần xử lý (delta)
+        let changedNodeIds = new Set();
+        if (lastSyncAt) {
+            // Delta: chỉ nodes có updatedAt hoặc createdAt sau lần sync cuối
+            const lastSyncDate = new Date(lastSyncAt);
+            for (const node of allNodes) {
+                const nodeUpdated = node.updatedAt ? new Date(node.updatedAt) : null;
+                const nodeCreated = node.createdAt ? new Date(node.createdAt) : null;
+                if ((nodeUpdated && nodeUpdated > lastSyncDate) ||
+                    (nodeCreated && nodeCreated > lastSyncDate) ||
+                    !node.driveFolderId) {
+                    changedNodeIds.add(node.id);
+                    // Cũng đánh dấu parent chain để đảm bảo cây đường dẫn đúng
+                    let current = node;
+                    while (current.parentId) {
+                        changedNodeIds.add(current.parentId);
+                        current = allNodes.find(n => n.id === current.parentId) || {};
+                    }
+                }
+            }
+            debugLogs.push(`[DELTA] ${changedNodeIds.size}/${allNodes.length} nodes cần xử lý`);
+        } else {
+            // Full sync lần đầu
+            allNodes.forEach(n => changedNodeIds.add(n.id));
+            debugLogs.push(`[FULL] Sync toàn bộ ${allNodes.length} nodes (lần đầu)`);
+        }
+
+        // Đệ quy sync thư mục — tuần tự từ gốc → con → cháu
+        const syncNodeRecursive = async (parentId, driveParentId, level = 0, prefix = '') => {
+            const children = allNodes.filter(n => {
+                const pId = n.parentId === "" ? null : (n.parentId || null);
+                return pId === parentId && n.type !== 'TASK';
+            }).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+            for (let i = 0; i < children.length; i++) {
+                const node = children[i];
+                const currentPrefix = level === 0 ? '' : (prefix ? `${prefix}${i + 1}.` : `${i + 1}.`);
+                const expectedName = currentPrefix ? `${currentPrefix} ${node.name}` : node.name;
+
+                // Chỉ xử lý nodes trong danh sách delta
+                if (!changedNodeIds.has(node.id)) {
+                    stats.foldersSkipped++;
+                    // Vẫn cần đệ quy xuống con (con có thể thay đổi dù cha không đổi)
+                    if (node.driveFolderId) {
+                        await syncNodeRecursive(node.id, node.driveFolderId, level + 1, level === 0 ? '' : currentPrefix);
+                    }
+                    continue;
+                }
+
+                let currentDriveId = node.driveFolderId;
+
+                if (!currentDriveId) {
+                    // Tạo thư mục mới
+                    try {
+                        const folder = await createFolder(expectedName, driveParentId);
+                        currentDriveId = folder.id;
+                        await db.collection("project_nodes").doc(node.id).update({
+                            driveFolderId: currentDriveId,
+                            driveFolderLink: folder.webViewLink || `https://drive.google.com/drive/folders/${currentDriveId}`
+                        });
+                        stats.foldersCreated++;
+                        debugLogs.push(`[+] Tạo mới: "${expectedName}"`);
+                        await sleep(500);
+                    } catch (err) {
+                        stats.errors++;
+                        errorDetails.push(`Lỗi tạo folder "${expectedName}": ${err.message}`);
+                    }
+                } else {
+                    // Kiểm tra tên + tồn tại
+                    try {
+                        const fileMeta = await drive.files.get({ fileId: currentDriveId, fields: "id, name" });
+                        if (fileMeta.data.name !== expectedName) {
+                            await drive.files.update({ fileId: currentDriveId, requestBody: { name: expectedName } });
+                            stats.foldersRenamed++;
+                            debugLogs.push(`[~] Đổi tên: "${fileMeta.data.name}" → "${expectedName}"`);
+                        } else {
+                            stats.foldersSkipped++;
+                        }
+                    } catch (err) {
+                        if (err.code === 404) {
+                            try {
+                                const folder = await createFolder(expectedName, driveParentId);
+                                currentDriveId = folder.id;
+                                await db.collection("project_nodes").doc(node.id).update({
+                                    driveFolderId: currentDriveId,
+                                    driveFolderLink: folder.webViewLink || `https://drive.google.com/drive/folders/${currentDriveId}`
+                                });
+                                stats.foldersRecreated++;
+                                debugLogs.push(`[!] Tạo lại (404): "${expectedName}"`);
+                            } catch (e2) {
+                                stats.errors++;
+                                errorDetails.push(`Lỗi tạo lại folder "${expectedName}": ${e2.message}`);
+                            }
+                        } else {
+                            stats.errors++;
+                            errorDetails.push(`Lỗi kiểm tra folder "${expectedName}": ${err.message}`);
+                        }
+                    }
+                }
+
+                // Cấp quyền Admin
+                if (currentDriveId) {
+                    try { await ensureAdminPermission(drive, currentDriveId); } catch (e) { /* ignore */ }
+                }
+
+                // Đệ quy con
+                if (currentDriveId) {
+                    await syncNodeRecursive(node.id, currentDriveId, level + 1, level === 0 ? '' : currentPrefix);
+                }
+                await sleep(300);
+            }
+        };
+
+        await syncNodeRecursive(null, folders.projectsRootId, 0, '');
+
+        // ========================
+        // PHASE 2: DELTA SYNC VĂN BẢN (Shortcut)
+        // ========================
+        debugLogs.push("--- PHASE 2: Đồng bộ văn bản (shortcut) ---");
+
+        let vanbanQuery = db.collection("vanban");
+        if (lastSyncAt) {
+            // Delta: chỉ VB thay đổi sau lần sync cuối
+            vanbanQuery = vanbanQuery.where("updatedAt", ">=", lastSyncAt);
+        }
+        const docsSnap = await vanbanQuery.get();
+        debugLogs.push(`[INFO] ${docsSnap.size} văn bản cần xử lý`);
+
+        for (const doc of docsSnap.docs) {
+            const data = doc.data();
+            const fileId = data.driveFileId_Original || data.driveId || data.fileId;
+            if (!fileId) continue;
+
+            try {
+                const isOutgoing = data.phanLoaiVanBan === 'OUTGOING' ||
+                    data.phanLoaiDoc === 'di' ||
+                    (data.loaiVanBan && data.loaiVanBan.toLowerCase().includes('đi'));
+                const targetFolderId = isOutgoing ? folders.vanBanDiId : folders.vanBanDenId;
+
+                const shortcutName = (data.fileNameStandardized || data.fileNameOriginal || "VanBan") + " (Shortcut)";
+                const existingShortcut = await findExistingItem(drive, shortcutName, targetFolderId, 'application/vnd.google-apps.shortcut');
+
+                if (!existingShortcut) {
+                    await drive.files.create({
+                        supportsAllDrives: true,
+                        resource: {
+                            name: shortcutName,
+                            mimeType: 'application/vnd.google-apps.shortcut',
+                            shortcutDetails: { targetId: fileId },
+                            parents: [targetFolderId]
+                        }
+                    });
+                    stats.shortcutsCreated++;
+                    debugLogs.push(`[+] Shortcut VB: "${data.fileNameOriginal || doc.id}"`);
+                } else {
+                    stats.shortcutsSkipped++;
+                }
+                await sleep(300);
+            } catch (err) {
+                stats.errors++;
+                errorDetails.push(`Lỗi shortcut VB ${doc.id}: ${err.message}`);
+            }
+        }
+
+        // ========================
+        // PHASE 3: DELTA SYNC LIÊN KẾT MINDMAP
+        // ========================
+        debugLogs.push("--- PHASE 3: Đồng bộ liên kết Mindmap ---");
+
+        let linksQuery = db.collection("vanban_node_links");
+        if (lastSyncAt) {
+            linksQuery = linksQuery.where("createdAt", ">=", lastSyncAt);
+        }
+        const linksSnap = await linksQuery.get();
+        debugLogs.push(`[INFO] ${linksSnap.size} liên kết cần xử lý`);
+
+        for (const linkDoc of linksSnap.docs) {
+            const linkData = linkDoc.data();
+            const nodeDoc = await db.collection("project_nodes").doc(linkData.nodeId).get();
+            const vbDoc = await db.collection("vanban").doc(linkData.vanBanId).get();
+
+            if (!nodeDoc.exists || !vbDoc.exists) continue;
+            const nodeData = nodeDoc.data();
+            const vbData = vbDoc.data();
+            const fileId = vbData.driveFileId_Original || vbData.driveId || vbData.fileId;
+
+            if (!nodeData.driveFolderId || !fileId) continue;
+
+            try {
+                const shortcutName = (vbData.fileNameStandardized || vbData.fileNameOriginal || "Link") + " (Shortcut)";
+                const existing = await findExistingItem(drive, shortcutName, nodeData.driveFolderId, 'application/vnd.google-apps.shortcut');
+                if (!existing) {
+                    await drive.files.create({
+                        supportsAllDrives: true,
+                        resource: {
+                            name: shortcutName,
+                            mimeType: 'application/vnd.google-apps.shortcut',
+                            shortcutDetails: { targetId: fileId },
+                            parents: [nodeData.driveFolderId]
+                        }
+                    });
+                    stats.shortcutsCreated++;
+                }
+                await sleep(200);
+            } catch (err) {
+                stats.errors++;
+                errorDetails.push(`Lỗi link Mindmap ${linkDoc.id}: ${err.message}`);
+            }
+        }
+
+        // ========================
+        // PHASE 4: GHI LOG & THÔNG BÁO
+        // ========================
+        const status = stats.errors > 0 ? 'partial' : 'completed';
+        const completedAt = new Date().toISOString();
+
+        debugLogs.push(`=== HOÀN TẤT: ${stats.foldersCreated} folder mới, ${stats.foldersRenamed} đổi tên, ${stats.shortcutsCreated} shortcut, ${stats.errors} lỗi ===`);
+
+        const logId = await _saveSyncLog(startedAt, status, triggerType, stats, debugLogs, errorDetails);
+
+        // Gửi thông báo cho tất cả Admin
+        await _sendSyncNotification(status, stats, triggerType);
+
+        return {
+            success: true,
+            status,
+            logId,
+            stats,
+            message: `Đồng bộ ${status === 'completed' ? 'thành công' : 'hoàn tất (có lỗi)'}. ` +
+                `${stats.foldersCreated} folder mới, ${stats.foldersRenamed} đổi tên, ` +
+                `${stats.shortcutsCreated} shortcut, ${stats.errors} lỗi.`
+        };
+    } catch (error) {
+        console.error("[scheduledDriveSync] Fatal Error:", error);
+        const errorMsg = `Lỗi nghiêm trọng: ${error.message}`;
+        errorDetails.push(errorMsg);
+        debugLogs.push(`[FATAL] ${errorMsg}`);
+        await _saveSyncLog(startedAt, 'failed', triggerType, stats, debugLogs, errorDetails);
+        await _sendSyncNotification('failed', stats, triggerType, error.message);
+        return { success: false, status: 'failed', message: errorMsg };
+    }
+}
+
+/** Ghi log vào Firestore */
+async function _saveSyncLog(startedAt, status, trigger, stats, details, errorDetails) {
+    const logRef = await db.collection("sync_logs").add({
+        startedAt,
+        completedAt: new Date().toISOString(),
+        trigger,
+        status,
+        stats,
+        details: details.slice(0, 500), // Giới hạn log tránh quá lớn
+        errorDetails: errorDetails.slice(0, 100)
+    });
+    return logRef.id;
+}
+
+/** Gửi notification cho tất cả Admin users */
+async function _sendSyncNotification(status, stats, trigger, errorMessage = null) {
+    try {
+        const adminsSnap = await db.collection("users").where("role", "==", "admin").get();
+        const batch = db.batch();
+        const now = new Date().toISOString();
+
+        let title, body, type;
+        if (status === 'completed') {
+            title = '✅ Đồng bộ Drive hoàn tất';
+            body = `${trigger === 'scheduled' ? 'Tự động' : 'Thủ công'}: ${stats.foldersCreated} folder mới, ${stats.shortcutsCreated} shortcut.`;
+            type = 'success';
+        } else if (status === 'partial') {
+            title = '⚠️ Đồng bộ Drive có lỗi';
+            body = `${stats.foldersCreated} folder, ${stats.shortcutsCreated} shortcut. ${stats.errors} lỗi cần kiểm tra.`;
+            type = 'warning';
+        } else if (status === 'failed') {
+            title = '❌ Đồng bộ Drive thất bại';
+            body = errorMessage || 'Lỗi không xác định. Kiểm tra log để biết chi tiết.';
+            type = 'error';
+        } else {
+            return; // skipped — không cần thông báo
+        }
+
+        for (const adminDoc of adminsSnap.docs) {
+            const notifRef = db.collection("notifications").doc();
+            batch.set(notifRef, {
+                userId: adminDoc.id,
+                title,
+                body,
+                type,
+                category: 'drive_sync',
+                read: false,
+                createdAt: now,
+                link: '/settings/drive'
+            });
+        }
+        await batch.commit();
+    } catch (err) {
+        console.error("[_sendSyncNotification] Error:", err.message);
+    }
+}
+
+// ==========================================
+// SCHEDULED: Chạy tự động 1:00 AM (giờ Việt Nam) mỗi ngày
+// ==========================================
+exports.scheduledDriveSync = onSchedule({
+    schedule: "0 18 * * *", // 18:00 UTC = 01:00 AM GMT+7
+    timeZone: "Asia/Ho_Chi_Minh",
+    timeoutSeconds: 540,
+    memory: "1GiB",
+    region: "asia-southeast1"
+}, async (event) => {
+    console.log("[scheduledDriveSync] Bắt đầu đồng bộ tự động lúc 1:00 AM...");
+    const result = await _coreDriveDeltaSync('scheduled');
+    console.log("[scheduledDriveSync] Kết quả:", JSON.stringify(result));
+});
+
+// ==========================================
+// RETRY: Chạy tự động 1:30 AM — thử lại nếu lần 1:00 AM thất bại
+// ==========================================
+exports.scheduledDriveSyncRetry = onSchedule({
+    schedule: "30 18 * * *", // 18:30 UTC = 01:30 AM GMT+7
+    timeZone: "Asia/Ho_Chi_Minh",
+    timeoutSeconds: 540,
+    memory: "1GiB",
+    region: "asia-southeast1"
+}, async (event) => {
+    // Kiểm tra log gần nhất — chỉ chạy nếu thất bại hoặc partial
+    const recentLog = await db.collection("sync_logs")
+        .orderBy("startedAt", "desc")
+        .limit(1)
+        .get();
+
+    if (recentLog.empty) {
+        console.log("[scheduledDriveSyncRetry] Không có log nào. Bỏ qua.");
+        return;
+    }
+
+    const lastStatus = recentLog.docs[0].data().status;
+    if (lastStatus === 'completed' || lastStatus === 'skipped') {
+        console.log(`[scheduledDriveSyncRetry] Lần sync trước đã ${lastStatus}. Không cần retry.`);
+        return;
+    }
+
+    console.log(`[scheduledDriveSyncRetry] Lần sync trước: ${lastStatus}. Đang retry...`);
+    const result = await _coreDriveDeltaSync('retry');
+    console.log("[scheduledDriveSyncRetry] Kết quả retry:", JSON.stringify(result));
+});
+
+// ==========================================
+// MANUAL TRIGGER: Admin kích hoạt từ WebApp
+// ==========================================
+exports.manualTriggerDriveSync = onCall({ timeoutSeconds: 540, memory: "1GiB" }, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Yêu cầu đăng nhập.");
+    }
+
+    const userDoc = await db.collection("users").doc(request.auth.uid).get();
+    const userData = userDoc.exists ? userDoc.data() : null;
+    if (!userData || (userData.role !== 'admin' && userData.role !== 'manager')) {
+        throw new HttpsError("permission-denied", "Chỉ Admin/Manager mới có quyền kích hoạt đồng bộ.");
+    }
+
+    console.log(`[manualTriggerDriveSync] Admin ${request.auth.uid} kích hoạt đồng bộ thủ công.`);
+    const result = await _coreDriveDeltaSync('manual');
+    return result;
+});
+

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { SyncDashboard } from '../components/SyncDashboard';
 import { useAuthStore } from '../store/useAuthStore';
 import { canEditOrDeleteData } from '../utils/authUtils';
 import { useAppSettingsStore } from '../store/useAppSettingsStore';
@@ -1034,6 +1035,9 @@ export function CategoriesManagement({ forcedTab, hideHeader }: { forcedTab?: st
                             </p>
                         </div>
                     </div>
+
+                    {/* Dashboard Đồng bộ Tự động */}
+                    <SyncDashboard />
                 </div>
             )}
 
