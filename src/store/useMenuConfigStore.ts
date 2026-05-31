@@ -56,8 +56,10 @@ export const useMenuConfigStore = create<MenuConfigState>((set, get) => ({
                 }
             });
 
-            const hasDocuments = list.some(item => item.key === 'documents');
-            if (!hasDocuments) {
+            const requiredKeys = ['dashboard', 'projects', 'documents', 'bim_gis', 'admin'];
+            const hasAllRequired = requiredKeys.every(key => list.some(item => item.key === key));
+            
+            if (!hasAllRequired) {
                 get().seedMenuConfig();
             }
             

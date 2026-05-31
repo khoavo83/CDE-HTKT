@@ -58,15 +58,8 @@ export const MainLayout = () => {
 
     // Nếu collection rỗng hoặc thiếu mục quan trọng → seed dữ liệu mặc định
     useEffect(() => {
-        if (!isLoading) {
-            if (menuItems.length === 0) {
-                seedMenuConfig();
-            } else {
-                const hasDocuments = menuItems.some(item => item.key === 'documents');
-                if (!hasDocuments) {
-                    seedMenuConfig();
-                }
-            }
+        if (!isLoading && menuItems.length === 0) {
+            seedMenuConfig();
         }
     }, [isLoading, menuItems, seedMenuConfig]);
 
