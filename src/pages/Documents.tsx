@@ -332,6 +332,10 @@ export const Documents = () => {
         });
     }, [filteredDocs, sortConfig]);
 
+    const totalFilteredSize = useMemo(() => {
+        return filteredDocs.reduce((acc, doc) => acc + (doc.fileSize || 0), 0);
+    }, [filteredDocs]);
+
     const totalPages = Math.ceil(sortedDocs.length / pageSize);
     const paginatedDocs = useMemo(() => {
         const start = (currentPage - 1) * pageSize;
@@ -891,6 +895,8 @@ export const Documents = () => {
                     <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
                         <div className="text-sm text-gray-500">
                             Hiển thị <span className="font-medium text-gray-900">{paginatedDocs.length}</span> trên tổng số <span className="font-medium text-gray-900">{filteredDocs.length}</span> văn bản
+                            <span className="ml-2 text-gray-400">|</span>
+                            <span className="ml-2">Tổng dung lượng: <span className="font-medium text-blue-600">{formatBytes(totalFilteredSize)}</span></span>
                         </div>
                         <div className="flex items-center gap-2">
                             <button
