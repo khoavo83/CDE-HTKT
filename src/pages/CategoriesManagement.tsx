@@ -27,7 +27,7 @@ const STATUS_CONFIG: Record<MenuItemStatus, { label: string; badge: string; icon
     inactive: { label: 'Ngừng hoạt động', badge: 'bg-red-50    text-red-700    border-red-200', icon: EyeOff },
 };
 
-export const CategoriesManagement = () => {
+export function CategoriesManagement({ forcedTab, hideHeader }: { forcedTab?: string, hideHeader?: boolean }) {
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
     useEffect(() => {
@@ -49,7 +49,14 @@ export const CategoriesManagement = () => {
     } = useMenuConfigStore();
     const { tabs, fetchTabs, seedInitialTabs, addTab, deleteTab } = useCategoryTabStore();
 
-    const [activeTab, setActiveTab] = useState<string>('phongBan');
+    const [activeTab, setActiveTab] = useState<string>(forcedTab || 'phongBan');
+
+    // Force tab if provided
+    useEffect(() => {
+        if (forcedTab) {
+            setActiveTab(forcedTab);
+        }
+    }, [forcedTab]);
     const [isAdding, setIsAdding] = useState(false);
     const [isAddingTab, setIsAddingTab] = useState(false);
     const [newTabName, setNewTabName] = useState('');
@@ -563,8 +570,8 @@ export const CategoriesManagement = () => {
     };
 
     return (
-        <div className="p-4 md:p-6 w-full mx-auto">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8 pb-4 border-b border-gray-200">
+        <div className={`w-full mx-auto ${hideHeader ? 'p-0' : 'p-4 md:p-6'}`}>
+            <div className={`flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8 pb-4 border-b border-gray-200 ${hideHeader ? 'hidden' : ''}`}>
                 <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
                         <ListTree className="w-6 h-6 text-blue-600" />
@@ -586,7 +593,7 @@ export const CategoriesManagement = () => {
             </div>
 
             {/* Tabs Navigation */}
-            <div className="flex gap-4 mb-6 border-b border-gray-100 overflow-x-auto whitespace-nowrap scrollbar-hide font-bold">
+            <div className={`flex gap-4 mb-6 border-b border-gray-100 overflow-x-auto whitespace-nowrap scrollbar-hide font-bold ${hideHeader ? 'hidden' : ''}`}>
                 {tabs.map((tab) => (
                     <button
                         key={tab.id}

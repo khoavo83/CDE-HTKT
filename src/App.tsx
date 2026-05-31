@@ -18,6 +18,8 @@ import { Projects } from './pages/Projects';
 import { Mindmap } from './pages/Mindmap';
 import { BimViewer } from './pages/BimViewer';
 import { MapViewer } from './pages/MapViewer';
+import { SettingsLayout } from './layout/SettingsLayout';
+import { AdminSettings } from './pages/AdminSettings';
 import { PendingApproval } from './pages/PendingApproval';
 import { UsersManagement } from './pages/UsersManagement';
 import { CategoriesManagement } from './pages/CategoriesManagement';
@@ -105,9 +107,15 @@ function App() {
                             <Route path="map" element={<MapViewer />} />
                         </Route>
 
+                        <Route path="/settings" element={<SettingsLayout />}>
+                            <Route path="users" element={<AdminSettings />} />
+                            <Route path="menu" element={<AdminSettings />} />
+                            <Route path="app" element={<AdminSettings />} />
+                            <Route path="drive" element={<AdminSettings />} />
+                        </Route>
+
                         <Route path="/admin" element={<AdminLayout />}>
                             <Route path="categories" element={<CategoriesManagement />} />
-                            <Route path="users" element={<UsersManagement />} />
                             <Route path="feedbacks" element={<FeedbackManagement />} />
                             <Route path="trash" element={<TrashManagement />} />
                         </Route>
