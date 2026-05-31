@@ -2506,7 +2506,7 @@ exports.uploadToStorageBase64 = onCall({ region: 'asia-southeast1', timeoutSecon
 // AUTO-SCAN INBOX & OCR
 // ==========================================
 exports.autoScanDriveAndOCR = onSchedule({
-    schedule: "*/15 8-17 * * *",
+    schedule: "*/15 * * * *",
     timeZone: "Asia/Ho_Chi_Minh",
     timeoutSeconds: 540,
     memory: "1GiB",
