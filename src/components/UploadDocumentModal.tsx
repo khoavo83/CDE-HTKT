@@ -30,7 +30,11 @@ interface UploadDocumentModalProps {
 
 export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen, onClose }) => {
     const [mainFile, setMainFile] = useState<File | null>(null);
-    const [attachments, setAttachments] = useState<File[]>([]);
+    const [extraFiles, setExtraFiles] = useState<{
+        id: string;
+        file: File;
+        role: 'phieutrinh' | 'draft_main' | 'draft_phieutrinh' | 'attachment';
+    }[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [isOcrRunning, setIsOcrRunning] = useState(false);
     const [uploadStatus, setUploadStatus] = useState<string>('');
@@ -92,6 +96,37 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
         setMainFilePreviewUrl(url);
         return () => URL.revokeObjectURL(url);
     }, [mainFile]);
+
+    const getFileStandardizedName = (
+        fileName: string,
+        role: 'phieutrinh' | 'draft_main' | 'draft_phieutrinh' | 'attachment',
+        index: number
+    ) => {
+        const safeSoKyHieu = (ocrData.soKyHieu || "NOSO").replace(/\//g, "_").replace(/\\/g, "_");
+        const ngayBanHanhStr = ocrData.ngayBanHanh || format(new Date(), 'yyyy-MM-dd');
+        const ext = fileName.split('.').pop() || '';
+
+        if (role === 'phieutrinh') {
+            return `${ngayBanHanhStr}_${safeSoKyHieu}_phieutrinh.pdf`;
+        } else if (role === 'draft_main') {
+            return `${ngayBanHanhStr}_${safeSoKyHieu}_duthao.${ext}`;
+        } else if (role === 'draft_phieutrinh') {
+            return `${ngayBanHanhStr}_${safeSoKyHieu}_duthao_phieutrinh.${ext}`;
+        } else {
+            // Lọc ra các file cùng là role attachment để đánh số STT chính xác
+            const attachmentFiles = extraFiles.filter(f => f.role === 'attachment');
+            const fileIdx = attachmentFiles.findIndex(f => f.file.name === fileName);
+            const actualIdx = fileIdx !== -1 ? fileIdx : index;
+            const stt = (actualIdx + 1).toString().padStart(2, '0');
+            const safeOriginalName = fileName
+                .substring(0, fileName.lastIndexOf('.'))
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-zA-Z0-9 -]/g, "")
+                .replace(/\s+/g, '-');
+            return `${ngayBanHanhStr}_${safeSoKyHieu}_dinhkem_${stt}_${safeOriginalName}.${ext}`;
+        }
+    };
 
     // Tự động điền tên file chuẩn hóa
     useEffect(() => {
@@ -239,7 +274,6 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
 
             const safeSoKyHieu = (ocrData.soKyHieu || "NOSO").replace(/\//g, "_").replace(/\\/g, "_");
             const ngayBanHanhStr = ocrData.ngayBanHanh || format(new Date(), 'yyyy-MM-dd');
-            let safeTrichYeu = (ocrData.trichYeu || "KhongTrichYeu").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9 -]/g, "").replace(/\s+/g, "_").substring(0, 50);
 
             let targetDocId = docId;
             let driveFileId_Original = ocrData.driveFileId_Original || '';
@@ -262,8 +296,7 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                 console.error("Không thể lấy cấu hình Drive:", err);
             }
 
-            // Upload file lên Drive (cả khi đã qua AI hoặc upload thủ công)
-            // File luôn được upload ở bước Lưu để đảm bảo dùng tên chuẩn hóa
+            // 1. Upload Văn bản chính
             if (mainFile && !driveFileId_Original) {
                 setUploadStatus('Đang tải lên Văn bản chính với tên chuẩn hóa...');
                 const base64Data = await fileToBase64(mainFile);
@@ -282,49 +315,111 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                     targetDocId = doc(collection(db, 'vanban')).id;
                     setDocId(targetDocId);
                 }
+            } else if (!targetDocId) {
+                targetDocId = doc(collection(db, 'vanban')).id;
+                setDocId(targetDocId);
             }
 
-            let finalAttachments = [...(ocrData.attachments || [])];
-            if (attachments.length > 0) {
-                for (let i = 0; i < attachments.length; i++) {
-                    const file = attachments[i];
-                    setUploadStatus(`Đang tải tệp đính kèm ${i + 1}/${attachments.length}: ${file.name}...`);
-                    const stt = (finalAttachments.length + 1).toString().padStart(2, '0');
-                    const safeOriginalName = file.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
-                    const standardizedAttachName = `${ngayBanHanhStr}_${safeSoKyHieu}_DinhKem_${stt}_${safeOriginalName}`;
+            // 2. Phân loại các tệp liên quan
+            let mainDocAttachments = [...(ocrData.attachments || [])];
+            let phieuTrinhAttachments: any[] = [];
+            
+            // Tìm file Phiếu trình PDF trong extraFiles
+            const phieuTrinhFileObj = extraFiles.find(f => f.role === 'phieutrinh');
+            let phieuTrinhDocId = '';
+            let uploadedPhieuTrinhData: any = null;
 
-                    const base64 = await fileToBase64(file);
+            // Upload Phiếu trình PDF trước nếu có
+            if (phieuTrinhFileObj) {
+                setUploadStatus('Đang tải lên Phiếu trình PDF...');
+                const ptFileName = getFileStandardizedName(phieuTrinhFileObj.file.name, 'phieutrinh', 0);
+                const base64 = await fileToBase64(phieuTrinhFileObj.file);
+                const uploadedPT = await uploadFn({
+                    fileName: ptFileName,
+                    mimeType: phieuTrinhFileObj.file.type,
+                    base64Data: base64,
+                    targetParentId: targetParentId
+                });
+
+                phieuTrinhDocId = doc(collection(db, 'vanban')).id;
+                uploadedPhieuTrinhData = {
+                    id: phieuTrinhDocId,
+                    parentDocId: targetDocId,
+                    soKyHieu: `${ocrData.soKyHieu || 'NOSO'}/PT`,
+                    ngayBanHanh: ocrData.ngayBanHanh,
+                    coQuanBanHanh: ocrData.coQuanBanHanh,
+                    trichYeu: `Phiếu trình kèm theo văn bản: ${ocrData.trichYeu || ''}`,
+                    nguoiKy: ocrData.nguoiKy,
+                    loaiVanBan: 'Phiếu trình',
+                    phanLoaiVanBan: ocrData.phanLoaiVanBan,
+                    mucDoKhan: ocrData.mucDoKhan,
+                    fileNameStandardized: ptFileName,
+                    fileNameOriginal: phieuTrinhFileObj.file.name,
+                    fileSize: phieuTrinhFileObj.file.size,
+                    driveFileId_Original: uploadedPT.data.file.id,
+                    webViewLink: uploadedPT.data.file.webViewLink,
+                    trangThaiDuLieu: 'COMPLETED',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    history: [
+                        {
+                            action: "UPLOAD_PHIEU_TRINH",
+                            userId: user.uid || "Unknown",
+                            userEmail: user.email || "Unknown",
+                            timestamp: new Date().toISOString()
+                        }
+                    ]
+                };
+            }
+
+            // Upload các file liên quan khác
+            if (extraFiles.length > 0) {
+                for (let i = 0; i < extraFiles.length; i++) {
+                    const item = extraFiles[i];
+                    if (item.role === 'phieutrinh') continue; // Đã xử lý riêng ở trên
+
+                    setUploadStatus(`Đang tải tệp ${i + 1}/${extraFiles.length}: ${item.file.name}...`);
+                    const stdName = getFileStandardizedName(item.file.name, item.role, i);
+                    const base64 = await fileToBase64(item.file);
                     const uploaded = await uploadFn({
-                        fileName: standardizedAttachName,
-                        mimeType: file.type,
+                        fileName: stdName,
+                        mimeType: item.file.type,
                         base64Data: base64,
                         targetParentId: targetParentId
                     });
 
-                    finalAttachments.push({
+                    const attachInfo = {
                         id: crypto.randomUUID(),
-                        fileName: standardizedAttachName,
-                        originalName: file.name,
-                        fileSize: file.size,
-                        mimeType: file.type,
+                        fileName: stdName,
+                        originalName: item.file.name,
+                        fileSize: item.file.size,
+                        mimeType: item.file.type,
                         driveFileId: uploaded.data.file.id,
                         webViewLink: uploaded.data.file.webViewLink,
                         uploadedAt: new Date().toISOString()
-                    });
+                    };
+
+                    // Nếu là dự thảo phiếu trình, gắn vào phiếu trình (nếu có phiếu trình), ngược lại gắn vào văn bản chính
+                    if (item.role === 'draft_phieutrinh' && phieuTrinhDocId) {
+                        phieuTrinhAttachments.push(attachInfo);
+                    } else {
+                        mainDocAttachments.push(attachInfo);
+                    }
                 }
             }
 
+            // Lưu Document Văn bản chính
             const documentData = {
                 ...ocrData,
                 fileNameStandardized,
                 driveFileId_Original,
                 webViewLink,
-                attachments: finalAttachments,
+                attachments: mainDocAttachments,
                 trangThaiDuLieu: 'COMPLETED',
                 updatedAt: new Date().toISOString()
             };
 
-            if (!docId) { // Manual creation without AI
+            if (!docId) { // Tạo thủ công không qua AI
                 const newDocInfo = {
                     ...documentData,
                     id: targetDocId,
@@ -348,6 +443,12 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                         timestamp: new Date().toISOString()
                     })
                 });
+            }
+
+            // Lưu Document Phiếu trình (nếu có)
+            if (uploadedPhieuTrinhData) {
+                uploadedPhieuTrinhData.attachments = phieuTrinhAttachments;
+                await setDoc(doc(db, 'vanban', phieuTrinhDocId), uploadedPhieuTrinhData);
             }
 
             await logVanBanActivity({
@@ -492,23 +593,56 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                             </div>
                         </div>
 
-                        {/* ═══════ PHẦN 2: Các tài liệu đính kèm ═══════ */}
+                        {/* ═══════ PHẦN 2: Các tài liệu liên quan & Dự thảo ═══════ */}
                         <div className="bg-white border border-amber-200 rounded-xl p-4 shadow-sm">
                             <div className="flex items-center gap-2 mb-3">
                                 <div className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-bold">2</div>
                                 <label className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
-                                    <Paperclip className="w-4 h-4 text-amber-600" /> Các tài liệu đính kèm <span className="text-gray-400 font-normal text-xs">(tuỳ chọn)</span>
+                                    <Paperclip className="w-4 h-4 text-amber-600" /> Các tài liệu liên quan khác <span className="text-gray-400 font-normal text-xs">(tuỳ chọn)</span>
                                 </label>
                             </div>
-                            <p className="text-xs text-gray-500 italic mb-3">Dự thảo Word, phụ lục, bảng vẽ... Hệ thống sẽ tự đổi tên theo Số ký hiệu sau khi duyệt.</p>
+                            <p className="text-xs text-gray-500 italic mb-3">Tải lên các bản dự thảo (Word/Excel), Phiếu trình (PDF), dự thảo Phiếu trình hoặc Phụ lục.</p>
                             <div className="relative border-2 border-dashed border-amber-200 rounded-lg p-4 text-center hover:bg-amber-50/50 transition-colors cursor-pointer">
                                 <input
                                     type="file"
                                     multiple
                                     onChange={(e) => {
                                         if (e.target.files) {
-                                            const filesArray = Array.from(e.target.files);
-                                            setAttachments((prev: any) => [...prev, ...filesArray]);
+                                            const filesArray = Array.from(e.target.files).map(file => {
+                                                // Gán vai trò mặc định dựa trên tên file
+                                                let role: 'phieutrinh' | 'draft_main' | 'draft_phieutrinh' | 'attachment' = 'attachment';
+                                                const lowerName = file.name.toLowerCase();
+                                                if (lowerName.includes('phieu trinh') || lowerName.includes('phieutrinh')) {
+                                                    if (lowerName.includes('du thao') || lowerName.includes('duthao')) {
+                                                        role = 'draft_phieutrinh';
+                                                    } else if (lowerName.endsWith('.pdf')) {
+                                                        role = 'phieutrinh';
+                                                    }
+                                                } else if (lowerName.includes('du thao') || lowerName.includes('duthao')) {
+                                                    role = 'draft_main';
+                                                }
+                                                return {
+                                                    id: crypto.randomUUID(),
+                                                    file,
+                                                    role
+                                                };
+                                            });
+
+                                            // Kiểm tra nếu đã có phieutrinh, các file phieutrinh mới sẽ chuyển thành attachment
+                                            const hasExistingPhieuTrinh = extraFiles.some(f => f.role === 'phieutrinh');
+                                            let foundPhieuTrinh = hasExistingPhieuTrinh;
+                                            const processedFiles = filesArray.map(item => {
+                                                if (item.role === 'phieutrinh') {
+                                                    if (foundPhieuTrinh) {
+                                                        item.role = 'attachment';
+                                                    } else {
+                                                        foundPhieuTrinh = true;
+                                                    }
+                                                }
+                                                return item;
+                                            });
+
+                                            setExtraFiles((prev) => [...prev, ...processedFiles]);
                                         }
                                     }}
                                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -516,34 +650,72 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                                 />
                                 <div className="flex flex-col items-center gap-1">
                                     <Upload className="w-6 h-6 text-amber-400" />
-                                    <p className="text-xs text-gray-500 font-medium">Chọn nhiều file đính kèm từ máy tính</p>
+                                    <p className="text-xs text-gray-500 font-medium">Chọn các file liên quan (Dự thảo, Phiếu trình, Phụ lục...)</p>
                                 </div>
                             </div>
 
                             {/* Danh sách file đã chọn */}
-                            {attachments.length > 0 && (
-                                <div className="mt-3 space-y-1.5">
-                                    <p className="text-[10px] font-bold text-amber-600 uppercase">Đã chọn {attachments.length} tệp:</p>
-                                    <div className="max-h-28 overflow-y-auto space-y-1.5 pr-1">
-                                        {attachments.map((file, idx) => (
-                                            <div key={idx} className="flex items-center justify-between text-xs bg-amber-50/50 p-2 rounded border border-amber-100">
-                                                <div className="flex items-center gap-2 truncate pr-3">
-                                                    <FileText className="w-3 h-3 text-amber-500 shrink-0" />
-                                                    <span className="truncate text-gray-600 font-medium">{file.name}</span>
-                                                    <span className="text-gray-400 shrink-0">({(file.size / 1024).toFixed(0)} KB)</span>
+                            {extraFiles.length > 0 && (
+                                <div className="mt-3 space-y-2">
+                                    <p className="text-[10px] font-bold text-amber-600 uppercase">Đã chọn {extraFiles.length} tệp liên quan:</p>
+                                    <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+                                        {extraFiles.map((item, idx) => {
+                                            const standardizedName = getFileStandardizedName(item.file.name, item.role, idx);
+                                            return (
+                                                <div key={item.id} className="flex flex-col gap-1.5 bg-amber-50/50 p-2.5 rounded border border-amber-100 text-xs">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2 truncate pr-3 font-semibold text-gray-700">
+                                                            <FileText className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                                            <span className="truncate" title={item.file.name}>{item.file.name}</span>
+                                                            <span className="text-gray-400 font-normal shrink-0">({(item.file.size / 1024).toFixed(0)} KB)</span>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setExtraFiles(extraFiles.filter(f => f.id !== item.id))}
+                                                            className="text-red-500 hover:text-red-700 font-bold px-1.5 py-0.5 text-[10px] bg-white border border-red-100 rounded shrink-0"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-1">
+                                                        <div className="shrink-0">
+                                                            <select
+                                                                value={item.role}
+                                                                onChange={(e) => {
+                                                                    const newRole = e.target.value as any;
+                                                                    if (newRole === 'phieutrinh') {
+                                                                        // Kiểm tra xem đã có file phiếu trình nào khác chưa
+                                                                        const otherPhieuTrinh = extraFiles.find(f => f.role === 'phieutrinh' && f.id !== item.id);
+                                                                        if (otherPhieuTrinh) {
+                                                                            toast.error('Chỉ được chọn tối đa một file làm Phiếu trình PDF!');
+                                                                            return;
+                                                                        }
+                                                                        if (!item.file.name.toLowerCase().endsWith('.pdf')) {
+                                                                            toast.error('Phiếu trình bắt buộc phải là định dạng file PDF!');
+                                                                            return;
+                                                                        }
+                                                                    }
+                                                                    setExtraFiles(extraFiles.map(f => f.id === item.id ? { ...f, role: newRole } : f));
+                                                                }}
+                                                                className="px-2 py-1 bg-white border border-amber-200 rounded font-medium text-[11px] text-gray-700 focus:outline-none"
+                                                            >
+                                                                <option value="attachment">📎 Phụ lục / Đính kèm</option>
+                                                                <option value="draft_main">📝 Dự thảo VB Chính</option>
+                                                                <option value="phieutrinh">📋 Phiếu trình (PDF)</option>
+                                                                <option value="draft_phieutrinh">✍️ Dự thảo Phiếu trình</option>
+                                                            </select>
+                                                        </div>
+                                                        <div className="truncate text-[10px] font-mono text-gray-500 bg-white/70 px-2 py-0.5 rounded border border-gray-100">
+                                                            Tên lưu Drive: <strong className="text-amber-800">{standardizedName}</strong>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <button
-                                                    onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))}
-                                                    className="text-red-400 hover:text-red-600 font-bold px-1.5 py-0.5 text-[10px] bg-white border border-red-100 rounded shrink-0"
-                                                >
-                                                    ✕
-                                                </button>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
-                            
+
                             {/* Danh sách đã có từ OCR */}
                             {ocrData.attachments && ocrData.attachments.length > 0 && (
                                 <div className="mt-4 pt-4 border-t border-gray-100">
