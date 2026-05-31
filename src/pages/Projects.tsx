@@ -664,6 +664,20 @@ export const Projects = () => {
 
     const selectedNode = selectedNodeId ? allNodes.find(n => n.id === selectedNodeId) : null;
 
+    const getPrefixForNode = (targetId: string): string => {
+        const findPrefix = (items: NodeTreeItem[], currentLevel: number = 0, currentPathPrefix: string = ''): string | null => {
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                const prefix = currentLevel === 0 ? '' : (currentPathPrefix ? `${currentPathPrefix}${i + 1}.` : `${i + 1}.`);
+                if (item.id === targetId) return prefix;
+                const found = findPrefix(item.children, currentLevel + 1, prefix);
+                if (found) return found;
+            }
+            return null;
+        };
+        return findPrefix(treeData) || '';
+    };
+
     const getChildNodes = () => {
         const findNodeInTree = (nodes: NodeTreeItem[], id: string): NodeTreeItem | null => {
             for (const n of nodes) {
@@ -1013,7 +1027,10 @@ export const Projects = () => {
                                         {getTypeIcon(selectedNode.type)}
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                        <h2 className="text-lg md:text-2xl font-bold text-gray-900 truncate" title={selectedNode.name}>{selectedNode.name}</h2>
+                                        <h2 className="text-lg md:text-2xl font-bold text-gray-900 break-words whitespace-normal leading-snug" title={`${getPrefixForNode(selectedNode.id)} ${selectedNode.name}`}>
+                                            {getPrefixForNode(selectedNode.id) && <span className="text-gray-500 mr-2">{getPrefixForNode(selectedNode.id)}</span>}
+                                            {selectedNode.name}
+                                        </h2>
                                         <div className="flex items-center gap-2 mt-1 flex-wrap">
                                             <span className="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 whitespace-nowrap">
                                                 {getTypeName(selectedNode.type)}
