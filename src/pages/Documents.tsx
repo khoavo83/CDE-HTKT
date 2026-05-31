@@ -63,7 +63,7 @@ export const Documents = () => {
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>({ key: 'ngayBanHanh', direction: 'desc' });
     const [activeTab, setActiveTab] = useState<'ALL' | 'INCOMING' | 'OUTGOING' | 'UNSORTED' | 'SORTED' | 'PROCESSING' | 'REVIEWING'>('ALL');
-    const [searchTerm, setSearchTerm] = useState('');
+    const [filters, setFilters] = useState({ loaiVanBan: '', soKyHieu: '', ngayBanHanh: '', coQuanBanHanh: '', trichYeu: '' });
     const [currentPage, setCurrentPage] = useState(1);
     const pageSize = 10;
     const [nodeLinks, setNodeLinks] = useState<any[]>([]);
@@ -266,23 +266,23 @@ export const Documents = () => {
         if (activeTab !== 'PROCESSING') return [];
         let result = tasks;
 
-        if (searchTerm.trim()) {
-            const lowerTerm = searchTerm.toLowerCase();
+        if (filters.loaiVanBan || filters.soKyHieu || filters.ngayBanHanh || filters.coQuanBanHanh || filters.trichYeu) {
             result = result.filter(task => {
-                const vb = vanBanCache[task.vanBanId];
-                return (
-                    (task.content && task.content.toLowerCase().includes(lowerTerm)) ||
-                    (task.assigneeName && task.assigneeName.toLowerCase().includes(lowerTerm)) ||
-                    (task.assignerName && task.assignerName.toLowerCase().includes(lowerTerm)) ||
-                    (task.collaboratorNames && task.collaboratorNames.some((name: string) => name.toLowerCase().includes(lowerTerm))) ||
-                    (task.result && task.result.toLowerCase().includes(lowerTerm)) ||
-                    (vb && vb.soKyHieu && vb.soKyHieu.toLowerCase().includes(lowerTerm)) ||
-                    (vb && vb.trichYeu && vb.trichYeu.toLowerCase().includes(lowerTerm))
-                );
+                const docData = vanBanCache[task.vanBanId];
+                if (!docData) return false;
+                
+                let isMatch = true;
+                if (filters.loaiVanBan && !docData.loaiVanBan?.toLowerCase().includes(filters.loaiVanBan.toLowerCase())) isMatch = false;
+                if (filters.soKyHieu && !docData.soKyHieu?.toLowerCase().includes(filters.soKyHieu.toLowerCase())) isMatch = false;
+                if (filters.ngayBanHanh && !docData.ngayBanHanh?.toLowerCase().includes(filters.ngayBanHanh.toLowerCase())) isMatch = false;
+                if (filters.coQuanBanHanh && !docData.coQuanBanHanh?.toLowerCase().includes(filters.coQuanBanHanh.toLowerCase())) isMatch = false;
+                if (filters.trichYeu && !docData.trichYeu?.toLowerCase().includes(filters.trichYeu.toLowerCase())) isMatch = false;
+                
+                return isMatch;
             });
         }
         return result;
-    }, [tasks, activeTab, searchTerm, vanBanCache]);
+    }, [tasks, activeTab, filters, vanBanCache]);
 
     const filteredDocs = useMemo(() => {
         let result = docs;
@@ -303,23 +303,25 @@ export const Documents = () => {
         }
 
         // B2: Lọc theo Từ khóa tìm kiếm đa năng
-        if (searchTerm.trim()) {
-            const lowerTerm = searchTerm.toLowerCase();
-            result = result.filter(doc =>
-                (doc.soKyHieu && doc.soKyHieu.toLowerCase().includes(lowerTerm)) ||
-                (doc.trichYeu && doc.trichYeu.toLowerCase().includes(lowerTerm)) ||
-                (doc.coQuanBanHanh && doc.coQuanBanHanh.toLowerCase().includes(lowerTerm)) ||
-                (doc.loaiVanBan && doc.loaiVanBan.toLowerCase().includes(lowerTerm))
-            );
+        if (filters.loaiVanBan || filters.soKyHieu || filters.ngayBanHanh || filters.coQuanBanHanh || filters.trichYeu) {
+            result = result.filter(doc => {
+                let isMatch = true;
+                if (filters.loaiVanBan && !doc.loaiVanBan?.toLowerCase().includes(filters.loaiVanBan.toLowerCase())) isMatch = false;
+                if (filters.soKyHieu && !doc.soKyHieu?.toLowerCase().includes(filters.soKyHieu.toLowerCase())) isMatch = false;
+                if (filters.ngayBanHanh && !doc.ngayBanHanh?.toLowerCase().includes(filters.ngayBanHanh.toLowerCase())) isMatch = false;
+                if (filters.coQuanBanHanh && !doc.coQuanBanHanh?.toLowerCase().includes(filters.coQuanBanHanh.toLowerCase())) isMatch = false;
+                if (filters.trichYeu && !doc.trichYeu?.toLowerCase().includes(filters.trichYeu.toLowerCase())) isMatch = false;
+                return isMatch;
+            });
         }
 
         return result;
-    }, [docs, activeTab, sortedDocIds, searchTerm]);
+    }, [docs, activeTab, sortedDocIds, filters]);
 
     // Bắt thay đổi khi Tab/Search đổi để reset về trang 1
     useEffect(() => {
         setCurrentPage(1);
-    }, [activeTab, searchTerm]);
+    }, [activeTab, filters]);
 
     const sortedDocs = useMemo(() => {
         if (!sortConfig) return filteredDocs;
@@ -490,19 +492,7 @@ export const Documents = () => {
                     </button>
                 </div>
 
-                {/* Search Bar */}
-                <div className="relative w-full sm:w-72">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Search className="h-4 w-4 text-gray-400" />
-                    </div>
-                    <input
-                        type="text"
-                        placeholder="Tìm theo số KH, trích yếu, cơ quan..."
-                        className="pl-9 pr-4 py-2 w-full border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow outline-none"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </div>
+                {/* Removed Search Bar */}
             </div>
 
             <UploadDocumentModal
@@ -806,6 +796,30 @@ export const Documents = () => {
                                     Hành động
                                 </div>
                                 <div onMouseDown={(e) => handleMouseDown(e, 'action')} className="absolute right-0 top-0 h-full w-2 cursor-col-resize hover:bg-primary-400 z-10 transition-colors" />
+                            </th>
+                        </tr>
+                        <tr className="bg-gray-50 border-b border-gray-200">
+                            <th className="p-2 border-r border-gray-200">
+                                <input type="text" placeholder="Lọc Loại văn bản..." className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 outline-none font-normal" value={filters.loaiVanBan} onChange={e => setFilters({...filters, loaiVanBan: e.target.value})} />
+                            </th>
+                            <th className="p-2 border-r border-gray-200">
+                                <input type="text" placeholder="Lọc Số ký hiệu..." className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 outline-none font-normal" value={filters.soKyHieu} onChange={e => setFilters({...filters, soKyHieu: e.target.value})} />
+                            </th>
+                            <th className="p-2 border-r border-gray-200">
+                                <input type="text" placeholder="Lọc Ngày ban hành..." className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 outline-none font-normal" value={filters.ngayBanHanh} onChange={e => setFilters({...filters, ngayBanHanh: e.target.value})} />
+                            </th>
+                            <th className="p-2 border-r border-gray-200">
+                                <input type="text" placeholder="Lọc Cơ quan..." className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 outline-none font-normal" value={filters.coQuanBanHanh} onChange={e => setFilters({...filters, coQuanBanHanh: e.target.value})} />
+                            </th>
+                            <th className="p-2 border-r border-gray-200">
+                                <input type="text" placeholder="Lọc Trích yếu..." className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 outline-none font-normal" value={filters.trichYeu} onChange={e => setFilters({...filters, trichYeu: e.target.value})} />
+                            </th>
+                            <th className="p-2 border-r border-gray-200"></th>
+                            <th className="p-2 border-r border-gray-200"></th>
+                            <th className="p-2">
+                                {(filters.loaiVanBan || filters.soKyHieu || filters.ngayBanHanh || filters.coQuanBanHanh || filters.trichYeu) && (
+                                    <button onClick={() => setFilters({loaiVanBan: '', soKyHieu: '', ngayBanHanh: '', coQuanBanHanh: '', trichYeu: ''})} className="text-xs text-red-500 hover:text-red-700 mx-auto block font-medium bg-red-50 px-2 py-1 rounded">Xóa lọc</button>
+                                )}
                             </th>
                         </tr>
                     </thead>
