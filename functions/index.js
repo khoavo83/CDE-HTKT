@@ -2923,14 +2923,7 @@ exports.syncSingleNodeDrive = onCall({ timeoutSeconds: 120 }, async (request) =>
     debugLogs.push(`Bắt đầu đồng bộ cục bộ thư mục ID: ${nodeId}`);
 
     try {
-        const auth = new google.auth.GoogleAuth({
-            credentials: {
-                client_email: SERVICE_ACCOUNT_EMAIL,
-                private_key: PRIVATE_KEY
-            },
-            scopes: ["https://www.googleapis.com/auth/drive"]
-        });
-        const drive = google.drive({ version: "v3", auth });
+const drive = await getDriveService();
 
         // Lấy thông tin thư mục
         const nodeDoc = await db.collection("project_nodes").doc(nodeId).get();
@@ -3039,3 +3032,5 @@ exports.syncSingleNodeDrive = onCall({ timeoutSeconds: 120 }, async (request) =>
         throw new HttpsError("internal", `Lỗi đồng bộ cục bộ: ${error.message}`);
     }
 });
+
+
