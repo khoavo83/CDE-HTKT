@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from './firebase/config';
@@ -111,6 +111,21 @@ function App() {
                             <Route path="feedbacks" element={<FeedbackManagement />} />
                             <Route path="trash" element={<TrashManagement />} />
                         </Route>
+
+                        {/* Redirects for Old Routes to prevent blank screens */}
+                        <Route path="/tasks" element={<Navigate to="/projects/tasks" replace />} />
+                        <Route path="/mindmap" element={<Navigate to="/projects/mindmap" replace />} />
+                        <Route path="/internal-docs" element={<Navigate to="/documents/internal-docs" replace />} />
+                        <Route path="/meetings" element={<Navigate to="/projects/meetings" replace />} />
+                        <Route path="/bim" element={<Navigate to="/bim-gis/bim" replace />} />
+                        <Route path="/map" element={<Navigate to="/bim-gis/map" replace />} />
+                        <Route path="/categories" element={<Navigate to="/admin/categories" replace />} />
+                        <Route path="/users" element={<Navigate to="/admin/users" replace />} />
+                        <Route path="/feedbacks" element={<Navigate to="/admin/feedbacks" replace />} />
+                        <Route path="/trash" element={<Navigate to="/admin/trash" replace />} />
+
+                        {/* Catch-all route */}
+                        <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
                 </Routes>
             </ErrorBoundary>
