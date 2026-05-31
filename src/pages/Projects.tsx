@@ -3,7 +3,7 @@ import { collection, query, onSnapshot, doc, setDoc, deleteDoc, updateDoc } from
 import { db, appFunctions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { Link } from 'react-router-dom';
-import { FolderTree, Folder, FileCheck, Layers, Plus, Edit2, Trash2, ChevronRight, ChevronDown, CheckCircle, Clock, ArrowUp, ArrowDown, FileText, FileImage, FileSpreadsheet, X, Link as LinkIcon, Unlink, ExternalLink, HardDrive, Search, Calendar, Loader2, ArrowUpDown, AlertTriangle, Download, BarChart3, ArrowLeft, Paperclip, ArrowRightLeft } from 'lucide-react';
+import { FolderTree, Folder, FileCheck, Layers, Plus, Edit2, Trash2, ChevronRight, ChevronDown, CheckCircle, Clock, ArrowUp, ArrowDown, FileText, FileImage, FileSpreadsheet, X, Link as LinkIcon, Unlink, ExternalLink, HardDrive, Cloud, RefreshCw, Search, Calendar, Loader2, ArrowUpDown, AlertTriangle, Download, BarChart3, ArrowLeft, Paperclip, ArrowRightLeft } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useAuthStore } from '../store/useAuthStore';
 import { canEditOrDeleteData } from '../utils/authUtils';
@@ -307,6 +307,10 @@ export const Projects = () => {
 
     // State cho Modal Delete (Thùng rác)
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+
+    const [isSyncingNode, setIsSyncingNode] = useState(false);
+    const [syncDebugLogs, setSyncDebugLogs] = useState<string[]>([]);
+    const [showDebugModal, setShowDebugModal] = useState(false);
     const [nodeToDelete, setNodeToDelete] = useState<ProjectNode | null>(null);
 
     // Tính toán lại cây thư mục khi allNodes thay đổi
@@ -675,6 +679,30 @@ export const Projects = () => {
     const childNodes = getChildNodes();
 
     // ====== XUẤT EXCEL TOÀN BỘ CẤU TRÚC DỰ ÁN ======
+    
+    const handleSyncSingleNode = async (nodeId: string) => {
+        setIsSyncingNode(true);
+        setSyncDebugLogs([]);
+        try {
+            const syncFn = httpsCallable(appFunctions, 'syncSingleNodeDrive');
+            const result = await syncFn({ nodeId }) as any;
+            if (result.data.success) {
+                toast.success(result.data.message || 'Đồng bộ thư mục thành công!');
+                if (result.data.debug && result.data.debug.length > 0) {
+                    setSyncDebugLogs(result.data.debug);
+                    setShowDebugModal(true);
+                }
+            } else {
+                toast.error('Có lỗi xảy ra: ' + result.data.message);
+            }
+        } catch (error: any) {
+            console.error('Lỗi đồng bộ thư mục:', error);
+            toast.error('Lỗi: ' + error.message);
+        } finally {
+            setIsSyncingNode(false);
+        }
+    };
+
     const handleExportExcel = async () => {
         if (!selectedNodeId) return;
 
@@ -1015,7 +1043,19 @@ export const Projects = () => {
                                         <BarChart3 className="w-4 h-4" />
                                         <span className="hidden md:inline">Sơ đồ Gantt</span>
                                     </Link>
-                                    {selectedNode.driveFolderLink && (
+
+                                    {isAdminOrManager && (
+                                        <button
+                                            onClick={() => handleSyncSingleNode(selectedNode.id)}
+                                            disabled={isSyncingNode}
+                                            className={`flex items-center gap-2 bg-purple-50 text-purple-700 font-medium px-3 md:px-4 py-2 rounded-md hover:bg-purple-100 transition-colors text-sm whitespace-nowrap ${isSyncingNode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            title="Đồng bộ thư mục này"
+                                        >
+                                            <RefreshCw className={`w-4 h-4 ${isSyncingNode ? 'animate-spin' : ''}`} />
+                                            <span className="hidden md:inline">{isSyncingNode ? 'Đang đồng bộ...' : 'Đồng bộ thư mục'}</span>
+                                        </button>
+                                    )}
+{selectedNode.driveFolderLink && (
                                         <a
                                             href={selectedNode.driveFolderLink}
                                             target="_blank"
@@ -1401,6 +1441,52 @@ export const Projects = () => {
             </div>
 
             {/* Modal Add/Edit */}
+            
+            {/* Modal: Debug Drive */}
+            {showDebugModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+                        {/* Header */}
+                        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                                    <Cloud className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-900">Nhật ký Đồng bộ Drive</h3>
+                                    <p className="text-sm text-gray-500 mt-1">Chi tiết quá trình tạo cấu trúc thư mục và liên kết tệp</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowDebugModal(false)} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1 rounded-full transition-colors">
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        {/* Body - Logs Terminal Style */}
+                        <div className="flex-1 overflow-auto p-6 bg-gray-900 text-gray-300 font-mono text-sm leading-relaxed">
+                            <div className="space-y-1.5">
+                                {syncDebugLogs.map((log, idx) => (
+                                    <div key={idx} className={`${log.includes('[+]') ? 'text-green-400 font-medium' : log.includes('[!]') ? 'text-red-400 font-medium' : log.includes('===') ? 'text-blue-400 font-bold mt-4 mb-2' : log.includes('[~]') ? 'text-yellow-400' : 'text-gray-300'}`}>
+                                        {log}
+                                    </div>
+                                ))}
+                                {syncDebugLogs.length === 0 && <div className="text-gray-500 py-8 text-center uppercase tracking-widest text-[10px]">Mọi thứ đang hoạt động tốt</div>}
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+                            <button
+                                onClick={() => setShowDebugModal(false)}
+                                className="px-6 py-2.5 bg-gray-900 text-white font-medium rounded-xl hover:bg-gray-800 transition-colors shadow-sm"
+                            >
+                                Đóng
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
@@ -1779,3 +1865,4 @@ export const Projects = () => {
         </div >
     );
 };
+
