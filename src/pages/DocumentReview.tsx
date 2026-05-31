@@ -583,7 +583,87 @@ export const DocumentReview = () => {
                         </p>
                     </div>
 
-                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 flex flex-col">
+                        <div className="pb-4 border-b border-gray-100 flex justify-end gap-3 sticky top-0 bg-white z-20 py-2">
+                            {!isEditing && (
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/documents')}
+                                    className="flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 transition font-medium"
+                                    title="Quay về danh sách văn bản"
+                                >
+                                    <ArrowLeft className="w-4 h-4" />
+                                    Quay về
+                                </button>
+                            )}
+
+                            {isEditing && (
+                                <button
+                                    type="button"
+                                    onClick={() => setIsProjectTreeOpen(true)}
+                                    disabled={isSavingProjectNodes}
+                                    className="flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-md hover:bg-blue-200 transition font-medium"
+                                    title="Sắp xếp/Đính kèm vào cây thư mục Dự án"
+                                >
+                                    {isSavingProjectNodes ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderTree className="w-4 h-4" />}
+                                    Sắp xếp
+                                </button>
+                            )}
+
+                            {canEdit && !isEditing && (
+                                <button
+                                    type="button"
+                                    onClick={() => setIsEditing(true)}
+                                    className="flex items-center gap-2 bg-amber-100 text-amber-700 px-4 py-2 rounded-md hover:bg-amber-200 transition font-medium"
+                                    title="Chỉnh sửa văn bản"
+                                >
+                                    <FileEdit className="w-4 h-4" />
+                                    Chỉnh sửa
+                                </button>
+                            )}
+
+                            {user?.role === 'admin' && (
+                                <button
+                                    type="button"
+                                    onClick={handleDeleteClick}
+                                    className="flex items-center gap-2 bg-red-100 text-red-700 px-4 py-2 rounded-md hover:bg-red-200 transition font-medium"
+                                    title="Xóa văn bản này"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                    Xóa
+                                </button>
+                            )}
+
+                            {isEditing && (
+                                <button
+                                    type="button"
+                                    onClick={handleAIRecheck}
+                                    disabled={isChecking}
+                                    className="flex items-center gap-2 bg-purple-100 text-purple-700 px-4 py-2 rounded-md hover:bg-purple-200 transition font-medium disabled:opacity-50"
+                                    title="Yêu cầu AI rà soát và điền nốt các thông tin còn thiếu"
+                                >
+                                    {isChecking ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <Sparkles className="w-4 h-4" />
+                                    )}
+                                    AI Kiểm tra lại
+                                </button>
+                            )}
+
+                            {isEditing && (
+                                <button
+                                    type="submit"
+                                    disabled={isUploading || isChecking || confirmModal.isOpen}
+                                    className="flex items-center gap-2 bg-green-100 text-green-700 px-4 py-2 rounded-md hover:bg-green-200 transition font-medium disabled:opacity-50"
+                                    title="Kiểm tra và Lưu cập nhật hệ thống"
+                                >
+                                    {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                    {isUploading ? 'Đang lưu...' : 'Lưu'}
+                                </button>
+                            )}
+                        </div>
+
                         <fieldset disabled={!isEditing} className="space-y-5">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Tên file hiển thị</label>
@@ -915,86 +995,6 @@ export const DocumentReview = () => {
                                 <DocumentActivityLog vanBanId={id} />
                             </div>
                         )}
-
-                        <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
-                            {!isEditing && (
-                                <button
-                                    type="button"
-                                    onClick={() => navigate('/documents')}
-                                    className="flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 transition font-medium"
-                                    title="Quay về danh sách văn bản"
-                                >
-                                    <ArrowLeft className="w-4 h-4" />
-                                    Quay về
-                                </button>
-                            )}
-
-                            {isEditing && (
-                                <button
-                                    type="button"
-                                    onClick={() => setIsProjectTreeOpen(true)}
-                                    disabled={isSavingProjectNodes}
-                                    className="flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-md hover:bg-blue-200 transition font-medium"
-                                    title="Sắp xếp/Đính kèm vào cây thư mục Dự án"
-                                >
-                                    {isSavingProjectNodes ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderTree className="w-4 h-4" />}
-                                    Sắp xếp
-                                </button>
-                            )}
-
-                            {canEdit && !isEditing && (
-                                <button
-                                    type="button"
-                                    onClick={() => setIsEditing(true)}
-                                    className="flex items-center gap-2 bg-amber-100 text-amber-700 px-4 py-2 rounded-md hover:bg-amber-200 transition font-medium"
-                                    title="Chỉnh sửa văn bản"
-                                >
-                                    <FileEdit className="w-4 h-4" />
-                                    Chỉnh sửa
-                                </button>
-                            )}
-
-                            {user?.role === 'admin' && (
-                                <button
-                                    type="button"
-                                    onClick={handleDeleteClick}
-                                    className="flex items-center gap-2 bg-red-100 text-red-700 px-4 py-2 rounded-md hover:bg-red-200 transition font-medium"
-                                    title="Xóa văn bản này"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                    Xóa
-                                </button>
-                            )}
-
-                            {isEditing && (
-                                <button
-                                    type="button"
-                                    onClick={handleAIRecheck}
-                                    disabled={isChecking}
-                                    className="flex items-center gap-2 bg-purple-100 text-purple-700 px-4 py-2 rounded-md hover:bg-purple-200 transition font-medium disabled:opacity-50"
-                                    title="Yêu cầu AI rà soát và điền nốt các thông tin còn thiếu"
-                                >
-                                    {isChecking ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                        <Sparkles className="w-4 h-4" />
-                                    )}
-                                    AI Kiểm tra lại
-                                </button>
-                            )}
-
-                            {isEditing && (
-                                <button
-                                    type="submit"
-                                    disabled={isUploading || isChecking || confirmModal.isOpen}
-                                    className="flex items-center gap-2 bg-green-100 text-green-700 px-4 py-2 rounded-md hover:bg-green-200 transition font-medium disabled:opacity-50"
-                                    title="Kiểm tra và Lưu cập nhật hệ thống"
-                                >
-                                    {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                    {isUploading ? 'Đang lưu...' : 'Lưu'}
-                                </button>
-                            )}
-                        </div>
                     </form>
                 </div>
                 {/* Resizer Divider - Desktop only */}
