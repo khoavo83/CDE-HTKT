@@ -86,6 +86,7 @@ export const CategoriesManagement = () => {
     // Batch Rename State
     const [isBatchRenaming, setIsBatchRenaming] = useState(false);
     const [batchRenameResult, setBatchRenameResult] = useState<any>(null);
+    const [isFixingMisplaced, setIsFixingMisplaced] = useState(false);
 
     useEffect(() => {
         if (!user || user.role === 'viewer' || user.role === 'pending') return;
@@ -209,6 +210,22 @@ export const CategoriesManagement = () => {
                 }
             }
         });
+    };
+
+    const handleFixMisplacedFiles = async () => {
+        if (!window.confirm("Bạn có chắc chắn muốn dọn dẹp các file lỗi đi lạc không? Quá trình này có thể mất vài phút.")) return;
+        setIsFixingMisplaced(true);
+        const loadingToast = toast.loading("Đang dọn dẹp file đi lạc và tạo lại shortcut đính kèm...");
+        try {
+            const fixFn = httpsCallable(appFunctions, 'fixMisplacedFiles');
+            const result: any = await fixFn();
+            toast.success(`Đã dọn dẹp thành công! Di chuyển ${result.data.movedFiles} file và tạo ${result.data.shortcutsCreated} shortcut.`, { id: loadingToast, duration: 5000 });
+        } catch (error: any) {
+            console.error("Fix misplaced files error:", error);
+            toast.error(`Lỗi: ${error.message}`, { id: loadingToast });
+        } finally {
+            setIsFixingMisplaced(false);
+        }
     };
 
     const handleBatchRename = async (dryRun: boolean) => {
@@ -923,6 +940,21 @@ export const CategoriesManagement = () => {
                                         className="px-4 py-2 bg-orange-600 text-white rounded-lg text-xs font-bold hover:bg-orange-700 disabled:opacity-50 transition-colors shadow-lg"
                                     >
                                         Reset & Làm sạch DRIVE
+                                    </button>
+                                </div>
+
+                                <div className="p-4 bg-purple-50 rounded-xl border border-purple-100 flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm font-bold text-purple-800">Dọn dẹp File đi lạc (Fix Lỗi)</p>
+                                        <p className="text-xs text-purple-600 mt-1 font-bold">Quét và di chuyển các file văn bản đang nằm ngoài thư mục Drive chính vào đúng vị trí, đồng thời sửa lỗi đính kèm.</p>
+                                    </div>
+                                    <button
+                                        onClick={handleFixMisplacedFiles}
+                                        disabled={isFixingMisplaced}
+                                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2 whitespace-nowrap disabled:opacity-50"
+                                    >
+                                        {isFixingMisplaced ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                                        {isFixingMisplaced ? 'Đang dọn dẹp...' : 'Dọn dẹp File'}
                                     </button>
                                 </div>
 

@@ -3,7 +3,7 @@ import { X, Upload, FileText, Paperclip, Loader2, Sparkles, FolderTree, Calendar
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { httpsCallable } from 'firebase/functions';
-import { doc, updateDoc, arrayUnion, setDoc, collection } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, setDoc, collection, getDoc } from 'firebase/firestore';
 import { db, storage, auth, appFunctions } from '../firebase/config';
 import { useAuthStore } from '../store/useAuthStore';
 import { useUserStore } from '../store/useUserStore';
@@ -249,6 +249,19 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                 fileNameStandardized += '.pdf';
             }
 
+            // Lấy thông tin cấu hình thư mục từ DB để lưu file đúng vị trí
+            let targetParentId = '';
+            try {
+                const settingsDoc = await getDoc(doc(db, "settings", "driveFolders"));
+                if (settingsDoc.exists()) {
+                    const driveConfig = settingsDoc.data();
+                    if (ocrData.phanLoaiVanBan === 'INCOMING') targetParentId = driveConfig.vanBanDenId;
+                    else if (ocrData.phanLoaiVanBan === 'OUTGOING') targetParentId = driveConfig.vanBanDiId;
+                }
+            } catch (err) {
+                console.error("Không thể lấy cấu hình Drive:", err);
+            }
+
             // Upload file lên Drive (cả khi đã qua AI hoặc upload thủ công)
             // File luôn được upload ở bước Lưu để đảm bảo dùng tên chuẩn hóa
             if (mainFile && !driveFileId_Original) {
@@ -258,7 +271,8 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                 const uploadedMain = await uploadFn({
                     fileName: fileNameStandardized,
                     mimeType: mainFile.type,
-                    base64Data: base64Data
+                    base64Data: base64Data,
+                    targetParentId: targetParentId
                 });
 
                 driveFileId_Original = uploadedMain.data.file.id;
@@ -283,7 +297,8 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({ isOpen
                     const uploaded = await uploadFn({
                         fileName: standardizedAttachName,
                         mimeType: file.type,
-                        base64Data: base64
+                        base64Data: base64,
+                        targetParentId: targetParentId
                     });
 
                     finalAttachments.push({

@@ -2687,3 +2687,114 @@ Cấu trúc JSON:
         console.error("[AUTO-SCAN] Lỗi tổng:", e);
     }
 });
+// ==========================================
+// FIX MISPLACED FILES & ATTACHMENT SHORTCUTS
+// ==========================================
+exports.fixMisplacedFiles = onCall({ timeoutSeconds: 540, memory: "1GiB" }, async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Unauthorized");
+
+    try {
+        const drive = await getDriveService();
+        const settingsDoc = await db.collection("settings").doc("driveFolders").get();
+        if (!settingsDoc.exists) throw new Error("Missing driveFolders config");
+        const config = settingsDoc.data();
+        
+        const vanBanDenId = config.vanBanDenId;
+        const vanBanDiId = config.vanBanDiId;
+        const projectsRootId = config.projectsRootId;
+
+        const snapshot = await db.collection("vanban").get();
+        let movedCount = 0;
+        let shortcutCount = 0;
+        
+        const moveFileToFolder = async (fileId, targetFolderId) => {
+            try {
+                const file = await drive.files.get({ fileId: fileId, fields: 'parents' });
+                const currentParents = file.data.parents;
+                if (!currentParents || !currentParents.includes(targetFolderId)) {
+                    await drive.files.update({
+                        fileId: fileId,
+                        addParents: targetFolderId,
+                        removeParents: currentParents ? currentParents.join(',') : '',
+                        fields: 'id, parents',
+                        supportsAllDrives: true
+                    });
+                    return true;
+                }
+            } catch (err) {
+                console.error("Move error:", err.message);
+            }
+            return false;
+        };
+
+        for (const doc of snapshot.docs) {
+            const data = doc.data();
+            const targetFolderId = data.phanLoaiVanBan === 'INCOMING' ? vanBanDenId : (data.phanLoaiVanBan === 'OUTGOING' ? vanBanDiId : null);
+            
+            if (targetFolderId) {
+                // Move main file
+                if (data.driveFileId_Original) {
+                    const moved = await moveFileToFolder(data.driveFileId_Original, targetFolderId);
+                    if (moved) movedCount++;
+                }
+                
+                // Move attachments
+                const allAttachments = [...(data.attachments || []), ...(data.dinhKem || [])];
+                for (const att of allAttachments) {
+                    if (att.driveFileId) {
+                        const moved = await moveFileToFolder(att.driveFileId, targetFolderId);
+                        if (moved) movedCount++;
+                    }
+                }
+            }
+            
+            // Fix attachment shortcuts in projects
+            const linksQuery = await db.collection("vanban_node_links").where("vanBanId", "==", doc.id).get();
+            for (const linkDoc of linksQuery.docs) {
+                const linkData = linkDoc.data();
+                const nodeDoc = await db.collection("project_nodes").doc(linkData.nodeId).get();
+                if (!nodeDoc.exists) continue;
+                const nodeData = nodeDoc.data();
+                if (!nodeData.driveFolderId) continue;
+                
+                let currentShortcutIds = linkData.attachmentShortcutIds || [];
+                const allAttachments = [...(data.attachments || []), ...(data.dinhKem || [])];
+                
+                let addedShortcuts = false;
+                for (const att of allAttachments) {
+                    if (att.driveFileId) {
+                        // Check if shortcut already exists (simple logic: check if we have enough shortcuts, or just create and store)
+                        // Actually, just create shortcut if we don't have enough shortcuts
+                        try {
+                            const attRes = await drive.files.create({
+                                supportsAllDrives: true,
+                                requestBody: {
+                                    name: att.fileName || att.originalName || att.name || "DinhKem",
+                                    mimeType: 'application/vnd.google-apps.shortcut',
+                                    shortcutDetails: { targetId: att.driveFileId },
+                                    parents: [nodeData.driveFolderId]
+                                }
+                            });
+                            currentShortcutIds.push(attRes.data.id);
+                            shortcutCount++;
+                            addedShortcuts = true;
+                        } catch (err) {
+                            console.error("Shortcut err:", err.message);
+                        }
+                    }
+                }
+                
+                if (addedShortcuts) {
+                    await db.collection("vanban_node_links").doc(linkDoc.id).update({
+                        attachmentShortcutIds: currentShortcutIds
+                    });
+                }
+            }
+        }
+
+        return { success: true, movedFiles: movedCount, shortcutsCreated: shortcutCount };
+    } catch (error) {
+        console.error("fixMisplacedFiles Error:", error);
+        throw new HttpsError("internal", error.message);
+    }
+});
